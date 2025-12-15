@@ -1,0 +1,179 @@
+/* Estilos personalizados para Dashboard EME */
+
+/* Animaciones de entrada */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* Efectos hover para cards */
+.hover-scale:hover .card {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.15) !important;
+}
+
+.hover-scale {
+    animation: fadeInUp 0.6s ease-out;
+    animation-fill-mode: both;
+}
+
+.hover-scale:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.hover-scale:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.hover-scale:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.hover-scale:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+.hover-scale:nth-child(5) {
+    animation-delay: 0.5s;
+}
+
+/* Efecto para el botón de búsqueda */
+#search-button:hover,
+#download-button:hover,
+#btn-volver-eme:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important;
+}
+
+#search-button:active,
+#download-button:active,
+#btn-volver-eme:active {
+    transform: translateY(0);
+}
+
+/* Estilo para el dropdown */
+.Select-control {
+    border-radius: 8px !important;
+    border: 2px solid #e9ecef !important;
+    transition: all 0.3s ease !important;
+}
+
+.Select-control:hover {
+    border-color: #0064AF !important;
+}
+
+.is-focused:not(.is-open) > .Select-control {
+    border-color: #0064AF !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 100, 175, 0.25) !important;
+}
+
+/* Animación para estadísticas totales */
+.stats-header {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+/* Efecto de gradiente animado para números */
+@keyframes gradient-animation {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hover-scale:hover .card {
+        transform: translateY(-4px);
+    }
+}
+
+/* Efecto de brillo en hover para iconos */
+.bi:hover {
+    filter: brightness(1.2);
+    transition: filter 0.3s ease;
+}
+
+/* Animación de carga */
+@keyframes loading {
+    0% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.6;
+    }
+}
+
+.loading {
+    animation: loading 1.5s ease-in-out infinite;
+}
+
+/* Mejoras para la tabla si se usa */
+table {
+    border-collapse: separate !important;
+    border-spacing: 0 8px !important;
+}
+
+tr {
+    transition: all 0.3s ease;
+}
+
+tr:hover {
+    transform: scale(1.01);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* Smooth scroll */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Tooltips mejorados */
+.tooltip-inner {
+    background-color: #0064AF !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+}
+
+.tooltip.show {
+    opacity: 1 !important;
+}
+
+/* Animación para el contador de atenciones */
+@keyframes countUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stat-number {
+    animation: countUp 0.8s ease-out;
+}

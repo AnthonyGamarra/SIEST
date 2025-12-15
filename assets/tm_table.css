@@ -1,0 +1,34 @@
+/* Cabecera azul con texto blanco */
+.ag-theme-alpine .ag-header-cell.tm-header-blue {
+    background-color: #0064AF !important;
+    color: #fff !important;
+    font-weight: 600;
+    border-right: 1px solid #ffffff22;
+}
+
+/* Texto dentro de la cabecera */
+.ag-theme-alpine .ag-header-cell.tm-header-blue .ag-header-cell-text {
+    color: #fff !important;
+}
+
+/* Íconos (sort, menu) en blanco */
+.ag-theme-alpine .ag-header-cell.tm-header-blue .ag-icon {
+    color: #fff !important;
+    fill: #fff !important;
+}
+
+/* Filtro flotante bajo cabecera (mantener legible) */
+.ag-theme-alpine .ag-header-cell.tm-header-blue .ag-floating-filter-button,
+.ag-theme-alpine .ag-header-cell.tm-header-blue .ag-floating-filter-input {
+    color: #fff !important;
+}
+
+.ag-theme-alpine .ag-header-cell.tm-header-blue .ag-input-field-input {
+    color: #fff;
+    background: #0064AF;
+    border: 1px solid #ffffff55;
+}
+
+.ag-theme-alpine .ag-header {
+    border-bottom: 1px solid #0064AF;
+}

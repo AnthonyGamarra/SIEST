@@ -1,0 +1,738 @@
+# # === TABLA AG GRID ===
+# # ahora calculamos Atenciones y Atendidos (pacientes únicos) por Servicio y Subactividad
+# df_serv_subact = (
+#     df.groupby(['descripcion_servicio', 'subactividad'], as_index=False)
+#       .agg(Atenciones=('descripcion_servicio', 'size'),
+#            Atendidos=('doc_paciente', 'nunique'))
+#       .rename(columns={'descripcion_servicio': 'Servicio', 'subactividad': 'Subactividad'})
+#       .sort_values('Atenciones', ascending=False)
+# )
+
+# aggrid_table = dag.AgGrid(
+#     id="tabla-servicio-subactividad",
+#     columnDefs=[
+#         {"headerName": "Servicio", "field": "Servicio", "filter": True, "sortable": True},
+#         {"headerName": "Subactividad", "field": "Subactividad", "filter": True, "sortable": True},
+#         {"headerName": "Atenciones", "field": "Atenciones", "type": "numericColumn", "filter": True, "sortable": True},
+#         {"headerName": "Atendidos", "field": "Atendidos", "type": "numericColumn", "filter": True, "sortable": True}
+#     ],
+#     rowData=df_serv_subact.to_dict("records"),
+#     columnSize="sizeToFit",
+#     className="ag-theme-alpine",
+#     style={"height": "500px", "width": "45vw", "marginTop": "20px","marginBottom": "10px"}
+# )
+
+
+# # Mostrar ambas tablas lado a lado
+# tables_row = dbc.Row([
+#     dbc.Col(
+#         dbc.Card(dbc.CardBody([aggrid_table]), style={'height': '520px', 'overflow': 'auto', 'padding': '8px'}),
+#         width=6
+#     )
+# ], className="g-2", style={'marginTop': '20px', 'marginBottom': '10px'})
+
+
+
+# return summary_row, html.Div([
+#     html.Div([
+#         html.H4(
+#             f"Número de atenciones del centro {nombre_centro}",
+#             style={'color': '#0064AF', 'fontFamily': 'Calibri', 'marginBottom': '20px'}
+#         )
+#     ]),
+#     html.H5("Atenciones por Servicio y Subactividad", style={'color': '#0064AF', 'marginTop': '30px'}),
+#     # reemplazado: ahora se muestran ambas tablas en la fila 'tables_row'
+#     tables_row
+# ])
+
+
+# return summary_row, html.Div([
+#     html.Div([
+#         html.H4(
+#             f"Número de atenciones del centro {nombre_centro}",
+#             style={'color': '#0064AF', 'fontFamily': 'Calibri', 'marginBottom': '20px'}
+#         )
+#     ]),
+#     html.H5("Atenciones por Servicio y Subactividad", style={'color': '#0064AF', 'marginTop': '30px'}),
+# ])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# from dash import html, dcc, register_page, Input, Output, State, callback
+# import pandas as pd
+# import plotly.express as px
+# from sqlalchemy import create_engine
+# import dash_ag_grid as dag
+# import plotly.graph_objects as go
+
+# # Paleta similar a dashboard.py
+# BRAND = "#0064AF"
+# CARD_BG = "#FFFFFF"
+# TEXT = "#212529"
+# MUTED = "#6c757d"
+# FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
+# CARD_STYLE = {
+#     "border": "none",
+#     "borderRadius": "14px",
+#     "backgroundColor": CARD_BG,
+#     "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
+#     "padding": "16px",
+# }
+
+# # Layout sin verificador de query
+# layout = html.Div([
+#     dcc.Location(id="page-url", refresh=False),
+#     html.Div([
+#         # Lado izquierdo: título + subtítulo
+#         html.Div([
+#             html.H4("Detalle de atenciones",
+#                     style={"margin": 0, "color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700}),
+#             html.P("Visualización del periodo seleccionado.",
+#                    style={"color": MUTED, "fontSize": "13px", "marginTop": "4px", "fontFamily": FONT_FAMILY})
+#         ]),
+#         # Lado derecho: botón descargar
+#         html.Div([
+#             html.Button(
+#                 "Descargar CSV",
+#                 id="btn-download-query1",
+#                 n_clicks=0,
+#                 style={
+#                     "backgroundColor": BRAND,
+#                     "color": "#fff",
+#                     "border": "none",
+#                     "borderRadius": "8px",
+#                     "padding": "8px 12px",
+#                     "fontFamily": FONT_FAMILY,
+#                     "fontSize": "13px",
+#                     "cursor": "pointer",
+#                     "boxShadow": "0 2px 6px rgba(0,0,0,0.12)"
+#                 }
+#             ),
+#             dcc.Download(id="download-query1-csv")
+#         ])
+#     ], style={
+#         "padding": "12px 20px",
+#         "background": "linear-gradient(90deg,#ffffff 0%,#F0F6FC 100%)",
+#         "border": "1px solid #e9ecef",
+#         "borderRadius": "14px",
+#         "boxShadow": "0 4px 12px rgba(0,0,0,0.06)",
+#         "marginBottom": "18px",
+#         "display": "flex",
+#         "justifyContent": "space-between",
+#         "alignItems": "center",
+#         "gap": "16px"
+#     }),
+#     html.Div([
+#         dcc.Loading(
+#             html.Div([
+#                 # Línea (mitad)
+#                 html.Div(
+#                     dcc.Graph(id="total-atenciones-graph", style={"height": "300px", "width": "100%"}),
+#                     style={"flex": "1", "minWidth": "320px"}
+#                 ),
+#                 # Torta (mitad)
+#                 html.Div(
+#                     dcc.Graph(id="total-atenciones-pie", style={"height": "300px", "width": "100%"}),
+#                     style={"flex": "1", "minWidth": "320px"}
+#                 )
+#             ], style={"display": "flex", "gap": "12px", "flexWrap": "wrap"}),
+#             type="dot"
+#         ),
+#         html.Div(id="total-atenciones-msg",
+#                  style={"marginTop": "8px", "color": MUTED, "fontFamily": FONT_FAMILY, "fontSize": "13px", "fontWeight": "bold"})
+#     ], style=CARD_STYLE),
+#     html.Br(),
+#     html.Div([
+#         html.H5("Detalle de atenciones",
+#                 style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 600, "marginBottom": "12px"}),
+#         html.Div(id="tabla-servicio-subactividad-wrapper")
+#     ], style=CARD_STYLE),
+#     # Nuevo wrapper propio para la tercera tabla
+#     html.Div([
+#         html.H5("Detalle de registros no considerados",
+#                 style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 600, "marginBottom": "12px"}),
+#         html.Div(id="tabla-detalle-wrapper")
+#     ], style={**CARD_STYLE, "marginTop": "18px"}),  # espaciado superior entre cards
+#     # Stores (pueden estar fuera de los wrappers)
+#     dcc.Store(id="store-serv-subact-data"),
+#     dcc.Store(id="store-agrup-espec-data"),
+#     dcc.Store(id="store-detalle-data")
+# ], style={
+#     "maxWidth": "1400px",
+#     "margin": "0 auto",
+#     "padding": "8px 8px 32px 8px",
+#     "fontFamily": FONT_FAMILY
+# })
+
+
+# # Registrar página
+# register_page(
+#     __name__,
+#     path_template="/dash/total_atenciones/<codcas>",
+#     name="total_atenciones",
+#     layout=layout
+# )
+
+# # Conexión DB
+# def create_connection():
+#     try:
+#         engine = create_engine('postgresql+psycopg2://postgres:admin@10.0.29.117:5433/DW_ESTADISTICA')
+#         with engine.connect():
+#             pass
+#         return engine
+#     except Exception as e:
+#         print(f"Failed to connect to the database: {e}")
+#         return None
+
+# def _parse_periodo(search: str) -> str | None:
+#     if not search:
+#         return None
+#     # search llega como "?periodo=03&otra=x"
+#     params = dict(
+#         part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
+#     )
+#     return params.get("periodo")
+
+# # Callback para construir el gráfico usando el periodo seleccionado en el dropdown principal
+# @callback(
+#     Output("total-atenciones-graph", "figure"),
+#     Output("total-atenciones-pie", "figure"),  # nuevo output
+#     Output("total-atenciones-msg", "children"),
+#     Output("tabla-servicio-subactividad-wrapper", "children"),
+#     Output("tabla-detalle-wrapper", "children"),
+#     Output("store-serv-subact-data", "data"),
+#     Output("store-agrup-espec-data", "data"),
+#     Output("store-detalle-data", "data"),
+#     Input("page-url", "pathname"),
+#     Input("page-url", "search"),
+#     State("filter-periodo", "value")
+# )
+# def update_total_atenciones(pathname, search, periodo_dropdown):
+#     empty_fig = go.Figure(); empty_fig.update_layout(template="simple_white")
+#     empty_div = html.Div()
+#     # Ajustar early returns al nuevo número de outputs (8)
+#     if not pathname:
+#         return empty_fig, empty_fig, "Sin ruta.", empty_div, empty_div, None, None, None
+#     codcas = pathname.rstrip("/").split("/")[-1]
+#     periodo = _parse_periodo(search) or periodo_dropdown
+#     if not periodo:
+#         return empty_fig, empty_fig, "Falta periodo (URL sin ?periodo=MM y dropdown vacío).", empty_div, empty_div, None, None, None
+#     engine = create_connection()
+#     if engine is None:
+#         return empty_fig, empty_fig, "Error de conexión a la base de datos.", empty_div, empty_div, None, None, None
+#     query = f"""
+#         SELECT 
+#             ce.cod_servicio,
+#             ce.cod_especialidad,
+#             ca.cenasides,
+#             am.actdes AS actividad,
+#             ag.agrupador AS agrupador,
+#             a.actespnom AS subactividad,
+#             ce.cod_tipo_consulta,
+#             ce.cod_diag,
+#             c.servhosdes AS descripcion_servicio,
+#             e.especialidad AS descripcion_especialidad,
+#             t.tipcondes AS descripcion_tipo_consulta,
+#             d.diagdes AS descripcion_diagnostico,
+#             dni_medico,
+#             doc_paciente,
+#             cod_tipdoc_paciente,
+#             sexo,
+#             fecha_atencion,
+#             acto_med
+#         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+#         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
+#         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
+#         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
+#         LEFT JOIN dwsge.sgss_cmdia10 AS d ON ce.cod_diag = d.diagcod
+#         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
+#         LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
+#         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
+#         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+#         WHERE ce.cod_centro = '{codcas}'
+#           AND ce.cod_actividad = '91'
+#           AND ce.clasificacion in (2,4,6)
+#           AND ce.cod_variable = '001'
+#     """
+
+#     query2 = f"""
+#         SELECT 
+#             c.servhosdes AS Servicio2,
+#             am.actdes AS Actividad2,
+#             a.actespnom AS Subactividad2,
+#             t.tipcondes AS Tipo_consulta2,
+#             ce.cod_diag as CodDiag2,
+#             d.diagdes AS Diagnostico2,
+#             dni_medico as dni_medico2,
+#             acto_med as acto_med2,
+#             sexo as sexo2,
+#             fecha_atencion as fecha_atencion2,
+#             cl.desc_cl AS desc_cl2
+#         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+#         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
+#         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
+#         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
+#         LEFT JOIN dwsge.sgss_cmdia10 AS d ON ce.cod_diag = d.diagcod
+#         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
+#         LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
+#         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
+#         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+#         LEFT JOIN dwsge.dwe_cl10 as cl ON ce.clasificacion = cl.id_cl
+#         WHERE ce.cod_centro = '{codcas}'
+#           AND ce.cod_actividad = '91'
+#           AND ce.clasificacion in (1,3,5,0)
+#           AND ce.cod_variable = '001'
+#     """
+#     try:
+#         df = pd.read_sql(query, engine)
+#         df2 = pd.read_sql(query2, engine)
+#     except Exception as e:
+#         return empty_fig, empty_fig, f"Error ejecutando consulta: {e}", empty_div, empty_div, None, None, None
+#     if df.empty:
+#         return empty_fig, empty_fig, f"Sin datos para periodo {periodo}.", empty_div, empty_div, None, None, None
+#     df["fecha_atencion"] = pd.to_datetime(df["fecha_atencion"], errors="coerce")
+#     df_fig = df.dropna(subset=["fecha_atencion"])
+#     serie = (df_fig.groupby(df_fig["fecha_atencion"].dt.date)
+#                    .size()
+#                    .reset_index(name="atenciones")
+#                    .sort_values("fecha_atencion"))
+#     if serie.empty:
+#         fig = px.line(title=f"Atenciones diarias - Periodo {periodo}")
+#         fig.update_layout(template="simple_white")
+#         msg_fig = "Sin puntos válidos (fechas nulas)."
+#     else:
+#         fig = px.line(serie, x="fecha_atencion", y="atenciones",
+#                       title=f"Atenciones diarias - Periodo {periodo}", markers=True)
+#         msg_fig = f"{len(serie)} días con atenciones."
+#     fig.update_layout(
+#         xaxis_title="Fecha",
+#         yaxis_title="Atenciones",
+#         template="simple_white",
+#         margin=dict(l=40, r=20, t=60, b=40),
+#         title_font=dict(size=18, color=BRAND),
+#         font=dict(family=FONT_FAMILY),
+#         hovermode="x unified"
+#     )
+
+#     # NUEVO: construir gráfico de torta por descripcion_tipo_consulta
+#     try:
+#         pie_df = (
+#             df.groupby('descripcion_tipo_consulta')
+#               .size()
+#               .reset_index(name='Atenciones')
+#               .sort_values('Atenciones', ascending=False)
+#         )
+#     except Exception:
+#         pie_df = pd.DataFrame(columns=["descripcion_tipo_consulta", "Atenciones"])
+
+#     if pie_df.empty:
+#         fig_pie = go.Figure()
+#         fig_pie.update_layout(template="simple_white", title_text=f"Atenciones por tipo de consulta - Periodo {periodo}")
+#     else:
+#         fig_pie = px.pie(
+#             pie_df,
+#             names="descripcion_tipo_consulta",
+#             values="Atenciones",
+#             title=f"Atenciones por tipo de consulta - Periodo {periodo}"
+#         )
+#         fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+
+#     fig_pie.update_layout(
+#         template="simple_white",
+#         margin=dict(l=20, r=20, t=60, b=20),
+#         title_font=dict(size=18, color=BRAND),
+#         font=dict(family=FONT_FAMILY),
+#         legend_title_text="Tipo de consulta"
+#     )
+
+#     # Tabla 1: Servicio / Subactividad
+#     df_serv_subact = (
+#         df.groupby(['descripcion_servicio', 'subactividad'])
+#           .agg(Atenciones=('descripcion_servicio', 'size'))
+#           .reset_index()
+#           .rename(columns={'descripcion_servicio': 'Servicio',
+#                            'subactividad': 'Subactividad'})
+#           .sort_values('Atenciones', ascending=False)
+#     )
+#     total_serv_subact = int(df_serv_subact['Atenciones'].sum())
+#     if df_serv_subact.empty:
+#         aggrid_serv_subact = html.Div("Sin datos Servicio/Subactividad.", style={"color": "#b00"})
+#     else:
+#         aggrid_serv_subact = dag.AgGrid(
+#             id="tabla-servicio-subactividad",
+#             defaultColDef={
+#                 "sortable": True,
+#                 "resizable": True,
+#                 "filter": "agTextColumnFilter",
+#                 "floatingFilter": True
+#             },
+#             columnDefs=[
+#                 {"headerName": "Servicio", "field": "Servicio"},
+#                 {"headerName": "Subactividad", "field": "Subactividad"},
+#                 {"headerName": "Atenciones", "field": "Atenciones", "type": "numericColumn", "filter": "agNumberColumnFilter"}
+#             ],
+#             rowData=df_serv_subact.to_dict("records"),
+#             enableEnterpriseModules=True,
+#             dashGridOptions={
+#                 "pinnedBottomRowData": [{
+#                     "Servicio": "Total",
+#                     "Subactividad": "",
+#                     "Atenciones": total_serv_subact
+#                 }],
+#                 "statusBar": {
+#                     "statusPanels": [
+#                         {"statusPanel": "agAggregationComponent", "align": "right"}
+#                     ]
+#                 }
+#             },
+#             columnSize="sizeToFit",
+#             className="ag-theme-alpine",
+#             style={"height": "500px", "width": "100%"}
+#         )
+
+#     # Tabla 2: Agrupador / Especialidad
+#     df_serv_agrup = (
+#         df.groupby(['agrupador', 'descripcion_especialidad'])
+#           .agg(Atenciones=('agrupador', 'size'))
+#           .reset_index()
+#           .rename(columns={'agrupador': 'Agrupador',
+#                            'descripcion_especialidad': 'Especialidad'})
+#           .sort_values('Atenciones', ascending=False)
+#     )
+#     total_serv_agrup = int(df_serv_agrup['Atenciones'].sum())
+#     if df_serv_agrup.empty:
+#         aggrid_agrup_espec = html.Div("Sin datos Agrupador/Especialidad.", style={"color": "#b00"})
+#     else:
+#         aggrid_agrup_espec = dag.AgGrid(
+#             id="tabla-agrupador-especialidad",
+#             defaultColDef={
+#                 "sortable": True,
+#                 "resizable": True,
+#                 "filter": "agTextColumnFilter",
+#                 "floatingFilter": True
+#             },
+#             columnDefs=[
+#                 {"headerName": "Agrupador", "field": "Agrupador"},
+#                 {"headerName": "Especialidad", "field": "Especialidad"},
+#                 {"headerName": "Atenciones", "field": "Atenciones", "type": "numericColumn", "filter": "agNumberColumnFilter"}
+#             ],
+#             rowData=df_serv_agrup.to_dict("records"),
+#             enableEnterpriseModules=True,
+#             dashGridOptions={
+#                 "pinnedBottomRowData": [{
+#                     "Agrupador": "Total",
+#                     "Especialidad": "",
+#                     "Atenciones": total_serv_agrup
+#                 }],
+#                 "statusBar": {
+#                     "statusPanels": [
+#                         {"statusPanel": "agAggregationComponent", "align": "right"}
+#                     ]
+#                 }
+#             },
+#             columnSize="sizeToFit",
+#             className="ag-theme-alpine",
+#             style={"height": "500px", "width": "100%"}
+#         )
+
+#     # Tabla 3 - Detalle (ya definida como aggrid_detalle)
+#     if df2.empty:
+#         aggrid_detalle = html.Div("Sin datos detalle (query2).", style={"color": "#b00"})
+#     else:
+#         # ColumnDefs con todas las columnas de df2 (alias en minúsculas)
+#         col_defs_detalle = [
+#             {"headerName": "Servicio", "field": "servicio2"},
+#             {"headerName": "Actividad", "field": "actividad2"},
+#             {"headerName": "Subactividad", "field": "subactividad2"},
+#             {"headerName": "Tipo consulta", "field": "tipo_consulta2"},
+#             {"headerName": "CodDiag", "field": "coddiag2"},
+#             {"headerName": "Diagnostico", "field": "diagnostico2"},
+#             {"headerName": "dni_medico", "field": "dni_medico2", "filter": "agNumberColumnFilter"},
+#             {"headerName": "acto_med", "field": "acto_med2", "filter": "agNumberColumnFilter"},
+#             {"headerName": "sexo", "field": "sexo2"},
+#             {"headerName": "fecha_atencion", "field": "fecha_atencion2"},
+#             {"headerName": "desc_cl", "field": "desc_cl2"}
+#         ]
+#         aggrid_detalle = dag.AgGrid(
+#             id="tabla-detalle-query2",
+#             defaultColDef={
+#                 "sortable": True,
+#                 "resizable": True,
+#                 "filter": "agTextColumnFilter",
+#                 "floatingFilter": True
+#             },
+#             columnDefs=col_defs_detalle,
+#             rowData=df2.to_dict("records"),
+#             enableEnterpriseModules=True,
+#             columnSize="sizeToFit",
+#             className="ag-theme-alpine",
+#             style={"height": "500px", "width": "100%"}
+#         )
+
+#     # Contenedor lado a lado (solo las dos primeras tablas)
+#     tablas_wrapper = html.Div([
+#         html.Div([
+#             html.H6("Servicio / Subactividad", style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 600, "marginBottom": "8px"}),
+#             aggrid_serv_subact
+#         ], style={"flex": "1", "minWidth": "420px"}),
+#         html.Div([
+#             html.H6("Agrupador / Especialidad", style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 600, "marginBottom": "8px"}),
+#             aggrid_agrup_espec
+#         ], style={"flex": "1", "minWidth": "420px"})
+#     ], style={
+#         "display": "flex",
+#         "gap": "18px",
+#         "flexWrap": "wrap"
+#     })
+
+#     # El wrapper del detalle ahora es independiente; devolvemos solo la grilla
+#     detalle_wrapper = aggrid_detalle
+
+#     msg = f"{len(df):,} registros procesados | {msg_fig}"
+#     return (
+#         fig,
+#         fig_pie,
+#         msg,
+#         tablas_wrapper,
+#         detalle_wrapper,
+#         df_serv_subact.to_dict("records"),
+#         df_serv_agrup.to_dict("records"),
+#         df2.to_dict("records")
+#     )
+
+# # Función auxiliar para aplicar filtro local
+# def _apply_filter(data_records, filter_model):
+#     if not filter_model:
+#         return data_records
+#     df_local = pd.DataFrame(data_records)
+#     for col, f in filter_model.items():
+#         if col not in df_local.columns:
+#             continue
+#         ft = f.get("filterType")
+#         t = f.get("type")
+#         val = f.get("filter")
+#         if val is None:
+#             continue
+#         if ft == "text":
+#             serie = df_local[col].astype(str)
+#             if t == "contains":
+#                 mask = serie.str.contains(val, case=False, na=False)
+#             elif t == "notContains":
+#                 mask = ~serie.str.contains(val, case=False, na=False)
+#             elif t == "equals":
+#                 mask = serie.str.lower() == str(val).lower()
+#             elif t == "startsWith":
+#                 mask = serie.str.lower().str.startswith(str(val).lower())
+#             elif t == "endsWith":
+#                 mask = serie.str.lower().str.endswith(str(val).lower())
+#             else:
+#                 mask = pd.Series([True]*len(df_local))
+#             df_local = df_local[mask]
+#         elif ft == "number":
+#             serie = pd.to_numeric(df_local[col], errors="coerce")
+#             try:
+#                 num = float(val)
+#             except:
+#                 continue
+#             if t == "equals":
+#                 mask = serie == num
+#             elif t == "greaterThan":
+#                 mask = serie > num
+#             elif t == "lessThan":
+#                 mask = serie < num
+#             else:
+#                 mask = pd.Series([True]*len(df_local))
+#             df_local = df_local[mask]
+#     return df_local.to_dict("records")
+
+# # Callback dinámico tabla 1
+# @callback(
+#     Output("tabla-servicio-subactividad", "dashGridOptions"),
+#     Input("tabla-servicio-subactividad", "filterModel"),
+#     State("store-serv-subact-data", "data")
+# )
+# def actualizar_total_serv_subact(filter_model, base_data):
+#     registros_filtrados = _apply_filter(base_data, filter_model)
+#     total = sum(r.get("Atenciones", 0) for r in registros_filtrados)
+#     return {
+#         "pinnedBottomRowData": [{
+#             "Servicio": "Total filtrado",
+#             "Subactividad": "",
+#             "Atenciones": total
+#         }],
+#         "statusBar": {
+#             "statusPanels": [
+#                 {"statusPanel": "agAggregationComponent", "align": "right"}
+#             ]
+#         }
+#     }
+
+# # Callback dinámico tabla 2
+# @callback(
+#     Output("tabla-agrupador-especialidad", "dashGridOptions"),
+#     Input("tabla-agrupador-especialidad", "filterModel"),
+#     State("store-agrup-espec-data", "data")
+# )
+# def actualizar_total_agrup_espec(filter_model, base_data):
+#     registros_filtrados = _apply_filter(base_data, filter_model)
+#     total = sum(r.get("Atenciones", 0) for r in registros_filtrados)
+#     return {
+#         "pinnedBottomRowData": [{
+#             "Agrupador": "Total filtrado",
+#             "Especialidad": "",
+#             "Atenciones": total
+#         }],
+#         "statusBar": {
+#             "statusPanels": [
+#                 {"statusPanel": "agAggregationComponent", "align": "right"}
+#             ]
+#         }
+#     }
+
+# # Callback dinámico tabla 3 (detalle)
+# @callback(
+#     Output("tabla-detalle-query2", "dashGridOptions"),
+#     Input("tabla-detalle-query2", "filterModel"),
+#     State("store-detalle-data", "data")
+# )
+# def actualizar_total_detalle(filter_model, base_data):
+#     registros_filtrados = _apply_filter(base_data, filter_model)
+#     total = len(registros_filtrados)
+#     return {
+#         "pinnedBottomRowData": [{
+#             "servicio2": f"Total filas: {total}"  # usar la clave en minúsculas
+#         }],
+#         "statusBar": {
+#             "statusPanels": [
+#                 {"statusPanel": "agAggregationComponent", "align": "right"}
+#             ]
+#         }
+#     }
+
+# @callback(
+#     Output("download-query1-csv", "data"),
+#     Input("btn-download-query1", "n_clicks"),
+#     State("page-url", "pathname"),
+#     State("page-url", "search"),
+#     State("filter-periodo", "value"),
+#     prevent_initial_call=True
+# )
+# def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown):
+#     if not pathname:
+#         return None
+#     codcas = pathname.rstrip("/").split("/")[-1]
+#     periodo = _parse_periodo(search) or periodo_dropdown
+#     if not periodo:
+#         return None
+#     engine = create_connection()
+#     if engine is None:
+#         return None
+
+#     query = f"""
+#         SELECT 
+#             ce.cod_servicio,
+#             ce.cod_especialidad,
+#             ca.cenasides,
+#             am.actdes AS actividad,
+#             ag.agrupador AS subactividad,
+#             a.actespnom AS agrupador,
+#             ce.cod_tipo_consulta,
+#             ce.cod_diag,
+#             c.servhosdes AS descripcion_servicio,
+#             e.especialidad AS descripcion_especialidad,
+#             t.tipcondes AS descripcion_tipo_consulta,
+#             d.diagdes AS descripcion_diagnostico,
+#             dni_medico,
+#             doc_paciente,
+#             cod_tipdoc_paciente,
+#             sexo,
+#             fecha_atencion,
+#             acto_med
+#         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+#         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
+#         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
+#         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
+#         LEFT JOIN dwsge.sgss_cmdia10 AS d ON ce.cod_diag = d.diagcod
+#         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
+#         LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
+#         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
+#         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+#         WHERE ce.cod_centro = '{codcas}'
+#           AND ce.cod_actividad = '91'
+#           AND ce.clasificacion in (2,4,6)
+#           AND ce.cod_variable = '001'
+#     """
+#     try:
+#         df = pd.read_sql(query, engine)
+#     except Exception:
+#         return None
+
+#     filename = f"total_atenciones_{codcas}_{periodo}.csv"
+#     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep=";")
+
+
+
+
+
+# SELECT
+# d.cod_centro,d.periodo,d.cod_topico,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente,
+# d.cod_prioridad,d.cod_emergencia,
+# d.secuen_aten,d.cod_estandar,d.cod_prioridad_n
+# FROM (
+#     SELECT 
+#         ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
+# acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
+#      FROM (SELECT
+#             a.cod_centro, 
+#             a.periodo, 
+#             a.cod_topico, 
+#             acto_med, 
+#             fecha_aten, 
+#             hora_aten, 
+#             cod_tipo_paciente,
+#             cod_prioridad, 
+#             a.cod_emergencia, 
+#             secuen_aten, 
+#             a.cod_estandar, 
+# 			a.cod_diagnostico,
+# 	(case when a.cod_estandar = '04' then '1'
+# 	else (case when a.cod_prioridad='1' then '2'-- and b.cod_estandar <> '04' then '2' 
+# 				else (a.cod_prioridad) 
+# 				end) 
+# 	end )as cod_prioridad_n
+#         FROM 
+#             dwsge.dwe_emergencia_atenciones_homologacion_2025_02 a
+# 	where (a.cod_diagnostico IS not NULL )
+# 	and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+# 	 ) c	
+# ) d
+# WHERE
+#     d.SECUENCIA = '1'
+# and cod_centro ='001'
+# and cod_prioridad_n ='5'

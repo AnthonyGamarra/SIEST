@@ -1,0 +1,421 @@
+{% extends 'base.html' %}
+{% block body %}
+<style>
+  /* Variables de diseño */
+  :root {
+    --primary: #0064AF;
+    --primary-dark: #004d8c;
+    --primary-light: #E8F1FF;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --dark: #1f2937;
+    --light: #f9fafb;
+    --border: #e5e7eb;
+  }
+
+  /* Asegurar que nada tenga márgenes y que ocupen el alto completo */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 100vh;
+  }
+
+  /* Fondo con imagen */
+  body, .main {
+    background: url('{{ url_for("static", filename="76824.jpg") }}')
+                center center / cover no-repeat fixed !important;
+  }
+
+  .rg-wrapper {
+    background: transparent;
+    padding-top: 20px;
+  }
+
+  /* Header con título y botón */
+  .rg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px 30px 20px;
+    background: transparent;
+    flex-wrap: wrap;
+    gap: 15px;
+  }
+
+  .rg-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    margin: 0;
+  }
+
+  .btn-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 24px;
+    text-align: center;
+    background: rgba(255,255,255,0.95);
+    color: var(--primary);
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    cursor: pointer;
+  }
+
+  .btn-back:hover {
+    background: #ffffff;
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: var(--primary-dark);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  }
+
+  .btn-back:active {
+    transform: translateY(0);
+  }
+
+  /* Contenedor de módulos */
+  .modules-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    padding: 0 20px;
+    max-width: 1200px;
+    margin: 0 auto 40px;
+    background: transparent;
+  }
+
+  /* Módulos (tarjetas) */
+  .modules-menu .module {
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .modules-menu .module::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--success));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+
+  .modules-menu .module-link {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .modules-menu .module-link:hover {
+    text-decoration: none;
+  }
+
+  .modules-menu .module-link:hover .module {
+    border-color: var(--primary-light);
+    box-shadow: 0 8px 24px rgba(0, 100, 175, 0.2);
+  }
+
+  .modules-menu .module-link:hover .module::before {
+    transform: scaleX(1);
+  }
+
+  .modules-menu .module img {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    transition: transform 0.3s ease;
+  }
+
+  .modules-menu .module-link:hover img {
+    transform: scale(1.1) rotate(-5deg);
+  }
+
+  .modules-menu .module span {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--dark);
+    transition: color 0.3s ease;
+  }
+
+  .modules-menu .module-link:hover span {
+    color: var(--primary);
+  }
+
+  /* Módulo inactivo */
+  .modules-menu .module.inactive {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(8px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .modules-menu .module.inactive img {
+    filter: grayscale(60%) drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+  }
+
+  .modules-menu .module.inactive span {
+    color: #9ca3af;
+  }
+
+  .modules-menu .module.inactive::after {
+    content: '(Próximamente)';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.1);
+    color: #6b7280;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* Visor de reportes */
+  #rg-viewer {
+    margin: 0 auto;
+    max-width: 1400px;
+    width: calc(100% - 40px);
+    padding: 0 20px 40px 20px;
+  }
+
+  .viewer-container {
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 12px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.15);
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  .viewer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  .viewer-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--dark);
+  }
+
+  .btn-close-viewer {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+  }
+
+  .btn-close-viewer:hover {
+    background: var(--light);
+    color: var(--dark);
+  }
+
+  #rg-iframe {
+    border: none;
+    width: 100%;
+    height: 72vh;
+    border-radius: 10px;
+    background: #f8f9fb;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .rg-header {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 0 16px 20px 16px;
+    }
+
+    .rg-title {
+      font-size: 24px;
+    }
+
+    .btn-back {
+      align-self: flex-start;
+    }
+
+    .modules-menu {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      padding: 0 16px;
+    }
+
+    .modules-menu .module {
+      padding: 24px 16px;
+    }
+
+    #rg-viewer {
+      width: calc(100% - 32px);
+      padding: 0 16px 32px 16px;
+    }
+
+    .viewer-container {
+      padding: 12px;
+    }
+
+    #rg-iframe {
+      height: 50vh;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .modules-menu {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 0 12px;
+    }
+
+    .rg-title {
+      font-size: 20px;
+    }
+  }
+</style>
+
+<!-- Wrapper permite crecer sin tapar el header -->
+<div class="rg-wrapper position-relative d-flex flex-column"
+  style="min-height:100vh; background:transparent;">
+
+  <!-- Header -->
+  <div class="rg-header">
+    <h1 class="rg-title">📊 Reportes Gerenciales</h1>
+  </div>
+
+  <!-- Módulos principales -->
+  <div class="modules-menu">
+    <a href="{{ bi_url }}" class="module-link" data-url="{{ bi_url }}">
+      <div class="module">
+        <img src="{{ url_for('static', filename='order_1420037.png') }}" alt="Atenciones">
+        <span>Atenciones - CE</span>
+      </div>
+    </a>
+
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiZDU3ODFkZjMtMDlkMi00YjgxLWE2MGYtNWRhMzA2ZWI2NmRjIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiZDU3ODFkZjMtMDlkMi00YjgxLWE2MGYtNWRhMzA2ZWI2NmRjIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9">
+      <div class="module">
+        <img src="{{ url_for('static', filename='shortlist_8915786.png') }}" alt="Atendidos">
+        <span>Atendidos - CE</span>
+      </div>
+    </a>
+    
+
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiMTRjZjQ3ZjQtMjg2NC00YzI2LWE5YzktYmMyMmNhZDQwODhhIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMTRjZjQ3ZjQtMjg2NC00YzI2LWE5YzktYmMyMmNhZDQwODhhIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9">
+      <div class="module">  
+        <img src="{{ url_for('static', filename='ambulance_3441448.png') }}" alt="Atenciones por tópico - EME">
+        <span>Atenciones por tópico - EME</span>
+      </div>
+    </a>
+
+    
+    <a style="display: none;" href="https://app.powerbi.com/view?r=eyJrIjoiZGU0YTAxMzktMDdiMi00NDEyLThjMmYtMTQ3ZGIwMmQ0MTIyIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiZGU0YTAxMzktMDdiMi00NDEyLThjMmYtMTQ3ZGIwMmQ0MTIyIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9">
+      <div class="module">
+        <img src="{{ url_for('static', filename='work-injury_13301328.png') }}" alt="Accidentes">
+        <span>Accidentes</span>
+      </div>
+    </a>
+
+    <div class="module inactive">
+      <img src="{{ url_for('static', filename='work-injury_13301328.png') }}" alt="Reportes">
+      <span>Accidentes</span>
+    </div>
+
+    <a style="display: none;"href="https://app.powerbi.com/view?r=eyJrIjoiZjJlZjk2NDgtMjdlMS00ZGRjLWJlMWMtN2QyYjJkNjNiOGU4IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link"  data-url="https://app.powerbi.com/view?r=eyJrIjoiZjJlZjk2NDgtMjdlMS00ZGRjLWJlMWMtN2QyYjJkNjNiOGU4IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9">
+      <div class="module">  
+        <img src="{{ url_for('static', filename='opportunity_1610611.png') }}" alt="Diferimiento de citas">
+        <span>Diferimiento de citas - CE</span>
+      </div> 
+    </a>
+    <div class="module inactive">
+      <img src="{{ url_for('static', filename='opportunity_1610611.png') }}" alt="Diferimiento de citas">
+      <span>Diferimiento de citas - CE</span>
+    </div>
+
+
+
+    <div class="module inactive">
+      <img src="{{ url_for('static', filename='analytics.png') }}" alt="Reportes">
+      <span>Reportes Adicionales</span>
+    </div>
+  </div>
+
+  <!-- Visor embebido para abrir el reporte en la misma página -->
+  <div id="rg-viewer" style="display:none;">
+    <div class="viewer-container">
+      <div class="viewer-header">
+        <span class="viewer-title">Reporte</span>
+        <button class="btn-close-viewer" onclick="closeViewer()">✕</button>
+      </div>
+      <iframe id="rg-iframe" title="Reporte"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function closeViewer() {
+    const viewer = document.getElementById('rg-viewer');
+    const iframe = document.getElementById('rg-iframe');
+    viewer.style.display = 'none';
+    iframe.src = '';
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const links = document.querySelectorAll('.module-link');
+    const viewer = document.getElementById('rg-viewer');
+    const iframe = document.getElementById('rg-iframe');
+
+    links.forEach(link => {
+      link.addEventListener('click', function(evt) {
+        evt.preventDefault();
+        const url = this.dataset.url || this.href;
+        if (!url) return;
+
+        iframe.src = url;
+        viewer.style.display = 'block';
+        viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Cerrar con ESC
+    document.addEventListener('keydown', function(evt) {
+      if (evt.key === 'Escape' && viewer.style.display !== 'none') {
+        closeViewer();
+      }
+    });
+  });
+</script>
+{% endblock %}
