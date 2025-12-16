@@ -58,7 +58,7 @@ def generate_logs_html(logs, total, graphs=None):
         graphs_script += f"""
         document.addEventListener('DOMContentLoaded', function() {{
             var graph1Data = {graphs['graph1']};
-            
+            var datosLogin = graph1Data.datosLogin || [];
             function updateGraph1() {{
                 var newLayout = JSON.parse(JSON.stringify(graph1Data.layout));
                 if (window.innerWidth > 1200) {{
@@ -75,8 +75,54 @@ def generate_logs_html(logs, total, graphs=None):
                 return newLayout;
             }}
             
+            function applyFiltersGraph1() {{
+                var mesEl = document.getElementById('monthFilter');
+                var anioEl = document.getElementById('yearFilter');
+                var mes = mesEl ? mesEl.value : 'todos';
+                var anio = anioEl ? anioEl.value : 'todos';
+
+                var filtrados = datosLogin;
+                if (anio && anio !== 'todos') {{
+                    filtrados = filtrados.filter(function(d) {{ return d.anio === anio; }});
+                }}
+                if (mes && mes !== 'todos') {{
+                    filtrados = filtrados.filter(function(d) {{ return d.mes === mes; }});
+                }}
+
+                var conteo = {{}};
+                filtrados.forEach(function(d) {{
+                    var rol = (d.user_role || 'sin_rol').trim();
+                    conteo[rol] = (conteo[rol] || 0) + 1;
+                }});
+
+                var roles = Object.keys(conteo);
+                var valores = roles.map(function(r) {{ return conteo[r]; }});
+
+                function colorRol(r) {{
+                    r = (r || '').trim();
+                    if (r === 'admin') return '#0064AF';
+                    if (r === 'user') return '#4C78A8';
+                    return '#9D755D';
+                }}
+                var colors = roles.map(colorRol);
+
+                var newData = [{{
+                    type: 'bar',
+                    x: roles,
+                    y: valores,
+                    text: valores,
+                    textposition: 'outside',
+                    marker: {{color: colors}},
+                    hovertemplate: '<b>%{{x}}</b><br>Logs: %{{y}}<extra></extra>'
+                }}];
+
+                Plotly.react('graph1', newData, updateGraph1(), {{responsive: true, maintainAspectRatio: false}});
+            }}
+
             var layout1 = updateGraph1();
             Plotly.newPlot('graph1', graph1Data.data, layout1, {{responsive: true, maintainAspectRatio: false}});
+            window.updateGraph1FromFilters = applyFiltersGraph1;
+            applyFiltersGraph1();
             
             // Listener mejorado
             var resizeTimer;
@@ -108,6 +154,8 @@ def generate_logs_html(logs, total, graphs=None):
         graphs_script += f"""
         document.addEventListener('DOMContentLoaded', function() {{
             var graph2Data = {graphs['graph2']};
+            var datosCompletos = graph2Data.datosCompletos || [];
+            var rangoAnios = graph2Data.rangoAnios || {{}};
             
             function updateGraph2() {{
                 var newLayout = JSON.parse(JSON.stringify(graph2Data.layout));
@@ -125,8 +173,108 @@ def generate_logs_html(logs, total, graphs=None):
                 return newLayout;
             }}
             
+            function filterData() {{
+                var mes = document.getElementById('monthFilter').value;
+                var anio = document.getElementById('yearFilter').value;
+                var filteredCountEl = document.getElementById('filteredCount');
+                
+                var datosFiltrados = datosCompletos;
+                
+                // Filtrar por año
+                if (anio !== 'todos') {{
+                    datosFiltrados = datosFiltrados.filter(function(d) {{ return d.anio === anio; }});
+                }}
+                
+                // Filtrar por mes
+                if (mes !== 'todos') {{
+                    datosFiltrados = datosFiltrados.filter(function(d) {{ return d.mes === mes; }});
+                }}
+                
+                var fechasFiltradas = datosFiltrados.map(function(d) {{ return d.fecha; }});
+                var cantidadesFiltradas = datosFiltrados.map(function(d) {{ return d.cantidad; }});
+                var totalFiltrado = cantidadesFiltradas.reduce(function(acc, v) {{
+                    var n = parseInt(v, 10);
+                    return acc + (isNaN(n) ? 0 : n);
+                }}, 0);
+                if (filteredCountEl) {{
+                    filteredCountEl.textContent = totalFiltrado;
+                }}
+                window.currentFilteredTotal = totalFiltrado;
+                
+                var newData = [{{
+                    x: fechasFiltradas,
+                    y: cantidadesFiltradas,
+                    mode: 'lines+markers',
+                    name: 'Cantidad de logins',
+                    line: {{color: '#0064AF', width: 3}},
+                    marker: {{size: 8, color: '#0064AF'}},
+                    hovertemplate: '<b>%{{x}}</b><br>Logins: %{{y}}<extra></extra>'
+                }}];
+                
+                Plotly.react('graph2', newData, updateGraph2(), {{responsive: true, maintainAspectRatio: false}});
+                if (window.updateGraph1FromFilters) {{ window.updateGraph1FromFilters(); }}
+            }}
+            
             var layout2 = updateGraph2();
             Plotly.newPlot('graph2', graph2Data.data, layout2, {{responsive: true, maintainAspectRatio: false}});
+            
+            var yearFilter = document.getElementById('yearFilter');
+            // Calcular rango de años: preferir el rango calculado en backend; si falta, derivar de datosCompletos
+            var minAnio = rangoAnios.minimo;
+            var maxAnio = rangoAnios.maximo;
+            if ((!minAnio || !maxAnio) && datosCompletos.length > 0) {{
+                var anios = datosCompletos
+                    .map(function(d) {{ return parseInt(d.anio, 10); }})
+                    .filter(function(v) {{ return !isNaN(v); }});
+                if (anios.length > 0) {{
+                    minAnio = Math.min.apply(null, anios);
+                    maxAnio = Math.max.apply(null, anios);
+                }}
+            }}
+
+            if (yearFilter && minAnio && maxAnio) {{
+                // Limpiar opciones existentes excepto "Todos los años"
+                yearFilter.innerHTML = '<option value="todos">Todos los años</option>';
+
+                for (var anio = minAnio; anio <= maxAnio; anio++) {{
+                    var option = document.createElement('option');
+                    option.value = String(anio);
+                    option.textContent = String(anio);
+                    yearFilter.appendChild(option);
+                }}
+
+                // Establecer el año actual como seleccionado por defecto (o el más reciente disponible)
+                var currentDate = new Date();
+                var currentYear = String(currentDate.getFullYear());
+                if (currentYear >= minAnio && currentYear <= maxAnio) {{
+                    yearFilter.value = currentYear;
+                }} else {{
+                    yearFilter.value = String(maxAnio);
+                }}
+            }}
+            
+            // Listener para el filtro de meses
+            var monthFilter = document.getElementById('monthFilter');
+            if (monthFilter) {{
+                // Seleccionar el mes actual por defecto
+                var now = new Date();
+                var currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+                monthFilter.value = currentMonth;
+                
+                monthFilter.addEventListener('change', function() {{
+                    filterData();
+                }});
+            }}
+            
+            // Listener para el filtro de años
+            if (yearFilter) {{
+                yearFilter.addEventListener('change', function() {{
+                    filterData();
+                }});
+            }}
+            
+            // Aplicar filtros iniciales (año y mes)
+            filterData();
             
             // Listener mejorado
             var resizeTimer;
@@ -247,16 +395,18 @@ def generate_logs_html(logs, total, graphs=None):
             }}
             .stats-grid {{
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 16px;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 18px;
                 margin-bottom: 20px;
             }}
             .stat-card {{
                 background: white;
-                padding: 20px;
+                padding: 18px 20px;
                 border-radius: 14px;
-                box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-                text-align: center;
+                box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
             }}
             .stat-number {{
                 font-size: 36px;
@@ -268,6 +418,60 @@ def generate_logs_html(logs, total, graphs=None):
                 font-size: 13px;
                 margin-top: 8px;
                 color: #6b6b6b;
+            }}
+            .stat-header {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                width: 100%;
+            }}
+            .stat-title {{
+                font-size: 14px;
+                font-weight: 600;
+                color: #003b72;
+                margin: 0;
+            }}
+            .stat-card.stats-merged {{
+                gap: 14px;
+            }}
+            .stat-pair {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 20px;
+                align-items: center;
+            }}
+            .stat-block {{
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }}
+            .filters-card {{
+                gap: 12px;
+            }}
+            .filters-container {{
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+                align-items: center;
+                flex-wrap: wrap;
+                width: 100%;
+            }}
+            .filters-row {{
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                align-items: center;
+                width: 100%;
+            }}
+            .filters-row.compact-filters {{
+                margin-top: 4px;
+            }}
+            .stat-subtext {{
+                font-size: 12px;
+                color: #8a8a8a;
+                margin-top: -4px;
             }}
             .content-card {{
                 background: white;
@@ -399,6 +603,48 @@ def generate_logs_html(logs, total, graphs=None):
                 box-shadow: 0 12px 28px rgba(0,0,0,0.12);
             }}
             
+            .filters-container {{
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+                align-items: center;
+                margin-bottom: 8px;
+                flex-wrap: wrap;
+            }}
+
+            .filters-card {{
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                align-items: flex-start;
+            }}
+
+            .month-filter, .year-filter {{
+                padding: 8px 12px;
+                border: 2px solid #0064AF;
+                border-radius: 8px;
+                background: white;
+                color: #0064AF;
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                outline: none;
+            }}
+            
+            .month-filter:hover, .year-filter:hover {{
+                background: #0064AF;
+                color: white;
+            }}
+            
+            .month-filter:focus, .year-filter:focus {{
+                box-shadow: 0 0 0 3px rgba(0,100,175,0.2);
+            }}
+            
+            #graph2 {{
+                position: relative;
+            }}
+            
             @keyframes fadeInGraph {{
                 from {{
                     opacity: 0;
@@ -518,15 +764,50 @@ def generate_logs_html(logs, total, graphs=None):
             </div>
             <!-- Estadísticas -->
             <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number">{total}</div>
-                    <div class="stat-label">Total de Logs</div>
+                <div class="stat-card stats-merged">
+                    <div class="stat-header">
+                        <p class="stat-title">Resumen de ingresos</p>
+                    </div>
+                    <div class="stat-pair">
+                        <div class="stat-block">
+                            <p class="stat-label">Total de ingresos</p>
+                            <div class="stat-number">{total}</div>
+                            <div class="stat-subtext">Conteo Total de ingresos</div>
+                        </div>
+                        <div class="stat-block">
+                            <p class="stat-label">Total de ingresos filtrados</p>
+                            <div class="stat-number" id="filteredCount">0</div>
+                            <div class="stat-subtext">Conteo Total de ingresos filtrados</div>
+                        </div>
+                    </div>
+                    <div class="filters-row compact-filters">
+                        <select id="yearFilter" class="year-filter">
+                            <option value="todos">Todos los años</option>
+                        </select>
+                        <select id="monthFilter" class="month-filter">
+                            <option value="todos">Todos los meses</option>
+                            <option value="01">Enero</option>
+                            <option value="02">Febrero</option>
+                            <option value="03">Marzo</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Mayo</option>
+                            <option value="06">Junio</option>
+                            <option value="07">Julio</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Septiembre</option>
+                            <option value="10">Octubre</option>
+                            <option value="11">Noviembre</option>
+                            <option value="12">Diciembre</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <!-- Gráficos -->
             <div class="graphs-container">
                 <div class="graph-card" id="graph1"></div>
-                <div class="graph-card" id="graph2"></div>
+                <div class="graph-card" style="position: relative;">
+                    <div id="graph2"></div>
+                </div>
             </div>
             <!-- Tabla de Logs -->
             <div class="content-card">
@@ -582,13 +863,21 @@ def generate_graphs(logs):
         'peticiones': getattr(log, 'peticiones', 'N/A') or 'N/A',
         'user_role': getattr(log, 'user_role', 'sin_rol') or 'sin_rol',
         'urls': getattr(log, 'urls', '') or '',
+        'fecha_dt': getattr(log, 'fecha', None)
     } for log in logs])
     
   
     
     try:
         # GRÁFICO 1: Cantidad de logs por rol (solo URL = /login)
-        df_login = df[df['urls'] == '/login']
+        df_login = df[df['urls'] == '/login'].copy()
+
+        # Agregar columnas de fecha/mes/año para filtros
+        if not df_login.empty:
+            df_login['fecha_dt'] = pd.to_datetime(df_login['fecha_dt'], errors='coerce')
+            df_login['fecha'] = df_login['fecha_dt'].dt.strftime('%d/%m/%Y')
+            df_login['mes'] = df_login['fecha_dt'].dt.strftime('%m')
+            df_login['anio'] = df_login['fecha_dt'].dt.strftime('%Y')
         
         if len(df_login) == 0:
             print("DEBUG: No hay logs de login para el gráfico 1")
@@ -633,42 +922,66 @@ def generate_graphs(logs):
                 yaxis=dict(gridcolor='#e9ecef', zeroline=True)
             )
             
-            # Serializar gráfico 1 usando to_json()
-            graph1_json = fig1.to_json()
+            # Serializar gráfico 1 usando to_json() y adjuntar datos para filtrado
+            import json
+            graph1_json_raw = fig1.to_json()
+            graph1_data = json.loads(graph1_json_raw)
+            datos_login = df_login[['fecha', 'mes', 'anio', 'user_role']].fillna('').to_dict(orient='records')
+            graph1_data['datosLogin'] = datos_login
+            graph1_json = json.dumps(graph1_data)
         
-        # GRÁFICO 2: Cantidad de logs por fecha (línea)
+        # GRÁFICO 2: Cantidad de /login por fecha (línea)
         try:
             from sqlalchemy import text
+            # Obtener rango de años de toda la tabla (no solo /login)
+            query_years = """SELECT 
+                            MIN(EXTRACT(YEAR FROM fecha)::integer) AS anio_minimo,
+                            MAX(EXTRACT(YEAR FROM fecha)::integer) AS anio_maximo
+                            FROM public."Log_users"
+                            WHERE fecha IS NOT NULL;"""
+            result_years = db.session.execute(text(query_years))
+            years_row = result_years.fetchone()
+            anio_minimo = years_row[0] if years_row and years_row[0] else None
+            anio_maximo = years_row[1] if years_row and years_row[1] else None
+
             query_str = """SELECT 
                            TO_CHAR(fecha, 'DD/MM/YYYY') AS fecha,
-                           COUNT(*) AS cantidad_logs
+                           TO_CHAR(fecha, 'MM') AS mes,
+                           TO_CHAR(fecha, 'YYYY') AS anio,
+                           COUNT(*) AS cantidad_login
                            FROM public."Log_users"
-                           GROUP BY TO_CHAR(fecha, 'DD/MM/YYYY')
-                           ORDER BY TO_CHAR(fecha, 'DD/MM/YYYY');
-                        """
+                           WHERE urls = '/login'
+                           GROUP BY TO_CHAR(fecha, 'DD/MM/YYYY'), TO_CHAR(fecha, 'MM'), TO_CHAR(fecha, 'YYYY')
+                           ORDER BY MIN(fecha);"""
             
             result = db.session.execute(text(query_str))
             rows = result.fetchall()
             
             if rows and len(rows) > 0:
                 fechas = [str(row[0]) for row in rows]
-                cantidades = [row[1] for row in rows]
+                meses = [str(row[1]) for row in rows]
+                anios = [str(row[2]) for row in rows]
+                cantidades = [row[3] for row in rows]
+                
+                # Crear datos completos con mes y año para filtrado
+                datos_completos = [{'fecha': f, 'mes': m, 'anio': a, 'cantidad': c} for f, m, a, c in zip(fechas, meses, anios, cantidades)]
+                rango_anios = {'minimo': anio_minimo, 'maximo': anio_maximo}
                 
                 fig2 = go.Figure()
                 fig2.add_trace(go.Scatter(
                     x=fechas,
                     y=cantidades,
                     mode='lines+markers',
-                    name='Cantidad de logs',
+                    name='Cantidad de logins',
                     line=dict(color='#0064AF', width=3),
                     marker=dict(size=8, color='#0064AF'),
-                    hovertemplate='<b>%{x}</b><br>Logs: %{y}<extra></extra>'
+                    hovertemplate='<b>%{x}</b><br>Logins: %{y}<extra></extra>'
                 ))
                 
                 fig2.update_layout(
-                    title='Cantidad de Logs por Fecha',
+                    title='Cantidad de Ingresos por Fecha',
                     xaxis_title='Fecha',
-                    yaxis_title='Número de logs',
+                    yaxis_title='Número de Ingresos',
                     showlegend=False,
                     margin=dict(l=60, r=60, t=80, b=60),
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -681,10 +994,16 @@ def generate_graphs(logs):
                 )
                 
                 graph2_json = fig2.to_json()
+                # Agregar datos completos y rango de años al JSON para el filtrado
+                import json
+                graph2_data = json.loads(graph2_json)
+                graph2_data['datosCompletos'] = datos_completos
+                graph2_data['rangoAnios'] = rango_anios
+                graph2_json = json.dumps(graph2_data)
             else:
                 graph2_json = None
         except Exception as e:
-            print(f"ERROR al generar gráfico 2 (línea de fechas): {e}")
+            print(f"ERROR al generar gráfico 2 (línea de login por fechas): {e}")
             graph2_json = None
         
         return {'graph1': graph1_json, 'graph2': graph2_json}
@@ -712,11 +1031,14 @@ def view_logs():
     # Consultar TODOS los logs ordenados por ID descendente (más recientes primero)
     logs = Logs_User.query.order_by(desc(Logs_User.id)).all()
     
+    # Calcular total de logs de /login
+    total_login = len([log for log in logs if log.urls == '/login'])
+    
     # Generar gráficos
     graphs = generate_graphs(logs)
     
     # Generar HTML con tabla y gráficos
-    return generate_logs_html(logs, len(logs), graphs)
+    return generate_logs_html(logs, total_login, graphs)
 
 
 def register_logs_blueprint(app):
