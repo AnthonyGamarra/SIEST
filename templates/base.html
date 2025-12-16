@@ -143,10 +143,11 @@
         {% if current_user.role == 'admin' %}
         <a href="{{ url_for('logs.view_logs') }}" class="module">
           <img
-            src="{{ url_for('static', filename='access-log.png') }}"
+            src="{{ url_for('static', filename='logs.png') }}"
             alt="Reportes LOGS"
           />
-          <span>Reportes LOGS</span>
+          
+          <span>Auditoría del Sistema</span>
         </a>
         {% endif %}
 
