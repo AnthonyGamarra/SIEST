@@ -63,9 +63,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         suppress_callback_exceptions=True
     )
 
+    meses = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+
+
     # Generar periodos "01".."12"
     valores = [f"{i:02d}" for i in range(1, 13)]
-    df_period = pd.DataFrame(valores, columns=["periodo"])
+    df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
 
     # ========== LAYOUT ==========
     def serve_layout():
@@ -97,7 +103,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                     'marginRight': '12px'
                                 }),
                                 html.H2(
-                                    "Emergencias - Atenciones por Prioridad",
+                                    "Emergencias - Atenciones por Tópico y Prioridad",
                                     style={
                                         'color': BRAND,
                                         'fontFamily': FONT_FAMILY,
@@ -153,12 +159,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         }),
                         dcc.Dropdown(
                             id='filter-periodo',
-                            options=[{'label': f'Periodo {p}', 'value': p} for p in df_period['periodo'].unique()],
-                            placeholder='🔍 Seleccione un periodo',
+                            options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
+                            placeholder='Seleccione un periodo',
+                            clearable=True,
                             style={
-                                'width': '250px',
-                                'fontFamily': FONT_FAMILY,
-                                'fontSize': '14px'
+                                'width': '240px',
+                                'fontFamily': FONT_FAMILY
                             }
                         ),
                     ], style={'display': 'flex', 'alignItems': 'center', 'marginRight': '15px'}),
