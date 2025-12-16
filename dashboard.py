@@ -52,6 +52,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "borderRadius": "14px",
         "boxShadow": "0 4px 10px rgba(0,0,0,0.05)",
         "backdropFilter": "blur(3px)",
+        "overflow": "visible",
+        "position": "relative",
+        "zIndex": 1100,
     }
 
     def _import_indicator_pages():
@@ -159,12 +162,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
                         dcc.Dropdown(
                             id='filter-periodo',
+                            className='periodo-dropdown',
                             options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
                             placeholder='Seleccione un periodo',
                             clearable=True,
                             style={
                                 'width': '240px',
-                                'fontFamily': FONT_FAMILY
+                                'fontFamily': FONT_FAMILY,
+                                'position': 'relative',
+                                'zIndex': 1200
                             }
                         ),
                         dbc.Button(

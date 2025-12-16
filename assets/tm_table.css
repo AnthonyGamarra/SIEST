@@ -29,6 +29,13 @@
     border: 1px solid #ffffff55;
 }
 
+/* Asegurar que el menú del dropdown de periodo quede por encima de las cards */
+.periodo-dropdown .Select-menu-outer,
+.periodo-dropdown .Select-menu,
+.periodo-dropdown .Select {
+    z-index: 1300 !important;
+}
+
 .ag-theme-alpine .ag-header {
     border-bottom: 1px solid #0064AF;
 }
