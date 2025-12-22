@@ -8,6 +8,14 @@ import plotly.express as px
 from datetime import date
 import dash_ag_grid as dag
 import os  # agregado
+import dash
+
+# Importar páginas de detalle
+from Indicadores import ate_topicos_1
+from Indicadores import ate_topicos_2
+from Indicadores import ate_topicos_3
+from Indicadores import ate_topicos_4
+from Indicadores import ate_topicos_5
 
 
 def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
@@ -60,8 +68,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         assets_folder=assets_path,            # <- ruta física a assets
         assets_url_path=assets_url_path,      # <- ruta pública para assets (única por app)
         external_stylesheets=external_stylesheets,
-        suppress_callback_exceptions=True
+        suppress_callback_exceptions=True,
     )
+
+    # Registrar callbacks de páginas de detalle
+    from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
+    ate_topicos_1.register_callbacks(dash_app)
+    ate_topicos_2.register_callbacks(dash_app)
+    ate_topicos_3.register_callbacks(dash_app)
+    ate_topicos_4.register_callbacks(dash_app)
+    ate_topicos_5.register_callbacks(dash_app)
 
     meses = [
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -83,6 +99,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 dcc.Location(id='url', refresh=False),
                 dcc.Location(id='location-redirect', refresh=True),
 
+                html.Div([
                 # ENCABEZADO
                 html.Div([
                     html.Div([
@@ -209,7 +226,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 # CONTENEDORES
                 dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
                 html.Br(),
-                dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)])
+                dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
+                ], id='main-eme-content'),
+
+                # Contenedor para páginas de detalle
+                html.Div(id='page-eme-container', style={'display': 'none'})
+
             ], fluid=True, style={
                 'backgroundImage': "url('/static/76824.jpg')",
                 'backgroundSize': 'cover',
@@ -237,6 +259,56 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         except Exception as e:
             print(f"Failed to connect to the database: {e}")
             return None
+
+    # Callback de Enrutamiento Manual (Reemplaza a Dash Pages)
+    @dash_app.callback(
+        Output('main-eme-content', 'style'),
+        Output('page-eme-container', 'children'),
+        Output('page-eme-container', 'style'),
+        Input('url', 'pathname')
+    )
+    def router(pathname):
+        # Estilos por defecto
+        show_dash = {'display': 'block'}
+        hide_dash = {'display': 'none'}
+        show_page = {'display': 'block'}
+        hide_page = {'display': 'none'}
+
+        if not pathname:
+            return show_dash, html.Div(), hide_page
+
+        # Limpiar la ruta base para obtener la ruta relativa
+        # Ejemplo: /dashboard_alt/prioridad_1/001 -> prioridad_1/001
+        prefix = url_base_pathname.rstrip('/')
+        clean_path = pathname
+        if clean_path.startswith(prefix):
+            clean_path = clean_path[len(prefix):].strip('/')
+        
+        if not clean_path:
+            return show_dash, html.Div(), hide_page
+
+        # Lógica de enrutamiento
+        if clean_path.startswith('prioridad_'):
+            try:
+                parts = clean_path.split('/')
+                # parts[0] -> "prioridad_1", parts[1] -> "001" (codcas)
+                prio_num = parts[0].split('_')[1]
+                codcas = parts[1] if len(parts) > 1 else "000"
+                
+                content = None
+                if prio_num == '1': content = ate_topicos_1.layout(codcas=codcas)
+                elif prio_num == '2': content = ate_topicos_2.layout(codcas=codcas)
+                elif prio_num == '3': content = ate_topicos_3.layout(codcas=codcas)
+                elif prio_num == '4': content = ate_topicos_4.layout(codcas=codcas)
+                elif prio_num == '5': content = ate_topicos_5.layout(codcas=codcas)
+                
+                if content:
+                    return hide_dash, content, show_page
+            except Exception:
+                pass # Si falla el parsing, vuelve al dashboard
+        
+        # Si no coincide con ninguna ruta conocida, mostrar dashboard
+        return show_dash, html.Div(), hide_page
 
     # ========== CALLBACK PRINCIPAL ==========
     @dash_app.callback(
@@ -485,7 +557,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         **CARD_STYLE,
                         'height': '100%'
                     }, className='h-100')
-                ], #href=f"/dashboard_eme_prioridad/{codcas}/{prioridad}/{periodo}", 
+                ], href=f"{url_base_pathname}prioridad_{prioridad}/{codcas}?periodo={periodo}",
                    style={'textDecoration': 'none'},
                    className='hover-scale'),
                 lg=4, md=6, sm=12, xs=12, className='mb-4'
@@ -725,7 +797,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
     )
     def navegar_volver_eme(n_clicks):
         if n_clicks:
-            return "javascript:history.back()"
+            return "/"
         return ""
 
 
@@ -733,4 +805,3 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
     dash_app.layout = serve_layout
     return dash_app
   
-

@@ -1,4 +1,5 @@
 from flask import Flask
+import sys
 from extensions import db, login_manager
 from routes import register_routes
 from backend.audit_logging import init_app as init_audit
@@ -93,6 +94,11 @@ def create_app():
 
 
 if __name__ == '__main__':
+    # Forzar que los prints se vean en consola inmediatamente
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     app = create_app()
     print('Servidor Flask/Dash corriendo en todas las interfaces')
     print('Abre desde este PC: http://localhost:8050/')

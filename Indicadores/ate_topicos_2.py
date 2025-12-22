@@ -1,3 +1,213 @@
+import dash_bootstrap_components as dbc
+from dash import html, dcc, Input, Output
+from sqlalchemy import create_engine
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import date
+
+# ==========================================================
+# CONFIG
+# ==========================================================
+BRAND = "#0064AF"
+CARD_BG = "#FFFFFF"
+MUTED = "#6c757d"
+FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
+BAR_COLOR_SCALE = ["#D7E9FF", "#92C4F9", "#2E78C7"]
+PRIORIDAD = 2
+COLOR_CONF = {
+    'gradient': 'linear-gradient(135deg, #fd7e14 0%, #e8590c 100%)',
+    'icon': 'bi-exclamation-circle-fill',
+    'bg': '#fd7e14'
+}
+DB_URI = "postgresql+psycopg2://postgres:admin@10.0.29.117:5433/DW_ESTADISTICA"
+
+# ==========================================================
+# ESTILOS DE FIGURA / PLACEHOLDER
+# ==========================================================
+def empty_fig(title_text):
+    fig = go.Figure()
+    fig.update_layout(
+        template="simple_white",
+        paper_bgcolor="#F9FBFD",
+        plot_bgcolor="#F9FBFD",
+        title=dict(text=title_text, font=dict(size=18, color=BRAND)),
+        margin=dict(l=40, r=20, t=50, b=40)
+    )
+    fig.add_annotation(
+        text="Sin datos disponibles",
+        x=0.5,
+        y=0.5,
+        showarrow=False,
+        font=dict(color=MUTED)
+    )
+    fig.update_xaxes(visible=False)
+    fig.update_yaxes(visible=False)
+    return fig
+
+def style_horizontal(fig):
+    fig.update_traces(
+        orientation="h",
+        hovertemplate="<b>%{y}</b><br>Atenciones: %{x}<extra></extra>",
+        texttemplate="%{x}",
+        textposition="outside"
+    )
+    fig.update_layout(
+        plot_bgcolor="#F9FBFD",
+        paper_bgcolor="#F9FBFD",
+        font=dict(family=FONT_FAMILY, color="#1F2937"),
+        margin=dict(l=80, r=20, t=50, b=40),
+        xaxis=dict(title="Atenciones", showgrid=True, gridcolor="rgba(80,80,80,0.1)"),
+        yaxis=dict(title="Diagnóstico", showgrid=False)
+    )
+    return fig
+
+# ==========================================================
+# HEADER
+# ==========================================================
+header = html.Div(
+    [
+        html.Img(src="/dashboard_alt/assets/logo.png", style={"width": "120px", "marginRight": "15px"}),
+        html.Div(
+            [
+                html.H2(
+                    f"Detalle de Atenciones - Prioridad {PRIORIDAD}",
+                    style={"color": BRAND, "fontFamily": FONT_FAMILY}
+                ),
+                html.P(
+                    f"📅 Actualizado al {date.today().strftime('%d/%m/%Y')}",
+                    style={"color": MUTED, "fontSize": "13px"}
+                )
+            ]
+        ),
+      
+    ],
+    style={
+        "padding": "14px 18px",
+        "backgroundColor": CARD_BG,
+        "borderRadius": "12px",
+        "display": "flex",
+        "alignItems": "center",
+        "gap": "16px"
+    }
+)
+
+# ==========================================================
+# LAYOUT
+# ==========================================================
+def layout(codcas=None, **_):
+    return html.Div(
+        [
+            dcc.Store(id="ate-topicos-codcas-store-2", data=codcas),
+            dcc.Location(id="ate-topicos-url-2", refresh=False),
+            header,
+            dcc.Loading(dcc.Graph(id="diag-bar-chart-2")),
+            html.Div(id="ate-topicos-msg-2", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
+            html.Div([
+                html.H5("Atenciones por Fecha", style={"color": BRAND, "marginTop": "24px"}),
+                dcc.Loading(dcc.Graph(id="timeline-atenciones-2")),
+            ], style={
+                "backgroundColor": CARD_BG,
+                "borderRadius": "14px",
+                "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
+                "padding": "18px 18px 18px 18px",
+                "marginTop": "18px"
+            }),
+            # Nuevo Card para el gráfico circular por tipo de paciente
+            html.Div([
+                html.H5("Distribución por Tipo de Paciente", style={"color": BRAND, "marginTop": "24px"}),
+                dcc.Loading(dcc.Graph(id="pie-tipo-paciente-2"))
+            ], style={
+                "backgroundColor": CARD_BG,
+                "borderRadius": "14px",
+                "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
+                "padding": "18px 18px 18px 18px",
+                "marginTop": "18px"
+            }),
+        ]
+    )
+
+# ==========================================================
+# DB
+# ==========================================================
+def get_engine():
+    try:
+        engine = create_engine(DB_URI, pool_pre_ping=True)
+        return engine
+    except Exception as e:
+        return None
+
+def build_query(periodo, codcas):
+    return f"""
+        SELECT d.diagdes
+        FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+        LEFT JOIN dwsge.sgss_cmdia10 d ON d.diagcod=a.cod_diagnostico
+        WHERE a.cod_diagnostico IS NOT NULL
+          AND a.cod_estandar='05'
+          AND a.cod_centro='{codcas}'
+        """
+
+# ==========================================================
+# CALLBACK
+# ==========================================================
+def register_callbacks(app):
+    @app.callback(
+        [
+            Output("diag-bar-chart-2", "figure"),
+            Output("ate-topicos-msg-2", "children")
+        ],
+        [
+            Input("ate-topicos-codcas-store-2", "data"),
+            Input("ate-topicos-url-2", "search")
+        ]
+    )
+    def update(codcas, search):
+        if not codcas:
+            return empty_fig("Top 10 Diagnósticos"), "Seleccione un centro."
+
+        # Periodo desde URL
+        periodo = None
+        if search:
+            params = dict(x.split("=") for x in search.lstrip("?").split("&") if "=" in x)
+            periodo = params.get("periodo")
+
+        if not periodo or not periodo.isdigit() or len(periodo) != 2:
+            return empty_fig("Top 10 Diagnósticos"), "Periodo inválido."
+
+        engine = get_engine()
+        if not engine:
+            return empty_fig("Top 10 Diagnósticos"), "No hay conexión a la BD."
+
+        sql = build_query(periodo, codcas)
+
+        try:
+            df = pd.read_sql(sql, engine)
+        except Exception as e:
+            return empty_fig("Top 10 Diagnósticos"), "Error durante la consulta."
+
+        if df.empty:
+            return empty_fig("Top 10 Diagnósticos"), "No hay registros."
+
+        diag_df = (
+            df.assign(diagdes=df["diagdes"].fillna("SIN DIAGNÓSTICO"))
+            .groupby("diagdes")
+            .size()
+            .reset_index(name="Atenciones")
+            .sort_values("Atenciones", ascending=False)
+            .head(10)
+        )
+
+        fig = px.bar(
+            diag_df,
+            y="diagdes",
+            x="Atenciones",
+            color="Atenciones",
+            color_continuous_scale=BAR_COLOR_SCALE,
+            title=f"Top 10 Diagnósticos P2 — Centro {codcas} ({periodo})"
+        )
+        fig = style_horizontal(fig)
+
+        return fig, f"Mostrando {len(diag_df)} diagnósticos."
 from dash import html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 from sqlalchemy import create_engine
@@ -21,7 +231,7 @@ PRIORIDAD_COLORS = {
     '5': {'gradient': 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', 'icon': 'bi-info-circle-fill', 'bg': '#17a2b8'}
 }
 
-prioridad = 5
+prioridad = 2
 color_config = PRIORIDAD_COLORS[str(prioridad)]
 BAR_COLOR_SCALE = ["#D7E9FF", "#92C4F9", "#2E78C7"]
 GRID = "#e9ecef"
@@ -156,14 +366,16 @@ header = html.Div([
 
 def layout(codcas=None, **kwargs):
     return html.Div([
-        dcc.Store(id='ate-topicos-codcas-store-5', data=codcas),
-        dcc.Location(id="ate-topicos-url-5", refresh=False),
+        dcc.Store(id='ate-topicos-codcas-store-2', data=codcas),
+        dcc.Location(id="ate-topicos-url-2", refresh=False),
         header,
-        dcc.Loading(dcc.Graph(id="diag-bar-chart-5")),
-        html.Div(id="ate-topicos-msg-5", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
+        dcc.Loading(
+            dcc.Graph(id="diag-bar-chart-2")
+        ),
+        html.Div(id="ate-topicos-msg-2", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
         html.Div([
             html.H5("Atenciones por Fecha", style={"color": BRAND, "marginTop": "24px"}),
-            dcc.Loading(dcc.Graph(id="timeline-atenciones-5")),
+            dcc.Loading(dcc.Graph(id="timeline-atenciones-2")),
         ], style={
             "backgroundColor": CARD_BG,
             "borderRadius": "14px",
@@ -174,7 +386,7 @@ def layout(codcas=None, **kwargs):
         # Nuevo Card para el gráfico circular por tipo de paciente
         html.Div([
             html.H5("Distribución por Tipo de Paciente", style={"color": BRAND, "marginTop": "24px"}),
-            dcc.Loading(dcc.Graph(id="pie-tipo-paciente-5"))
+            dcc.Loading(dcc.Graph(id="pie-tipo-paciente-2"))
         ], style={
             "backgroundColor": CARD_BG,
             "borderRadius": "14px",
@@ -197,12 +409,7 @@ def create_connection():
         print(f"Failed to connect to the database: {e}")
         return None
 
-@callback(
-    [Output("diag-bar-chart-5", "figure"),
-     Output("ate-topicos-msg-5", "children")],
-    [Input("ate-topicos-codcas-store-5", "data"),
-     Input("ate-topicos-url-5", "search")],
-)
+
 def update_page_content(codcas, search):
     periodo = None
     if search:
@@ -210,13 +417,13 @@ def update_page_content(codcas, search):
         periodo = parts.get("periodo")
 
     if not periodo:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 5)"), "Seleccione un periodo en el dashboard principal."
+        return empty_fig("Top 10 Diagnósticos (Prioridad 2)"), "Seleccione un periodo en el dashboard principal."
     if not codcas:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 5)"), "No se ha especificado un centro (codcas)."
+        return empty_fig("Top 10 Diagnósticos (Prioridad 2)"), "No se ha especificado un centro (codcas)."
 
     engine = create_connection()
     if engine is None:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 5)"), "Error de conexión a la base de datos."
+        return empty_fig("Top 10 Diagnósticos (Prioridad 2)"), "Error de conexión a la base de datos."
 
     query = f"""
             SELECT
@@ -263,13 +470,14 @@ def update_page_content(codcas, search):
             WHERE
                 d.SECUENCIA = '1'
             and cod_centro = '{codcas}'
-            and cod_prioridad_n = '5'
+            and cod_prioridad_n = '2'
         """
     try:
         df = pd.read_sql(query, engine)
-        print(f"Query executed successfully, retrieved" f" {len(df)} records.")
+        print("Query executed successfully")
+
     except Exception as e:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 5)"), f"Error al ejecutar la consulta: {e}"
+        return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), f"Error al ejecutar la consulta: {e}"
 
     if df.empty:
         return empty_fig(f"Top 10 Diagnósticos - Sin datos para {codcas} en periodo {periodo}"), "No se encontraron registros."
@@ -292,7 +500,7 @@ def update_page_content(codcas, search):
         y='diagdes',
         x='Atenciones',
         orientation='h',
-        title=f"Top 10 Diagnósticos - Prioridad 5 (Centro: {codcas} | Periodo: {periodo})",
+        title=f"Top 10 Diagnósticos - Prioridad 2 (Centro: {codcas} | Periodo: {periodo})",
         text='label',
         color='Atenciones',
         color_continuous_scale=BAR_COLOR_SCALE,
@@ -354,15 +562,14 @@ def update_page_content(codcas, search):
     except Exception as e:
         pie_fig = empty_fig("Distribución por Tipo de Paciente")
 
-    msg = f"Mostrando {len(diag_df)} diagnósticos principales de un total de {total_atenciones:,} atenciones."
-    return fig, msg, timeline_fig, pie_fig
+    return fig, "", timeline_fig, pie_fig
 
 def register_callbacks(app):
     app.callback(
-        [Output("diag-bar-chart-5", "figure"),
-         Output("ate-topicos-msg-5", "children"),
-         Output("timeline-atenciones-5", "figure"),
-         Output("pie-tipo-paciente-5", "figure")],
-        [Input("ate-topicos-codcas-store-5", "data"),
-         Input("ate-topicos-url-5", "search")],
+        [Output("diag-bar-chart-2", "figure"),
+         Output("ate-topicos-msg-2", "children"),
+         Output("timeline-atenciones-2", "figure"),
+         Output("pie-tipo-paciente-2", "figure")],
+        [Input("ate-topicos-codcas-store-2", "data"),
+         Input("ate-topicos-url-2", "search")],
     )(update_page_content)

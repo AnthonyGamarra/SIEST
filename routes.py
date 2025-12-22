@@ -111,6 +111,14 @@ def register_routes(app):
 		flash(warning_msg, 'warning')
 		return redirect(url_for('main.index'))
 
+	@bp.route('/dashboard_eme_prioridad_<prioridad>/<codcas>')
+	@login_required
+	def dashboard_eme_prioridad_redirect(prioridad, codcas):
+		# Redirecciona a la ruta interna del dashboard de emergencia
+		# Ejemplo: /dashboard_alt/prioridad_1/001
+		qs = request.query_string.decode()
+		return redirect(f"/dashboard_alt/prioridad_{prioridad}/{codcas}?{qs}")
+
 	@bp.route('/total_atenciones/')
 	@login_required
 	def total_atenciones_redirect():
