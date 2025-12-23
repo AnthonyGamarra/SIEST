@@ -13,16 +13,7 @@ CARD_BG = "#FFFFFF"
 TEXT = "#212529"
 MUTED = "#6c757d"
 FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
-PRIORIDAD_COLORS = {
-    '1': {'gradient': 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', 'icon': 'bi-exclamation-triangle-fill', 'bg': '#dc3545'},
-    '2': {'gradient': 'linear-gradient(135deg, #fd7e14 0%, #e8590c 100%)', 'icon': 'bi-exclamation-circle-fill', 'bg': '#fd7e14'},
-    '3': {'gradient': 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', 'icon': 'bi-exclamation-diamond-fill', 'bg': '#ffc107'},
-    '4': {'gradient': 'linear-gradient(135deg, #28a745 0%, #218838 100%)', 'icon': 'bi-check-circle-fill', 'bg': '#28a745'},
-    '5': {'gradient': 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', 'icon': 'bi-info-circle-fill', 'bg': '#17a2b8'}
-}
-
-prioridad = 3
-color_config = PRIORIDAD_COLORS[str(prioridad)]
+color_config =  {'gradient': 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', 'icon': 'bi-exclamation-diamond-fill', 'bg': '#ffc107'}
 BAR_COLOR_SCALE = ["#D7E9FF", "#92C4F9", "#2E78C7"]
 GRID = "#e9ecef"
 
@@ -99,15 +90,6 @@ def style_horizontal_bar(fig: go.Figure, x_title: str, y_title: str, height: int
 
 header = html.Div([
     html.Div([
-        html.Img(
-            src='/dashboard_alt/assets/logo.png',
-            style={
-                'width': '120px',
-                'height': '60px',
-                'objectFit': 'contain',
-                'marginRight': '20px',
-            }
-        ),
         html.Div([
             html.Div([
                 html.I(className=f"bi {color_config['icon']}", style={
@@ -116,7 +98,7 @@ header = html.Div([
                     'marginRight': '12px'
                 }),
                 html.H2(
-                    f"Detalle de Atenciones - Prioridad {prioridad}",
+                    f"Detalle de Atenciones - Prioridad 3",
                     style={
                         'color': BRAND,
                         'fontFamily': FONT_FAMILY,
@@ -141,7 +123,39 @@ header = html.Div([
             'justifyContent': 'center',
             'flex': '1'
         }),
-       
+        html.Div([
+            dbc.Button([
+                html.I(className="bi bi-download", style={
+                    'marginRight': '8px',
+                    'fontSize': '18px',
+                }),
+                "Descargar CSV"
+            ],
+                id="download-csv-btn-3",
+                color="success",
+                outline=False,
+                style={
+                    'fontFamily': FONT_FAMILY,
+                    'fontWeight': '600',
+                    'fontSize': '15px',
+                    'marginLeft': 'auto',
+                    'padding': '8px 22px',
+                    'borderRadius': '8px',
+                    'boxShadow': '0 2px 8px rgba(0,100,175,0.10)',
+                    'transition': 'background 0.2s',
+                    'display': 'flex',
+                    'alignItems': 'center',
+                    'gap': '6px',
+                }
+            ),
+            dcc.Download(id="download-csv-3")
+        ], style={
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'flex-end',
+            'flex': '0',
+            'marginLeft': '20px'
+        })
     ], style={
         'display': 'flex',
         'alignItems': 'center',
@@ -159,8 +173,18 @@ def layout(codcas=None, **kwargs):
         dcc.Store(id='ate-topicos-codcas-store-3', data=codcas),
         dcc.Location(id="ate-topicos-url-3", refresh=False),
         header,
-        dcc.Loading(dcc.Graph(id="diag-bar-chart-3")),
-        html.Div(id="ate-topicos-msg-3", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
+        # Gráfico de barras de top 10 diagnósticos
+        html.Div([
+            html.H5("Top 10 Diagnósticos", style={"color": BRAND, "marginTop": "24px"}),
+            dcc.Loading(dcc.Graph(id="diag-bar-chart-3")),
+            ], style={
+            "backgroundColor": CARD_BG,
+            "borderRadius": "14px",
+            "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
+            "padding": "18px 18px 18px 18px",
+            "marginTop": "18px"
+            }),
+        # Gráfico de línea de tiempo por fecha_aten
         html.Div([
             html.H5("Atenciones por Fecha", style={"color": BRAND, "marginTop": "24px"}),
             dcc.Loading(dcc.Graph(id="timeline-atenciones-3")),
@@ -214,57 +238,52 @@ def update_page_content(codcas, search):
         return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), "Error de conexión a la base de datos."
 
     query = f"""
-            SELECT
+        SELECT
             d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
             d.cod_prioridad,d.cod_emergencia,
             d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
-            FROM (
-                SELECT 
-                    ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
-            acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
-                FROM (SELECT
-                        a.cod_centro, 
-                        a.periodo, 
-                        a.cod_topico,
-                        top.topemedes,
-                        acto_med, 
-                        fecha_aten, 
-                        hora_aten, 
-                        cod_tipo_paciente,
-                        tp.tipopacinom,
-                        cod_prioridad, 
-                        a.cod_emergencia, 
-                        secuen_aten, 
-                        a.cod_estandar,
-                        es.des_estandar,
-                        a.cod_diagnostico,
-                        dg.diagdes,
-                (case when a.cod_estandar = '04' then '1'
-                else (case when a.cod_prioridad='1' then '2'
-                            else (a.cod_prioridad) 
-                            end) 
-                end )as cod_prioridad_n
-                        FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
-                LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
-                LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
-                LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
-                LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
-                where (a.cod_diagnostico IS not NULL )
-                and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
-                ) c	
-            ) d
-
-            WHERE
-                d.SECUENCIA = '1'
+        FROM (
+            SELECT 
+                ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
+            FROM (SELECT
+                    a.cod_centro, 
+                    a.periodo, 
+                    a.cod_topico,
+                    top.topemedes,
+                    acto_med, 
+                    fecha_aten, 
+                    hora_aten, 
+                    cod_tipo_paciente,
+                    tp.tipopacinom,
+                    cod_prioridad, 
+                    a.cod_emergencia, 
+                    secuen_aten, 
+                    a.cod_estandar,
+                    es.des_estandar,
+                    a.cod_diagnostico,
+                    dg.diagdes,
+                    (case when a.cod_estandar = '04' then '2'
+                    else (case when a.cod_prioridad='2' then '2'
+                                else (a.cod_prioridad) 
+                                end) 
+                    end )as cod_prioridad_n
+                    FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
+                    LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
+                    LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
+                    LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
+                    where (a.cod_diagnostico IS not NULL )
+                    and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                ) c    
+        ) d
+        WHERE
+            d.SECUENCIA = '1'
             and cod_centro = '{codcas}'
             and cod_prioridad_n = '3'
-        """
+    """
     try:
         df = pd.read_sql(query, engine)
-        print(f"Query executed successfully, retrieved" f" {len(df)} records.")
-        print(df.head())
-        print(f"DataFrame shape: {df.shape}")
+        print("Query executed successfully")
     except Exception as e:
         return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), f"Error al ejecutar la consulta: {e}"
 
@@ -289,7 +308,6 @@ def update_page_content(codcas, search):
         y='diagdes',
         x='Atenciones',
         orientation='h',
-        title=f"Top 10 Diagnósticos - Prioridad 3 (Centro: {codcas} | Periodo: {periodo})",
         text='label',
         color='Atenciones',
         color_continuous_scale=BAR_COLOR_SCALE,
@@ -311,7 +329,6 @@ def update_page_content(codcas, search):
             x='fecha_aten',
             y='Atenciones',
             markers=True,
-            title="Atenciones por Fecha",
             line_shape="linear",
         )
         timeline_fig.update_traces(line_color=BRAND, marker_color=BRAND)
@@ -327,6 +344,9 @@ def update_page_content(codcas, search):
         timeline_fig = empty_fig("Atenciones por Fecha")
 
     # Gráfico circular por tipo de paciente
+    PIE_COLOR_SCALE = [
+            "#D7E9FF", "#92C4F9", "#2E78C7", "#A7D8DE", "#6EC6CA", "#4BA3C3", "#B2B1FF", "#7C83FD", "#5A5AFF", "#A0C4FF"
+    ]
     try:
         pie_df = (
             df.groupby('cod_tipo_paciente', dropna=False)
@@ -338,8 +358,7 @@ def update_page_content(codcas, search):
             pie_df,
             names='cod_tipo_paciente',
             values='Atenciones',
-            title="Distribución por Tipo de Paciente",
-            color_discrete_sequence=BAR_COLOR_SCALE
+            color_discrete_sequence=PIE_COLOR_SCALE
         )
         pie_fig.update_traces(textinfo='label+percent', pull=[0.05]*len(pie_df))
         pie_fig.update_layout(
@@ -351,14 +370,92 @@ def update_page_content(codcas, search):
     except Exception as e:
         pie_fig = empty_fig("Distribución por Tipo de Paciente")
 
-    return fig, "", timeline_fig, pie_fig
+    return fig, timeline_fig, pie_fig
 
 def register_callbacks(app):
     app.callback(
         [Output("diag-bar-chart-3", "figure"),
-         Output("ate-topicos-msg-3", "children"),
          Output("timeline-atenciones-3", "figure"),
          Output("pie-tipo-paciente-3", "figure")],
         [Input("ate-topicos-codcas-store-3", "data"),
          Input("ate-topicos-url-3", "search")],
     )(update_page_content)
+
+
+    # Callback para descargar CSV
+    app.callback(
+        Output("download-csv-3", "data"),
+        [Input("download-csv-btn-3", "n_clicks"),
+         Input("ate-topicos-codcas-store-3", "data"),
+         Input("ate-topicos-url-3", "search")],
+        prevent_initial_call=True
+    )(download_csv)
+
+
+def download_csv(n_clicks, codcas, search):
+    import pandas as pd
+    from dash import no_update
+    from dash import dcc
+    if not n_clicks:
+        return no_update
+    periodo = None
+    if search:
+        parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
+        periodo = parts.get("periodo")
+    if not periodo or not codcas:
+        return no_update
+    engine = create_connection()
+    if engine is None:
+        return no_update
+    query = f"""
+        SELECT
+            d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
+            d.cod_prioridad,d.cod_emergencia,
+            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
+        FROM (
+            SELECT 
+                ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
+            FROM (SELECT
+                    a.cod_centro, 
+                    a.periodo, 
+                    a.cod_topico,
+                    top.topemedes,
+                    acto_med, 
+                    fecha_aten, 
+                    hora_aten, 
+                    cod_tipo_paciente,
+                    tp.tipopacinom,
+                    cod_prioridad, 
+                    a.cod_emergencia, 
+                    secuen_aten, 
+                    a.cod_estandar,
+                    es.des_estandar,
+                    a.cod_diagnostico,
+                    dg.diagdes,
+                    (case when a.cod_estandar = '04' then '2'
+                    else (case when a.cod_prioridad='2' then '2'
+                                else (a.cod_prioridad) 
+                                end) 
+                    end )as cod_prioridad_n
+                    FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
+                    LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
+                    LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
+                    LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
+                    where (a.cod_diagnostico IS not NULL )
+                    and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                ) c    
+        ) d
+        WHERE
+            d.SECUENCIA = '1'
+            and cod_centro = '{codcas}'
+            and cod_prioridad_n = '3'
+    """
+    try:
+        df = pd.read_sql(query, engine)
+    except Exception:
+        return no_update
+    if df.empty:
+        return no_update
+    return dcc.send_data_frame(df.to_csv, filename=f"atenciones_{codcas}_{periodo}_prioridad_3.csv", index=False)
+

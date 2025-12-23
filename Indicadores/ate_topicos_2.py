@@ -1,14 +1,12 @@
-import dash_bootstrap_components as dbc
 from dash import html, dcc, Input, Output
+import dash_bootstrap_components as dbc
 from sqlalchemy import create_engine
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
-# ==========================================================
 # CONFIG
-# ==========================================================
 BRAND = "#0064AF"
 CARD_BG = "#FFFFFF"
 MUTED = "#6c757d"
@@ -21,200 +19,6 @@ COLOR_CONF = {
     'bg': '#fd7e14'
 }
 DB_URI = "postgresql+psycopg2://postgres:admin@10.0.29.117:5433/DW_ESTADISTICA"
-
-# ==========================================================
-# ESTILOS DE FIGURA / PLACEHOLDER
-# ==========================================================
-def empty_fig(title_text):
-    fig = go.Figure()
-    fig.update_layout(
-        template="simple_white",
-        paper_bgcolor="#F9FBFD",
-        plot_bgcolor="#F9FBFD",
-        title=dict(text=title_text, font=dict(size=18, color=BRAND)),
-        margin=dict(l=40, r=20, t=50, b=40)
-    )
-    fig.add_annotation(
-        text="Sin datos disponibles",
-        x=0.5,
-        y=0.5,
-        showarrow=False,
-        font=dict(color=MUTED)
-    )
-    fig.update_xaxes(visible=False)
-    fig.update_yaxes(visible=False)
-    return fig
-
-def style_horizontal(fig):
-    fig.update_traces(
-        orientation="h",
-        hovertemplate="<b>%{y}</b><br>Atenciones: %{x}<extra></extra>",
-        texttemplate="%{x}",
-        textposition="outside"
-    )
-    fig.update_layout(
-        plot_bgcolor="#F9FBFD",
-        paper_bgcolor="#F9FBFD",
-        font=dict(family=FONT_FAMILY, color="#1F2937"),
-        margin=dict(l=80, r=20, t=50, b=40),
-        xaxis=dict(title="Atenciones", showgrid=True, gridcolor="rgba(80,80,80,0.1)"),
-        yaxis=dict(title="Diagnóstico", showgrid=False)
-    )
-    return fig
-
-# ==========================================================
-# HEADER
-# ==========================================================
-header = html.Div(
-    [
-        html.Img(src="/dashboard_alt/assets/logo.png", style={"width": "120px", "marginRight": "15px"}),
-        html.Div(
-            [
-                html.H2(
-                    f"Detalle de Atenciones - Prioridad {PRIORIDAD}",
-                    style={"color": BRAND, "fontFamily": FONT_FAMILY}
-                ),
-                html.P(
-                    f"📅 Actualizado al {date.today().strftime('%d/%m/%Y')}",
-                    style={"color": MUTED, "fontSize": "13px"}
-                )
-            ]
-        ),
-      
-    ],
-    style={
-        "padding": "14px 18px",
-        "backgroundColor": CARD_BG,
-        "borderRadius": "12px",
-        "display": "flex",
-        "alignItems": "center",
-        "gap": "16px"
-    }
-)
-
-# ==========================================================
-# LAYOUT
-# ==========================================================
-def layout(codcas=None, **_):
-    return html.Div(
-        [
-            dcc.Store(id="ate-topicos-codcas-store-2", data=codcas),
-            dcc.Location(id="ate-topicos-url-2", refresh=False),
-            header,
-            dcc.Loading(dcc.Graph(id="diag-bar-chart-2")),
-            html.Div(id="ate-topicos-msg-2", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
-            html.Div([
-                html.H5("Atenciones por Fecha", style={"color": BRAND, "marginTop": "24px"}),
-                dcc.Loading(dcc.Graph(id="timeline-atenciones-2")),
-            ], style={
-                "backgroundColor": CARD_BG,
-                "borderRadius": "14px",
-                "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
-                "padding": "18px 18px 18px 18px",
-                "marginTop": "18px"
-            }),
-            # Nuevo Card para el gráfico circular por tipo de paciente
-            html.Div([
-                html.H5("Distribución por Tipo de Paciente", style={"color": BRAND, "marginTop": "24px"}),
-                dcc.Loading(dcc.Graph(id="pie-tipo-paciente-2"))
-            ], style={
-                "backgroundColor": CARD_BG,
-                "borderRadius": "14px",
-                "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
-                "padding": "18px 18px 18px 18px",
-                "marginTop": "18px"
-            }),
-        ]
-    )
-
-# ==========================================================
-# DB
-# ==========================================================
-def get_engine():
-    try:
-        engine = create_engine(DB_URI, pool_pre_ping=True)
-        return engine
-    except Exception as e:
-        return None
-
-def build_query(periodo, codcas):
-    return f"""
-        SELECT d.diagdes
-        FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
-        LEFT JOIN dwsge.sgss_cmdia10 d ON d.diagcod=a.cod_diagnostico
-        WHERE a.cod_diagnostico IS NOT NULL
-          AND a.cod_estandar='05'
-          AND a.cod_centro='{codcas}'
-        """
-
-# ==========================================================
-# CALLBACK
-# ==========================================================
-def register_callbacks(app):
-    @app.callback(
-        [
-            Output("diag-bar-chart-2", "figure"),
-            Output("ate-topicos-msg-2", "children")
-        ],
-        [
-            Input("ate-topicos-codcas-store-2", "data"),
-            Input("ate-topicos-url-2", "search")
-        ]
-    )
-    def update(codcas, search):
-        if not codcas:
-            return empty_fig("Top 10 Diagnósticos"), "Seleccione un centro."
-
-        # Periodo desde URL
-        periodo = None
-        if search:
-            params = dict(x.split("=") for x in search.lstrip("?").split("&") if "=" in x)
-            periodo = params.get("periodo")
-
-        if not periodo or not periodo.isdigit() or len(periodo) != 2:
-            return empty_fig("Top 10 Diagnósticos"), "Periodo inválido."
-
-        engine = get_engine()
-        if not engine:
-            return empty_fig("Top 10 Diagnósticos"), "No hay conexión a la BD."
-
-        sql = build_query(periodo, codcas)
-
-        try:
-            df = pd.read_sql(sql, engine)
-        except Exception as e:
-            return empty_fig("Top 10 Diagnósticos"), "Error durante la consulta."
-
-        if df.empty:
-            return empty_fig("Top 10 Diagnósticos"), "No hay registros."
-
-        diag_df = (
-            df.assign(diagdes=df["diagdes"].fillna("SIN DIAGNÓSTICO"))
-            .groupby("diagdes")
-            .size()
-            .reset_index(name="Atenciones")
-            .sort_values("Atenciones", ascending=False)
-            .head(10)
-        )
-
-        fig = px.bar(
-            diag_df,
-            y="diagdes",
-            x="Atenciones",
-            color="Atenciones",
-            color_continuous_scale=BAR_COLOR_SCALE,
-            title=f"Top 10 Diagnósticos P2 — Centro {codcas} ({periodo})"
-        )
-        fig = style_horizontal(fig)
-
-        return fig, f"Mostrando {len(diag_df)} diagnósticos."
-from dash import html, dcc, Input, Output, callback
-import dash_bootstrap_components as dbc
-from sqlalchemy import create_engine
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import date
 
 
 # Estilos y colores consistentes con dashboard_eme.py
@@ -309,15 +113,6 @@ def style_horizontal_bar(fig: go.Figure, x_title: str, y_title: str, height: int
 
 header = html.Div([
     html.Div([
-        html.Img(
-            src='/dashboard_alt/assets/logo.png',
-            style={
-                'width': '120px',
-                'height': '60px',
-                'objectFit': 'contain',
-                'marginRight': '20px',
-            }
-        ),
         html.Div([
             html.Div([
                 html.I(className=f"bi {color_config['icon']}", style={
@@ -351,7 +146,39 @@ header = html.Div([
             'justifyContent': 'center',
             'flex': '1'
         }),
-       
+        html.Div([
+            dbc.Button([
+                html.I(className="bi bi-download", style={
+                    'marginRight': '8px',
+                    'fontSize': '18px',
+                }),
+                "Descargar CSV"
+            ],
+                id="download-csv-btn-2",
+                color="success",
+                outline=False,
+                style={
+                    'fontFamily': FONT_FAMILY,
+                    'fontWeight': '600',
+                    'fontSize': '15px',
+                    'marginLeft': 'auto',
+                    'padding': '8px 22px',
+                    'borderRadius': '8px',
+                    'boxShadow': '0 2px 8px rgba(0,100,175,0.10)',
+                    'transition': 'background 0.2s',
+                    'display': 'flex',
+                    'alignItems': 'center',
+                    'gap': '6px',
+                }
+            ),
+            dcc.Download(id="download-csv-2")
+        ], style={
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'flex-end',
+            'flex': '0',
+            'marginLeft': '20px'
+        })
     ], style={
         'display': 'flex',
         'alignItems': 'center',
@@ -369,10 +196,17 @@ def layout(codcas=None, **kwargs):
         dcc.Store(id='ate-topicos-codcas-store-2', data=codcas),
         dcc.Location(id="ate-topicos-url-2", refresh=False),
         header,
-        dcc.Loading(
-            dcc.Graph(id="diag-bar-chart-2")
-        ),
-        html.Div(id="ate-topicos-msg-2", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
+       
+        html.Div([
+            html.H5("Top 10 Diagnósticos", style={"color": BRAND, "marginTop": "24px"}),
+            dcc.Loading(dcc.Graph(id="diag-bar-chart-2")),
+            ], style={
+            "backgroundColor": CARD_BG,
+            "borderRadius": "14px",
+            "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
+            "padding": "18px 18px 18px 18px",
+            "marginTop": "18px"
+            }),
         html.Div([
             html.H5("Atenciones por Fecha", style={"color": BRAND, "marginTop": "24px"}),
             dcc.Loading(dcc.Graph(id="timeline-atenciones-2")),
@@ -477,35 +311,39 @@ def update_page_content(codcas, search):
         print("Query executed successfully")
 
     except Exception as e:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), f"Error al ejecutar la consulta: {e}"
+        return empty_fig("Top 10 Diagnósticos (Prioridad 2)"), f"Error al ejecutar la consulta: {e}"
 
     if df.empty:
         return empty_fig(f"Top 10 Diagnósticos - Sin datos para {codcas} en periodo {periodo}"), "No se encontraron registros."
 
-    total_atenciones = df.shape[0]
-    diag_df = (
+     # Gráfico por cod_diagnostico
+    try:
+        total_atenciones = df.shape[0]
+        diag_df = (
         df.groupby(['cod_diagnostico', 'diagdes'], dropna=False)
         .size()
         .reset_index(name='Atenciones')
         .sort_values('Atenciones', ascending=False)
         .head(10)
-    )
-    diag_df['diagdes'] = diag_df['diagdes'].fillna('SIN DIAGNÓSTICO')
-    diag_df['label'] = diag_df['Atenciones'].apply(
+        )
+        diag_df['diagdes'] = diag_df['diagdes'].fillna('SIN DIAGNÓSTICO')
+        diag_df['label'] = diag_df['Atenciones'].apply(
         lambda v: f"{v:,.0f} ({(v/total_atenciones):.1%})" if total_atenciones else f"{v:,.0f}"
-    )
+        )
 
-    fig = px.bar(
+        fig = px.bar(
         diag_df,
         y='diagdes',
         x='Atenciones',
         orientation='h',
-        title=f"Top 10 Diagnósticos - Prioridad 2 (Centro: {codcas} | Periodo: {periodo})",
         text='label',
         color='Atenciones',
         color_continuous_scale=BAR_COLOR_SCALE,
-    )
-    fig = style_horizontal_bar(fig, x_title="Atenciones", y_title="Diagnóstico")
+        )
+        fig = style_horizontal_bar(fig, x_title="Atenciones", y_title="Diagnóstico")
+    except Exception as e:
+        fig = empty_fig("Top 10 Diagnósticos")
+    
 
     # Gráfico de línea de tiempo por fecha_aten
     try:
@@ -522,7 +360,6 @@ def update_page_content(codcas, search):
             x='fecha_aten',
             y='Atenciones',
             markers=True,
-            title="Atenciones por Fecha",
             line_shape="linear",
         )
         timeline_fig.update_traces(line_color=BRAND, marker_color=BRAND)
@@ -538,6 +375,9 @@ def update_page_content(codcas, search):
         timeline_fig = empty_fig("Atenciones por Fecha")
 
     # Gráfico circular por tipo de paciente
+    PIE_COLOR_SCALE = [
+            "#D7E9FF", "#92C4F9", "#2E78C7", "#A7D8DE", "#6EC6CA", "#4BA3C3", "#B2B1FF", "#7C83FD", "#5A5AFF", "#A0C4FF"
+    ]
     try:
         pie_df = (
             df.groupby('cod_tipo_paciente', dropna=False)
@@ -549,8 +389,7 @@ def update_page_content(codcas, search):
             pie_df,
             names='cod_tipo_paciente',
             values='Atenciones',
-            title="Distribución por Tipo de Paciente",
-            color_discrete_sequence=BAR_COLOR_SCALE
+            color_discrete_sequence=PIE_COLOR_SCALE
         )
         pie_fig.update_traces(textinfo='label+percent', pull=[0.05]*len(pie_df))
         pie_fig.update_layout(
@@ -562,14 +401,93 @@ def update_page_content(codcas, search):
     except Exception as e:
         pie_fig = empty_fig("Distribución por Tipo de Paciente")
 
-    return fig, "", timeline_fig, pie_fig
+    return fig,  timeline_fig, pie_fig
 
 def register_callbacks(app):
     app.callback(
         [Output("diag-bar-chart-2", "figure"),
-         Output("ate-topicos-msg-2", "children"),
          Output("timeline-atenciones-2", "figure"),
          Output("pie-tipo-paciente-2", "figure")],
         [Input("ate-topicos-codcas-store-2", "data"),
          Input("ate-topicos-url-2", "search")],
     )(update_page_content)
+
+    # Callback para descargar CSV
+    app.callback(
+        Output("download-csv-2", "data"),
+        [Input("download-csv-btn-2", "n_clicks"),
+         Input("ate-topicos-codcas-store-2", "data"),
+         Input("ate-topicos-url-2", "search")],
+        prevent_initial_call=True
+    )(download_csv)
+
+
+def download_csv(n_clicks, codcas, search):
+    import pandas as pd
+    from dash import no_update
+    from dash import dcc
+    if not n_clicks:
+        return no_update
+    periodo = None
+    if search:
+        parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
+        periodo = parts.get("periodo")
+    if not periodo or not codcas:
+        return no_update
+    engine = create_connection()
+    if engine is None:
+        return no_update
+    query = f"""
+            SELECT
+            d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
+            d.cod_prioridad,d.cod_emergencia,
+            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
+            FROM (
+                SELECT 
+                    ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
+            acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
+                FROM (SELECT
+                        a.cod_centro, 
+                        a.periodo, 
+                        a.cod_topico,
+                        top.topemedes,
+                        acto_med, 
+                        fecha_aten, 
+                        hora_aten, 
+                        cod_tipo_paciente,
+                        tp.tipopacinom,
+                        cod_prioridad, 
+                        a.cod_emergencia, 
+                        secuen_aten, 
+                        a.cod_estandar,
+                        es.des_estandar,
+                        a.cod_diagnostico,
+                        dg.diagdes,
+                (case when a.cod_estandar = '04' then '1'
+                else (case when a.cod_prioridad='1' then '2'
+                            else (a.cod_prioridad) 
+                            end) 
+                end )as cod_prioridad_n
+                        FROM 
+                            dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
+                LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
+                LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
+                LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
+                where (a.cod_diagnostico IS not NULL )
+                and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                ) c	
+            ) d
+
+            WHERE
+                d.SECUENCIA = '1'
+            and cod_centro = '{codcas}'
+            and cod_prioridad_n = '2'
+        """
+    try:
+        df = pd.read_sql(query, engine)
+    except Exception:
+        return no_update
+    if df.empty:
+        return no_update
+    return dcc.send_data_frame(df.to_csv, filename=f"atenciones_{codcas}_{periodo}_prioridad_2.csv", index=False)

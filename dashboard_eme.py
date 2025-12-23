@@ -429,26 +429,30 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         # Query base para obtener datos con cod_prioridad_n
         query_base = f"""
             SELECT
-            d.cod_centro,d.periodo,d.cod_topico,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente,
+            d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
             d.cod_prioridad,d.cod_emergencia,
-            d.secuen_aten,d.cod_estandar,d.cod_prioridad_n
+            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
             FROM (
                 SELECT 
                     ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
             acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
-                 FROM (SELECT
+                FROM (SELECT
                         a.cod_centro, 
                         a.periodo, 
-                        a.cod_topico, 
+                        a.cod_topico,
+                        top.topemedes,
                         acto_med, 
                         fecha_aten, 
                         hora_aten, 
                         cod_tipo_paciente,
+                        tp.tipopacinom,
                         cod_prioridad, 
                         a.cod_emergencia, 
                         secuen_aten, 
-                        a.cod_estandar, 
+                        a.cod_estandar,
+                        es.des_estandar,
                         a.cod_diagnostico,
+                        dg.diagdes,
                 (case when a.cod_estandar = '04' then '1'
                 else (case when a.cod_prioridad='1' then '2'
                             else (a.cod_prioridad) 
@@ -456,10 +460,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 end )as cod_prioridad_n
                         FROM 
                             dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
+                LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
+                LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
+                LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
                 where (a.cod_diagnostico IS not NULL )
                 and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
-                 ) c	
+                ) c	
             ) d
+
             WHERE
                 d.SECUENCIA = '1'
             and cod_centro = '{codcas}'
