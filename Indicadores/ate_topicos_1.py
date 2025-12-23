@@ -14,20 +14,32 @@ CARD_BG = "#FFFFFF"
 TEXT = "#212529"
 MUTED = "#6c757d"
 FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
-PRIORIDAD_COLORS = {
-    '1': {'gradient': 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', 'icon': 'bi-exclamation-triangle-fill', 'bg': '#dc3545'},
-    '2': {'gradient': 'linear-gradient(135deg, #fd7e14 0%, #e8590c 100%)', 'icon': 'bi-exclamation-circle-fill', 'bg': '#fd7e14'},
-    '3': {'gradient': 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', 'icon': 'bi-exclamation-diamond-fill', 'bg': '#ffc107'},
-    '4': {'gradient': 'linear-gradient(135deg, #28a745 0%, #218838 100%)', 'icon': 'bi-check-circle-fill', 'bg': '#28a745'},
-    '5': {'gradient': 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', 'icon': 'bi-info-circle-fill', 'bg': '#17a2b8'}
-}
-
-prioridad = 1
-color_config = PRIORIDAD_COLORS[str(prioridad)]
+color_config = {'gradient': 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', 'icon': 'bi-exclamation-triangle-fill', 'bg': '#dc3545'}
 BAR_COLOR_SCALE = ["#D7E9FF", "#92C4F9", "#2E78C7"]
 GRID = "#e9ecef"
 
+TAB_STYLE = {
+    "padding": "12px 20px",
+    "fontFamily": FONT_FAMILY,
+    "fontSize": "14px",
+    "fontWeight": "600",
+    "color": MUTED,
+    "borderRadius": "12px",
+    "margin": "4px 6px",
+    "cursor": "pointer",
+    "transition": "all .2s ease",
+    "border": "1px solid transparent",
+    "letterSpacing": "-0.1px"
+}
 
+TAB_SELECTED_STYLE = {
+    **TAB_STYLE,
+    "color": BRAND,
+    "background": "linear-gradient(145deg, #ffffff 0%, #F3F8FC 100%)",
+    "boxShadow": "0 3px 8px rgba(0,100,175,0.12)",
+    "border": f"1px solid {BRAND}",
+    "fontWeight": "700"
+}
 
 # Helpers de gráficos
 def empty_fig(title: str | None = None) -> go.Figure:
@@ -111,7 +123,7 @@ header = html.Div([
                     'marginRight': '12px'
                 }),
                 html.H2(
-                    f"Detalle de Atenciones - Prioridad {prioridad}",
+                    f"Detalle de Atenciones - Prioridad 1",
                     style={
                         'color': BRAND,
                         'fontFamily': FONT_FAMILY,
@@ -186,7 +198,20 @@ def layout(codcas=None, **kwargs):
         dcc.Store(id='ate-topicos-codcas-store-1', data=codcas),
         dcc.Location(id="ate-topicos-url-1", refresh=False),
         header,
-        html.Div([
+        dcc.Tabs(
+        id="main-tabs",
+        value="tab-graficos",
+        style={"border": "none"},
+        parent_style={"marginTop": "12px"},
+        className="custom-tabs",
+        children=[
+            dcc.Tab(
+                label="Producción",
+                value="tab-graficos",
+                style=TAB_STYLE,
+                selected_style=TAB_SELECTED_STYLE,
+                children=html.Div([
+                    html.Div([
                 html.H5("Top 10 Diagnósticos", style={"color": BRAND, "marginTop": "24px"}),
                 dcc.Loading(dcc.Graph(id="diag-bar-chart-1")),
                 html.Div(id="ate-topicos-msg-1", style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}),
@@ -221,6 +246,9 @@ def layout(codcas=None, **kwargs):
             "padding": "18px 18px 18px 18px",
             "marginTop": "18px"
         }),
+                ]))
+            
+        ]),
     ])
 
 
@@ -378,7 +406,7 @@ def register_callbacks(app):
         #  Gráfico de línea de tiempo por fecha_aten
         try:
             df_fecha = df.copy()
-            df_fecha['fecha_aten'] = pd.to_datetime(df_fecha['fecha_aten'], errors='coerce')
+            df_fecha['fecha_aten'] = pd.to_datetime(df_fecha['fecha_aten'],format='%d-%m-%Y', errors='coerce')
             timeline_df = (
                 df_fecha.groupby('fecha_aten', dropna=True)
                 .size()
@@ -410,14 +438,14 @@ def register_callbacks(app):
         ]
         try:
             pie_df = (
-                df.groupby('cod_tipo_paciente', dropna=False)
+                df.groupby('tipopacinom', dropna=False)
                 .size()
                 .reset_index(name='Atenciones')
             )
-            pie_df['cod_tipo_paciente'] = pie_df['cod_tipo_paciente'].fillna('SIN TIPO')
+            pie_df['tipopacinom'] = pie_df['tipopacinom'].fillna('SIN TIPO')
             pie_fig = px.pie(
                 pie_df,
-                names='cod_tipo_paciente',
+                names='tipopacinom',
                 values='Atenciones',
                 color_discrete_sequence=PIE_COLOR_SCALE
             )
