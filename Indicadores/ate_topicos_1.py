@@ -267,7 +267,6 @@ def create_connection():
 def register_callbacks(app):
     @app.callback(
         [Output("diag-bar-chart-1", "figure"),
-         Output("ate-topicos-msg-1", "children"),
          Output("timeline-atenciones-1", "figure"),
          Output("pie-tipo-paciente-1", "figure")],
         [Input("ate-topicos-codcas-store-1", "data"),
@@ -461,7 +460,7 @@ def register_callbacks(app):
         except Exception as e:
             pie_fig = empty_fig("Distribución por Tipo de Paciente")
 
-        return fig, "", timeline_fig, pie_fig
+        return fig, timeline_fig, pie_fig
 
     # Callback solo para descargar CSV, sin recargar la página
     @app.callback(

@@ -6,9 +6,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
-DB_URI = "postgresql+psycopg2://postgres:admin@10.0.29.117:5433/DW_ESTADISTICA"
-
-
 # Estilos y colores consistentes con dashboard_eme.py
 BRAND = "#0064AF"
 CARD_BG = "#FFFFFF"

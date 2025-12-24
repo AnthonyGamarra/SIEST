@@ -494,7 +494,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         df2 = pd.read_sql(query2, engine)
         df3 = pd.read_sql(query3, engine)
         df4= pd.read_sql(query4, engine)
-        df5= pd.read_sql(query5, engine)
+        ##df5= pd.read_sql(query5, engine)
         df6= pd.read_sql(query6, engine)
 
         if df.empty or df2.empty or df3.empty:
@@ -515,7 +515,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
         total_horas_programadas = df3['total_horas'].sum()
         total_citados = df4.shape[0]
-        total_desercion_citas = df5.shape[0]
+        ##total_desercion_citas = df5.shape[0]
         promedio_ponderado_diferimiento = (round(df6['promedio_ponderado_diferimiento'].iloc[0], 2)if not df6.empty else None)
 
         # Construir hrefs usando url_base_pathname para evitar rutas hardcodeadas
@@ -698,7 +698,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                                 ),
                                 html.H2(
-                                    f"{total_desercion_citas:,.0f}",
+                                    #f"{total_desercion_citas:,.0f}",
                                     style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}
                                 ),
                                 html.P(
@@ -706,7 +706,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY}
                                 )
                             ], style=CARD_BODY_STYLE),
-                            style={**CARD_STYLE, "borderLeft": f"5px solid {BRAND_SOFT}"}
+                            style={**CARD_STYLE, "borderLeft": f"5px solid {BRAND_SOFT}", 'display': 'none'}
                         ),
                         color="light",
                         spinner_style={"width": "2.5rem", "height": "2.5rem"}
@@ -986,7 +986,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
         total_horas_programadas = df3['total_horas'].sum()
         total_citados = df4.shape[0]
-        total_desercion_citas = df5.shape[0]
+        ##total_desercion_citas = df5.shape[0]
         promedio_ponderado_diferimiento = df6['promedio_ponderado_diferimiento'].iloc[0] if not df6.empty else None
 
         # Crear un diccionario con los totales
@@ -997,7 +997,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             'Total Horas Efectivas': total_horas_efectivas,
             'Total Horas Programadas': total_horas_programadas,
             'Total Citados': total_citados,
-            'Total Desercion de Citas': total_desercion_citas
+          ##  'Total Desercion de Citas': total_desercion_citas
         }
 
         # Convertir a DataFrame
