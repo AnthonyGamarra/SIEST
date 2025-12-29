@@ -138,7 +138,10 @@ def _parse_periodo(search: str) -> str | None:
 def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
     if not pathname:
         return None, None
+    import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas)
+    print(f"Decoded codcas: {codcas}")
     periodo = _parse_periodo(search) or periodo_dropdown
     return codcas, periodo
 
@@ -311,7 +314,9 @@ def _parse_periodo(search: str) -> str | None:
 def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
     if not pathname:
         return None, None
+    import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
     return codcas, periodo
 

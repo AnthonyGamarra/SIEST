@@ -32,10 +32,17 @@
 
       <div class="header__right">
         <div class="user-chip" aria-label="Datos del usuario">
-          <div class="user-avatar">{{ (current_user.name or 'U')[:1]|upper }}{{ (current_user.lastname or 'S')[:1]|upper }}</div>
+          <div class="user-avatar">
+            {{ (current_user.name or 'U')[:1]|upper }}{{ (current_user.lastname
+            or 'S')[:1]|upper }}
+          </div>
           <div class="user-meta">
-            <span class="user-name">{{ current_user.name }} {{ current_user.lastname }}</span>
-            <span class="user-id">{{ current_user.codcas or 'Sin código' }}</span>
+            <span class="user-name"
+              >{{ current_user.name }} {{ current_user.lastname }}</span
+            >
+            <span class="user-id"
+              >{{ current_user.codcas or 'Sin código' }}</span
+            >
           </div>
           <span class="role-chip">{{ current_user.role|capitalize }}</span>
         </div>
@@ -43,7 +50,11 @@
         <div class="header__actions">
           <a class="pill-btn pill-btn--primary" href="/">Inicio</a>
           {% if current_user.role == 'admin' %}
-          <a class="pill-btn pill-btn--primary" href="{{ url_for('main.register') }}">Agregar usuario</a>
+          <a
+            class="pill-btn pill-btn--primary"
+            href="{{ url_for('main.register') }}"
+            >Agregar usuario</a
+          >
           {% endif %}
           <a class="pill-btn pill-btn--ghost" href="/logout">Cerrar sesión</a>
         </div>
@@ -71,89 +82,136 @@
 
     <!-- CONTENIDO PRINCIPAL -->
     {% if current_user.is_authenticated %} {% if show_modules|default(True) %}
+
     <div class="main">
+      {% if current_user.role == 'admin' %}
+      <form class="codcas-selector">
+        <div class="d-flex align-items-center mb-3">
+          <img
+            src="{{ url_for('static', filename='SIEST.png') }}"
+            alt="Logo centro"
+          />
+          <div>
+            <h2>Seleccione un centro</h2>
+            <p class="text-muted mb-0 small">
+              Elija el centro para ver los módulos disponibles
+            </p>
+          </div>
+        </div>
+        <div class="form-group mb-0">
+          <label for="codcas" class="form-label" style="font-weight: 500"
+            >Centro asistencial</label
+          >
+          <select
+            id="codcas"
+            name="codcas"
+            class="form-select form-select-lg"
+            required
+            style="border-radius: 0.7rem"
+          >
+            <option value="">Seleccionar centro...</option>
+            <option value="001">Centro 1</option>
+            <option value="002">Centro 2</option>
+            <option value="003">Centro 3</option>
+            <option value="004">Centro 4</option>
+            <option value="005">Centro 5</option>
+            <option value="006">Centro 6</option>
+            <option value="007">Centro 7</option>
+            <option value="008">Centro 8</option>
+          </select>
+          <!-- Botón selección -->
+          <div class="register-submit">
+            <button type="submit">Centro seleccionado</button>
+          </div>
+        </div>
+      </form>
+      {% endif %}
       <div class="modules-container">
-        <div class="modules-header" style="color:#ffffff;">
+        <div class="modules-header" style="color: #ffffff">
           <h1 class="modules-title">Módulos disponibles</h1>
-          <p class="modules-subtitle">Accede a los diferentes servicios de la plataforma</p>
+          <p class="modules-subtitle">
+            Accede a los diferentes servicios de la plataforma
+          </p>
         </div>
         <div class="modules-menu">
-        <!-- Módulo 1: Dashboard (activo) -->
-        <a
-          href="{{ '/dashboard/' + (current_user.dashboard_code() if current_user else '') }}"
-          class="module"
-        >
-          <img
-            src="{{ url_for('static', filename='RCS2.png') }}"
-            alt="Dashboard"
-          />
-          <span>Consulta externa</span>
-        </a>
+          <!-- Módulo 1: Dashboard (activo) -->
+          <a
+            href="{{ '/dashboard/' + dashboard_code_for_user() }}"
+            class="module"
+          >
+            <img
+              src="{{ url_for('static', filename='RCS2.png') }}"
+              alt="Dashboard"
+            />
+            <span>Consulta externa</span>
+          </a>
 
-        <!-- Módulo 2: Emergencia (activar si existe código del usuario) -->
-        {% set code_alt = current_user.dashboard_code() if current_user else ''
-        %} {% if code_alt %}
-        <a href="{{ '/dashboard_alt/' + code_alt + '/' }}" class="module">
-          <img
-            src="{{ url_for('static', filename='RSC1.png') }}"
-            alt="Emergencia"
-          />
-          <span>Emergencia</span>
-        </a>
-        {% else %}
-        <div class="module inactive">
-          <img
-            src="{{ url_for('static', filename='RSC1.png') }}"
-            alt="Módulo 2"
-          />
-          <span>Emergencia</span>
+          <!-- Módulo 2: Emergencia (activar si existe código del usuario) -->
+          {% set code_alt = current_user.dashboard_code() if current_user else
+          '' %} {% if code_alt %}
+          <a
+            href="{{ '/dashboard_alt/' + dashboard_code_for_user() + '/' }}"
+            class="module"
+          >
+            <img
+              src="{{ url_for('static', filename='RSC1.png') }}"
+              alt="Emergencia"
+            />
+            <span>Emergencia</span>
+          </a>
+          {% else %}
+          <div class="module inactive">
+            <img
+              src="{{ url_for('static', filename='RSC1.png') }}"
+              alt="Módulo 2"
+            />
+            <span>Emergencia</span>
+          </div>
+          {% endif %}
+
+          <!-- Módulo 3: Hospitalización (desactivado) -->
+          <div class="module inactive">
+            <img
+              src="{{ url_for('static', filename='hospitalizacion.png') }}"
+              alt="Hospitalización"
+            />
+            <span>Hospitalización</span>
+          </div>
+
+          <!-- Módulo 4: Laboratorio (desactivado) -->
+          <div class="module inactive">
+            <img
+              src="{{ url_for('static', filename='cirugia.png') }}"
+              alt="Centro quirúrgico"
+            />
+            <span>Centro quirúrgico</span>
+          </div>
+
+          <!-- Módulo 5: reportes gerenciales -->
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.reportes_gerenciales') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='analytics.png') }}"
+              alt="Reportes gerenciales"
+            />
+            <span>Reportes gerenciales</span>
+          </a>
+          {% endif %}
+
+          <!-- Módulo 6: reportes LOGS - ADMIN -->
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('logs.view_logs') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='logs.png') }}"
+              alt="Reportes LOGS"
+            />
+
+            <span>Auditoría del Sistema</span>
+          </a>
+          {% endif %}
+
+          <!-- Los gráficos de auditoría ahora están integrados en Reportes LOGS -->
         </div>
-        {% endif %}
-
-        <!-- Módulo 3: Hospitalización (desactivado) -->
-        <div class="module inactive">
-          <img
-            src="{{ url_for('static', filename='hospitalizacion.png') }}"
-            alt="Hospitalización"
-          />
-          <span>Hospitalización</span>
-        </div>
-
-        <!-- Módulo 4: Laboratorio (desactivado) -->
-        <div class="module inactive">
-          <img
-            src="{{ url_for('static', filename='cirugia.png') }}"
-            alt="Centro quirúrgico"
-          />
-          <span>Centro quirúrgico</span>
-        </div>
-
-        <!-- Módulo 5: reportes gerenciales -->
-        {% if current_user.role == 'admin' %}
-        <a href="{{ url_for('main.reportes_gerenciales') }}" class="module">
-          <img
-            src="{{ url_for('static', filename='analytics.png') }}"
-            alt="Reportes gerenciales"
-          />
-          <span>Reportes gerenciales</span>
-        </a>
-        {% endif %}
-
-        <!-- Módulo 6: reportes LOGS - ADMIN -->
-        {% if current_user.role == 'admin' %}
-        <a href="{{ url_for('logs.view_logs') }}" class="module">
-          <img
-            src="{{ url_for('static', filename='logs.png') }}"
-            alt="Reportes LOGS"
-          />
-          
-          <span>Auditoría del Sistema</span>
-        </a>
-        {% endif %}
-
-        <!-- Los gráficos de auditoría ahora están integrados en Reportes LOGS -->
-        
-      </div>
       </div>
     </div>
 
@@ -173,7 +231,9 @@
         </div>
         <div class="container">
           <h2>🔐 Acceso</h2>
-          <p class="small">Ingresa tus credenciales para acceder a la plataforma</p>
+          <p class="small">
+            Ingresa tus credenciales para acceder a la plataforma
+          </p>
           <form method="post" action="/login" novalidate>
             <!-- Campo Usuario -->
             <div class="field" aria-hidden="false">

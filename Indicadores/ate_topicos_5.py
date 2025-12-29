@@ -269,6 +269,10 @@ def create_connection():
      Input("ate-topicos-url-5", "search")],
 )
 def update_page_content(codcas, search):
+
+    import secure_code as sc
+    codcas = sc.decode_code(codcas) if codcas else None
+    
     periodo = None
     if search:
         parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
@@ -444,6 +448,10 @@ def download_csv(n_clicks, codcas, search):
     import pandas as pd
     from dash import no_update
     from dash import dcc
+
+    import secure_code as sc
+    codcas = sc.decode_code(codcas) if codcas else None
+    
     if not n_clicks:
         return no_update
     periodo = None

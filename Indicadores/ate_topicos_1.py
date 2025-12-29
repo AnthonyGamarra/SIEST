@@ -274,6 +274,9 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def update_page_content(codcas, search):
+        import secure_code as sc
+        codcas = sc.decode_code(codcas) if codcas else None
+
         periodo = None
         if search:
             parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
@@ -471,6 +474,9 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def download_csv(n_clicks, codcas, search):
+        import secure_code as sc
+        codcas = sc.decode_code(codcas) if codcas else None
+        
         if not n_clicks:
             return None
         periodo = None

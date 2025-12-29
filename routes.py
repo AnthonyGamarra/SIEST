@@ -2,15 +2,20 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
-
+from flask import current_app
 from bi import get_bi_url
+from secure_code import encode_code
 
 def register_routes(app):
 
+	from backend.models import dashboard_code_for_user
 	bp = Blueprint('main', __name__)
 	@bp.app_context_processor
 	def inject_flags():
-		return {'has_reportes_gerenciales': 'main.reportes_gerenciales' in current_app.view_functions}
+		return {
+			'has_reportes_gerenciales': 'main.reportes_gerenciales' in current_app.view_functions,
+			'dashboard_code_for_user': lambda: dashboard_code_for_user(current_user, request)
+		}
 
 	@bp.route('/')
 	def index():
@@ -70,27 +75,43 @@ def register_routes(app):
 		flash('Cierre de sesión exitoso.', 'success')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard', endpoint='dashboard_redirect')
 	@login_required
 	def dashboard_redirect():
-		code = getattr(current_user, 'dashboard_code', lambda: '')()
+		code = ""
+		if current_user.role == 'admin':
+			code =  request.args.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+
 		if code:
-			return redirect(f'/dashboard/{code}/')
+			token = encode_code(code)
+			return redirect(f'/dashboard/{token}/')
 		return redirect(url_for('main.index'))
 
 	@bp.route('/dashboard/')
 	@login_required
 	def dashboard_index():
-		code = getattr(current_user, 'dashboard_code', lambda: '')()
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '') 
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
 		if code:
-			return redirect(f'/dashboard/{code}/')
+			token = encode_code(code)
+			return redirect(f'/dashboard/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
 
 	@bp.route('/dashboard_alt', endpoint='dashboard_alt_redirect')
 	@login_required
 	def dashboard_alt_redirect():
-		code = getattr(current_user, 'dashboard_code', lambda: '')()
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '') 
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
 		if code:
 			return redirect(f'/dashboard_alt/{code}/')
 		return redirect(url_for('main.index'))
@@ -105,7 +126,11 @@ def register_routes(app):
 		return redirect(url_for('main.index'))
 	
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
-		code = getattr(current_user, 'dashboard_code', lambda: '')()
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '') or request.args.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
 		if code:
 			return redirect(f'/dashboard/dash{target_path}/?codcas={code}')
 		flash(warning_msg, 'warning')
@@ -114,8 +139,6 @@ def register_routes(app):
 	@bp.route('/dashboard_eme_prioridad_<prioridad>/<codcas>')
 	@login_required
 	def dashboard_eme_prioridad_redirect(prioridad, codcas):
-		# Redirecciona a la ruta interna del dashboard de emergencia
-		# Ejemplo: /dashboard_alt/prioridad_1/001
 		qs = request.query_string.decode()
 		return redirect(f"/dashboard_alt/prioridad_{prioridad}/{codcas}?{qs}")
 

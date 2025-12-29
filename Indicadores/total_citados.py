@@ -128,7 +128,9 @@ def style_horizontal_bar(fig: go.Figure, x_title: str, y_title: str) -> go.Figur
 def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
     if not pathname:
         return None, None
-    codcas = pathname.rstrip("/").split("/")[-1]
+    import secure_code as sc
+    codcas_url = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas_url)
     periodo = _parse_periodo(search) or periodo_dropdown
     return codcas, periodo
 
@@ -325,7 +327,9 @@ def _parse_periodo(search: str) -> str | None:
 def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
     if not pathname:
         return None, None
+    import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
     return codcas, periodo
 
@@ -383,7 +387,9 @@ def update_top_bars(pathname, search):
             empty_fig("Total citas por servicio"),
             empty_fig("Total citas por subactividad"),
         )
+    import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas)
 
     engine = create_connection()
     if engine is None:
@@ -579,7 +585,9 @@ def render_tabla_prod_servicio(pathname, search):
     periodo = _parse_periodo(search) or "01"
     if not pathname:
         return html.Div("Sin ruta.", style={"color": "#b00"})
+    import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas)
 
     engine = create_connection()
     if engine is None:
