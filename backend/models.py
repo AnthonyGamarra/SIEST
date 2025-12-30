@@ -1,6 +1,40 @@
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 from extensions import db, login_manager
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from flask import current_app
+
+def dashboard_code_for_user(user, request):
+
+    if not getattr(user, 'is_authenticated', False):
+        return ''
+    if getattr(user, 'role', None) == 'admin':
+        code = request.form.get('codcas', '') or request.args.get('codcas', '')
+    else:
+        code = getattr(user, 'dashboard_code', lambda: '')()
+    if not code:
+        return ''
+    from backend.models import encode_code
+    return encode_code(code)
+
+
+def get_serializer():
+    return URLSafeTimedSerializer(
+        current_app.config['SECRET_KEY'],
+        salt='dashboard-code'
+    )
+
+def encode_code(code: str) -> str:
+    s = get_serializer()
+    return s.dumps(code)
+
+def decode_code(token: str, max_age=3600):
+    s = get_serializer()
+    try:
+        return s.loads(token, max_age=max_age)
+    except (BadSignature, SignatureExpired):
+        return None
+
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users' 

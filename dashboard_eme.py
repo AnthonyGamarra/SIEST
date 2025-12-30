@@ -321,8 +321,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
     def on_search(n_clicks, periodo, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
-
-        codcas = pathname.rstrip('/').split('/')[-1] if pathname else None
+        
+        import secure_code as sc
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url)
         if not periodo or not codcas:
             return html.Div([
                 html.I(className="bi bi-exclamation-circle", style={
@@ -566,7 +568,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         **CARD_STYLE,
                         'height': '100%'
                     }, className='h-100')
-                ], href=f"{url_base_pathname}prioridad_{prioridad}/{codcas}?periodo={periodo}",
+                ], href=f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}",
                    style={'textDecoration': 'none'},
                    className='hover-scale'),
                 lg=4, md=6, sm=12, xs=12, className='mb-4'

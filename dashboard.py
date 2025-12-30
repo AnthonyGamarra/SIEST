@@ -284,8 +284,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     def on_search(n_clicks, periodo, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
+        
+        import secure_code as sc
 
-        codcas = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+
         if not periodo or not codcas:
             return html.Div("Seleccione un periodo y asegúrese de tener un centro válido."), html.Div()
 
@@ -490,11 +494,18 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 f.cod_oricentro,
                 f.cod_centro;
         """
-        df = pd.read_sql(query, engine)
-        df2 = pd.read_sql(query2, engine)
-        df3 = pd.read_sql(query3, engine)
-        df4= pd.read_sql(query4, engine)
-        df5= pd.read_sql(query5, engine)
+        
+        from concurrent.futures import ThreadPoolExecutor
+
+        queries = [query, query2, query3, query4, query5]
+
+        def read_fast(q):
+         return pd.concat(
+            pd.read_sql(q, engine, chunksize=200_000),
+            ignore_index=True
+       )
+        with ThreadPoolExecutor(max_workers=5) as executor:
+         df, df2, df3, df4, df5 = executor.map(read_fast, queries)
         #df6= pd.read_sql(query6, engine)
 
         if df.empty or df2.empty or df3.empty:
@@ -530,7 +541,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                 dcc.Link(
                                     html.H5("Total de Atenciones", className="card-title",
                                             style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                    href=f"{base}dash/total_atenciones/{codcas}?periodo={periodo}",
+                                    href=f"{base}dash/total_atenciones/{codcas_url}?periodo={periodo}",
                                     className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                             ),
                             html.H2(f"{total_atenciones:,.0f}",
@@ -597,7 +608,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                             dcc.Link(
                                 html.H5("Total de Médicos Programados", className="card-title",
                                         style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/total_medicos/{codcas}?periodo={periodo}",
+                                href=f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
                                 className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                             ),
                             html.H2(f"{total_medicos:,.0f}",
@@ -644,7 +655,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                             dcc.Link(
                                 html.H5("Total horas programadas", className="card-title",
                                         style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/horas_programadas/{codcas}?periodo={periodo}",
+                                href=f"{base}dash/horas_programadas/{codcas_url}?periodo={periodo}",
                                 className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                             ),
                             html.H2(f"{total_horas_programadas:,.0f}",
@@ -666,7 +677,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                             dcc.Link(
                                 html.H5("Total Citas", className="card-title",
                                         style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/total_citados/{codcas}?periodo={periodo}",
+                                href=f"{base}dash/total_citados/{codcas_url}?periodo={periodo}",
                                 className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                             ),
                             html.H2(f"{total_citados:,.0f}",
@@ -694,7 +705,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                         className="card-title",
                                         style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}
                                     ),
-                                    href=f"{base}dash/desercion_citas/{codcas}?periodo={periodo}",
+                                    href=f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}",
                                     className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                                 ),
                                 html.H2(
@@ -723,7 +734,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                         className="card-title",
                                         style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}
                                     ),
-                                    href=f"{base}dash/diferimiento/{codcas}?periodo={periodo}",
+                                    href=f"{base}dash/diferimiento/{codcas_url}?periodo={periodo}",
                                     className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
                                 ),
                                 html.H2(

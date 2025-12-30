@@ -1,3 +1,45 @@
+/* --- codcas-selector --- */
+.codcas-selector {
+  max-width: 420px;
+  margin: 0 auto 2rem auto;
+  border-radius: 1.2rem;
+  background: #f8fafc;
+  box-shadow: 0 2px 12px rgba(30, 34, 126, 0.07);
+  padding: 2rem;
+  border: none;
+}
+.codcas-selector .d-flex {
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+.codcas-selector img {
+  width: 48px;
+  height: 48px;
+  margin-right: 1rem;
+  border-radius: 0.5rem;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.codcas-selector h2 {
+  font-weight: 700;
+  color: #1a237e;
+  margin-bottom: 0;
+}
+.codcas-selector p {
+  color: #6c757d;
+  margin-bottom: 0;
+  font-size: 0.97rem;
+}
+.codcas-selector .form-label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+.codcas-selector .form-select {
+  border-radius: 0.7rem;
+  font-size: 1.1rem;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 1px 3px rgba(30,34,126,0.04);
+}
 /* ...extracted styles from templates/base.html... */
 
 body {
