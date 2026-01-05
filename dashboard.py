@@ -1004,7 +1004,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
         total_horas_programadas = df3['total_horas'].sum()
         total_citados = df4.shape[0]
-        ##total_desercion_citas = df5.shape[0]
+        total_desercion_citas = df5.shape[0]
         #promedio_ponderado_diferimiento = df6['promedio_ponderado_diferimiento'].iloc[0] if not df6.empty else None
 
         # Crear un diccionario con los totales
@@ -1015,7 +1015,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             'Total Horas Efectivas': total_horas_efectivas,
             'Total Horas Programadas': total_horas_programadas,
             'Total Citados': total_citados,
-          ##  'Total Desercion de Citas': total_desercion_citas
+            'Total Desercion de Citas': total_desercion_citas
         }
 
         # Convertir a DataFrame
