@@ -17,7 +17,7 @@ def create_app():
 
     # CONFIGURACIÓN GENERAL
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:admin@10.0.29.117:5433/Flask_Prueba'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/Flask_Prueba'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # INICIALIZAR EXTENSIONES

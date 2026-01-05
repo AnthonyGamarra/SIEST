@@ -265,7 +265,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     # CONEXIÓN DB ==========
     def create_connection():
         try:
-            engine = create_engine('postgresql+psycopg2://postgres:admin@10.0.29.117:5433/DW_ESTADISTICA')
+            engine = create_engine('postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/DW_ESTADISTICA')
             with engine.connect() as conn:
                 pass
             return engine
@@ -987,7 +987,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         df3 = pd.read_sql(query3, engine)
         df4= pd.read_sql(query4, engine)
         df5= pd.read_sql(query5, engine)
-        df6= pd.read_sql(query6, engine)
+        #df6= pd.read_sql(query6, engine)
 
         total_atenciones = len(df)
         total_atendidos = df[['doc_paciente', 'cod_tipdoc_paciente']].drop_duplicates().shape[0]
@@ -998,7 +998,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         total_horas_programadas = df3['total_horas'].sum()
         total_citados = df4.shape[0]
         ##total_desercion_citas = df5.shape[0]
-        promedio_ponderado_diferimiento = df6['promedio_ponderado_diferimiento'].iloc[0] if not df6.empty else None
+        #promedio_ponderado_diferimiento = df6['promedio_ponderado_diferimiento'].iloc[0] if not df6.empty else None
 
         # Crear un diccionario con los totales
         resumen = {

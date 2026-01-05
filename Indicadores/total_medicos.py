@@ -126,7 +126,7 @@ def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
 # Conexión DB
 def create_connection():
     try:
-        engine = create_engine('postgresql+psycopg2://postgres:admin@10.0.29.117:5433/DW_ESTADISTICA')
+        engine = create_engine('postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/DW_ESTADISTICA')
         with engine.connect():
             pass
         return engine
