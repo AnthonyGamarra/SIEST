@@ -5,6 +5,7 @@ from backend.models import User
 from flask import current_app
 from bi import get_bi_url
 from secure_code import encode_code
+from backend.centro_asistencial import get_centro_asistencial
 
 def register_routes(app):
 
@@ -19,7 +20,9 @@ def register_routes(app):
 
 	@bp.route('/')
 	def index():
-		return render_template('index.html')
+		df = get_centro_asistencial()
+		centros_asistenciales = df.to_dict(orient='records')
+		return render_template('index.html', centros_asistenciales=centros_asistenciales)
 
 	@bp.route('/register', methods=['GET', 'POST'])
 	@login_required
@@ -119,7 +122,11 @@ def register_routes(app):
 	@bp.route('/dashboard_alt/')
 	@login_required
 	def dashboard_alt_index():
-		code = getattr(current_user, 'dashboard_code', lambda: '')()
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '') 
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
 		if code:
 			return redirect(f'/dashboard_alt/{code}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard alternativo.', 'warning')
