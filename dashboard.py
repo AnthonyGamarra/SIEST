@@ -497,17 +497,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         
         from concurrent.futures import ThreadPoolExecutor
 
-        queries = [query, query2, query3, query4, query5]
-
         def read_fast(q):
-         return pd.concat(
-            pd.read_sql(q, engine, chunksize=200_000),
-            ignore_index=True
-       )
-        with ThreadPoolExecutor(max_workers=5) as executor:
-         df, df2, df3, df4, df5 = executor.map(read_fast, queries)
-        #df6= pd.read_sql(query6, engine)
+            return pd.concat(
+                pd.read_sql(q, engine, chunksize=400_000),
+                ignore_index=True
+            )
 
+        # ---------- Grupo 1: df y df2 ----------
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            df, df2 = executor.map(read_fast, [query, query2])
+
+        # ---------- Grupo 2: df3 y df4 ----------
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            df3, df4 = executor.map(read_fast, [query3, query4])
+
+        # ---------- Grupo 3: df5 ----------
+        df5 = read_fast(query5)
+
+        # ---------- Validación ----------
         if df.empty or df2.empty or df3.empty:
             return html.Div("No hay registros para el periodo seleccionado."), html.Div()
         
