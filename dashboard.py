@@ -222,9 +222,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         
                     }),
 
-                    dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom'),
-                    dbc.Tooltip("Buscar datos", target='search-button', placement='bottom'),
-                    dbc.Tooltip("Descargar CSV", target='download-button', placement='bottom'),
+                    dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom',
+                                style={'zIndex': 9999}),
+
+                    dbc.Tooltip("Buscar datos", target='search-button', placement='bottom',
+                                style={'zIndex': 9999}),
+
+                    dbc.Tooltip("Descargar CSV", target='download-button', placement='bottom',
+                                style={'zIndex': 9999}),
 
                     dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
                     html.Br(),
@@ -302,6 +307,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 ce.cod_servicio,
                 ce.cod_especialidad,
                 ca.cenasides,
+                ag.agrupador AS agrupador,
                 am.actdes AS actividad,
                 a.actespnom AS subactividad,
                 ce.cod_tipo_consulta,
@@ -333,6 +339,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON ce.cod_oricentro = ca.oricenasicod
                 AND ce.cod_centro = ca.cenasicod
+            LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
             WHERE ce.cod_centro = '{codcas}'
             AND ce.cod_actividad = '91'
             AND ce.clasificacion in (2,4,6)
@@ -367,6 +374,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             SELECT 			
                 p.*,c.servhosdes,
                 e.especialidad,
+                ag.agrupador AS agrupador,
                 a.actespnom,
                 am.actdes,
                 ca.cenasides 
@@ -383,6 +391,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON p.cod_oricentro = ca.oricenasicod
                 AND p.cod_centro = ca.cenasicod
+            LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
             WHERE p.cod_variable = '001'
             AND (
                     p.cod_motivo_suspension IS NULL 
@@ -494,31 +503,72 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 f.cod_oricentro,
                 f.cod_centro;
         """
-        
-        from concurrent.futures import ThreadPoolExecutor
+        import polars as pl
 
-        def read_fast(q):
-            return pd.concat(
-                pd.read_sql(q, engine, chunksize=400_000),
-                ignore_index=True
+        periodo_sql = f"2025{periodo.zfill(2)}"
+        query7 =f"""
+                WITH fecha_min_paciente AS (
+            SELECT 
+                cod_oricentro,
+                cod_centro,
+                doc_paciente,
+                to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
+            FROM dwsge.dwe_consulta_externa_homologacion_2025
+            WHERE cod_variable = '001'
+            AND cod_actividad = '91'
+            AND clasificacion IN (2,4,6)
+            AND cod_centro = '{codcas}'
+            GROUP BY 
+                cod_oricentro,
+                cod_centro, 
+                doc_paciente
+        )
+        SELECT
+            COUNT(DISTINCT doc_paciente) AS cantidad
+        FROM fecha_min_paciente 
+        WHERE periodo = '{periodo_sql}'
+        """
+        
+        query8 =f"""
+            WITH fecha_min_paciente AS (
+                SELECT 
+                    p.doc_paciente,
+                    ag.agrupador,
+                    to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                LEFT JOIN dwsge.dim_agrupador ag 
+                    ON p.cod_agrupador = ag.cod_agrupador
+                WHERE p.cod_variable = '001'
+                AND p.cod_actividad = '91'
+                AND p.clasificacion IN (2,4,6)
+                AND p.cod_centro = '{codcas}'
+                GROUP BY 
+                    p.doc_paciente,
+                    ag.agrupador
             )
+            SELECT 
+                agrupador,
+                COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente
+            WHERE periodo = '{periodo_sql}'
+            GROUP BY agrupador"""
 
-        # ---------- Grupo 1: df y df2 ----------
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            df, df2 = executor.map(read_fast, [query, query2])
 
-        # ---------- Grupo 2: df3 y df4 ----------
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            df3, df4 = executor.map(read_fast, [query3, query4])
+        from concurrent.futures import ThreadPoolExecutor
+        import pandas as pd
 
-        # ---------- Grupo 3: df5 ----------
-        df5 = read_fast(query5)
+        queries = [query, query2, query3, query4, query5]
 
-        # ---------- Validación ----------
-        if df.empty or df2.empty or df3.empty:
-            return html.Div("No hay registros para el periodo seleccionado."), html.Div()
-        
-        
+        def read_query(q):
+            return pd.read_sql(q, engine)
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            dfs = list(executor.map(read_query, queries))
+
+        df, df2, df3, df4, df5 = dfs
+
+        df7 = pl.read_database(query7, engine)
+        df8 = pl.read_database(query8, engine)
 
         # NOMBRE DEL CENTRO ===
         nombre_centro = df['cenasides'].dropna().unique()
@@ -526,12 +576,38 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
         # TARJETAS RESUMEN ===
         total_atenciones = len(df)
-        total_atendidos = df[['doc_paciente', 'cod_tipdoc_paciente']].drop_duplicates().shape[0]
+        total_atenciones_agru = (
+            df.groupby(["agrupador"])  # total por agrupador
+            .size()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+        )
+        total_consultantes = df7.select("cantidad").item()
+        total_consultantes_por_servicio = df8.select(["agrupador", "cantidad"]).to_pandas()
+        total_consultantes_por_servicio_table = total_consultantes_por_servicio.rename(
+            columns={"cantidad": "counts"}
+        )
         total_medicos = df['dni_medico'].nunique()
+        medicos_por_agrupador = (
+            df.groupby('agrupador')['dni_medico']
+            .nunique()
+            .reset_index(name='total_medicos')
+            .sort_values('total_medicos', ascending=False)
+        )
+        medicos_por_agrupador_table = medicos_por_agrupador.rename(columns={'total_medicos': 'counts'})
         df2["hras_prog"] = pd.to_numeric(df2["hras_prog"], errors="coerce")
         total_horas_efectivas = df2['hras_prog'].sum()
         df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
         total_horas_programadas = df3['total_horas'].sum()
+        horas_programadas_por_agrupador = (
+            df3.groupby('agrupador', dropna=False)['total_horas']
+            .sum()
+            .reset_index(name='total_horas_programadas')
+            .sort_values('total_horas_programadas', ascending=False)
+        )
+        horas_programadas_table = horas_programadas_por_agrupador.rename(
+            columns={'total_horas_programadas': 'counts'}
+        )
         total_citados = df4.shape[0]
         total_desercion_citas = df5.shape[0]
         ##promedio_ponderado_diferimiento = (round(df6['promedio_ponderado_diferimiento'].iloc[0], 2)if not df6.empty else None)
@@ -539,230 +615,175 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         # Construir hrefs usando url_base_pathname para evitar rutas hardcodeadas
         base = url_base_pathname.rstrip('/') + '/'
 
-        summary_row = dbc.Container([
-            dbc.Row([
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                                dcc.Link(
-                                    html.H5("Total de Atenciones", className="card-title",
-                                            style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                    href=f"{base}dash/total_atenciones/{codcas_url}?periodo={periodo}",
-                                    className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-                            ),
-                            html.H2(f"{total_atenciones:,.0f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}),
-                            html.P(f"Periodo {periodo} | {nombre_centro}",
-                                   style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY})
-                        ], style=CARD_BODY_STYLE),
-                        style={**CARD_STYLE, "borderLeft": f"5px solid {BRAND}"}
-                    ),
-                    color="light",
-                    spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                ),
-                md=6, xs=12
-                ),
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                                            html.H5(
-                                                "Total de Pacientes Atendidos en el mes",
-                                                className="card-title",
-                                                style={
-                                                    'color': BRAND,
-                                                    'marginBottom': '6px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'letterSpacing': '-0.1px'
-                                                }
-                                            ),
-                                            html.H2(
-                                                f"{total_atendidos:,.0f}",
-                                                style={
-                                                    'fontWeight': '800',
-                                                    'color': TEXT,
-                                                    'fontSize': '34px',
-                                                    'margin': 0,
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'letterSpacing': '-0.2px'
-                                                }
-                                            ),
-                                            html.P(
-                                                f"Periodo {periodo} | {nombre_centro}",
-                                                style={
-                                                    'fontSize': '12px',
-                                                    'color': MUTED,
-                                                    'margin': '6px 0 0 0',
-                                                    'fontFamily': FONT_FAMILY
-                                                }
-                                            )
-                        ], style=CARD_BODY_STYLE),
-                        style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}"}
-                    ),
-                    color="light",
-                    spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                ),
-                md=6, xs=12
-                ),
-            ], justify="center", align="stretch", style={'marginBottom': '10px', 'rowGap': '10px'}),
+        subtitle = f"Periodo {periodo} | {nombre_centro}"
 
-            dbc.Row([
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                            dcc.Link(
-                                html.H5("Total de Médicos Programados", className="card-title",
-                                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
-                                className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-                            ),
-                            html.H2(f"{total_medicos:,.0f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}),
-                            html.P(f"Periodo {periodo} | {nombre_centro}",
-                                   style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY})
-                        ], style=CARD_BODY_STYLE),
-                        style={**CARD_STYLE, "borderLeft": f"5px solid {BRAND_SOFT}"}
+        def render_card(title, value, border_color, href=None, subtitle_text=subtitle, extra_style=None):
+            heading = dcc.Link(
+                html.H5(title, className="card-title",
+                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
+                href=href,
+                className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
+            ) if href else html.H5(
+                title, className="card-title",
+                style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}
+            )
+
+            card_style = {**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
+            if extra_style:
+                card_style.update(extra_style)
+
+            return dbc.Card(
+                dbc.CardBody([
+                    heading,
+                    html.H2(value, style={
+                        'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0,
+                        'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
+                    }),
+                    html.P(subtitle_text, style={
+                        'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY
+                    })
+                ], style=CARD_BODY_STYLE),
+                style=card_style
+            )
+
+        def render_agrupador_table(dataframe, value_format="{:,.0f}"):
+            if dataframe.empty:
+                return dbc.Card(
+                    dbc.CardBody(
+                        html.P("Sin registros", className="text-muted mb-0", style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}),
+                        style={**CARD_BODY_STYLE, 'padding': '14px'}
                     ),
-                    color="light",
-                    spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                ),
-                md=6, xs=12
-                ),
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                            dcc.Link(
-                                html.H5("Total de Horas Efectivas", className="card-title",
-                                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/horas_efectivas/{codcas}?periodo={periodo}",
-                                className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-                            ),
-                            html.H2(f"{total_horas_efectivas:,.0f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}),
-                            html.P(f"Periodo {periodo} | {nombre_centro}",
-                                   style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY})
-                        ], style=CARD_BODY_STYLE),
-                        style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}"}
-                    ),
-                    color="light",
-                    spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                ),
-                md=6, xs=12
+                    style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
                 )
-            ], justify="center", align="stretch", style={'marginBottom': '10px', 'rowGap': '10px'}),
-
-            dbc.Row([
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                            dcc.Link(
-                                html.H5("Total horas programadas", className="card-title",
-                                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/horas_programadas/{codcas_url}?periodo={periodo}",
-                                className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-                            ),
-                            html.H2(f"{total_horas_programadas:,.0f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}),
-                            html.P(f"Periodo {periodo} | {nombre_centro}",
-                                   style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY})
-                        ], style=CARD_BODY_STYLE),
-                        style={**CARD_STYLE, "borderLeft": f"5px solid {BRAND}"}
+            body = html.Tbody([
+                html.Tr([
+                    html.Td(
+                        row['agrupador'] or "Sin agrupador",
+                        style={'padding': '4px 8px', 'lineHeight': '1.1'}
                     ),
-                    color="light",
-                    spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                ),
-                md=6, xs=12
-                ),
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                            dcc.Link(
-                                html.H5("Total Citas", className="card-title",
-                                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                                href=f"{base}dash/total_citados/{codcas_url}?periodo={periodo}",
-                                className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-                            ),
-                            html.H2(f"{total_citados:,.0f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}),
-                            html.P(f"Periodo {periodo} | {nombre_centro}",
-                                   style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY})
-                        ], style=CARD_BODY_STYLE),
-                        style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}"}
-                    ),
-                    color="light",
-                    spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                ),
-                md=6, xs=12
-                )
-            ], justify="center", align="stretch", style={'marginBottom': '10px', 'rowGap': '10px'}),
+                    html.Td(
+                        "-" if pd.isna(row['counts']) else value_format.format(row['counts']),
+                        style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1'}
+                    )
+                ])
+                for _, row in dataframe.iterrows()
+            ])
+            table = dbc.Table([body], bordered=False, hover=True, responsive=True, striped=True, className="mb-0", style={'fontSize': '10px'})
+            return dbc.Card(
+                dbc.CardBody([
+                    html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
+                ], style={**CARD_BODY_STYLE, 'padding': '14px'}),
+                style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
+            )
 
-            dbc.Row([
-                dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                                dcc.Link(
-                                    html.H5(
-                                        "Total desercion citas",
-                                        className="card-title",
-                                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}
+        cards = [
+            {
+                "title": "Total de consultantes al establecimiento",
+                "value": f"{total_consultantes:,.0f}",
+                "border_color": ACCENT,
+                "side_component": render_agrupador_table(total_consultantes_por_servicio_table),
+            },
+            {
+                "title": "Total de Consultas",
+                "value": f"{total_atenciones:,.0f}",
+                "border_color": BRAND,
+                "href": f"{base}dash/total_atenciones/{codcas_url}?periodo={periodo}",
+                "side_component": render_agrupador_table(total_atenciones_agru),
+            },
+
+            {
+                "title": "Total de Médicos Programados",
+                "value": f"{total_medicos:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
+                "side_component": render_agrupador_table(medicos_por_agrupador_table),
+            },
+            {
+                "title": "Total desercion citas",
+                "value": f"{total_desercion_citas:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}",
+            },
+            {
+                "title": "Total Citas",
+                "value": f"{total_citados:,.0f}",
+                "border_color": ACCENT,
+                "href": f"{base}dash/total_citados/{codcas_url}?periodo={periodo}",
+            },
+            {
+                "title": "Total horas programadas",
+                "value": f"{total_horas_programadas:,.0f}",
+                "border_color": BRAND,
+                "href": f"{base}dash/horas_programadas/{codcas_url}?periodo={periodo}",
+                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
+            },
+
+
+            {
+                "title": "Total de Horas Efectivas",
+                "value": f"{total_horas_efectivas:,.0f}",
+                "border_color": ACCENT,
+                "href": f"{base}dash/horas_efectivas/{codcas}?periodo={periodo}",
+            }
+
+        ]
+
+        summary_row = dbc.Container(
+            [
+                (
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    render_card(
+                                        title=card["title"],
+                                        value=card["value"],
+                                        border_color=card["border_color"],
+                                        href=card.get("href"),
+                                        subtitle_text=card.get("subtitle", subtitle),
+                                        extra_style=card.get("extra_style")
                                     ),
-                                    href=f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}",
-                                    className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
+                                    style={'width': '100%'}
                                 ),
-                                html.H2(
-                                    f"{total_desercion_citas:,.0f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            ),
+                            dbc.Col(
+                                html.Div(card["side_component"], style={'width': '100%'}),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            )
+                        ],
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                    if card.get("side_component")
+                    else dbc.Row(
+                        dbc.Col(
+                            html.Div(
+                                render_card(
+                                    title=card["title"],
+                                    value=card["value"],
+                                    border_color=card["border_color"],
+                                    href=card.get("href"),
+                                    subtitle_text=card.get("subtitle", subtitle),
+                                    extra_style=card.get("extra_style")
                                 ),
-                                html.P(
-                                    f"Periodo {periodo} | {nombre_centro}",
-                                    style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY}
-                                )
-                            ], style=CARD_BODY_STYLE),
-                            style={**CARD_STYLE, "borderLeft": f"5px solid {BRAND_SOFT}"}
+                                style={'width': '100%'}
+                            ),
+                            width=12,
+                            lg=8
                         ),
-                        color="light",
-                        spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                    ),
-                    md=6, xs=12
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
                 )
-                ,dbc.Col(
-                    dbc.Spinner(
-                        dbc.Card(
-                            dbc.CardBody([
-                                dcc.Link(
-                                    html.H5(
-                                        "Promedio diferimiento de citas",
-                                        className="card-title",
-                                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}
-                                    ),
-                                    href=f"{base}dash/diferimiento/{codcas_url}?periodo={periodo}",
-                                    className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-                                ),
-                                html.H2(
-                                    #f"{promedio_ponderado_diferimiento:,.2f}",
-                                    style={'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'}
-                                ),
-                                html.P(
-                                    f"Periodo {periodo} | {nombre_centro}",
-                                    style={'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY}
-                                )
-                            ], style=CARD_BODY_STYLE),
-                            style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}" , 'display': 'none'}
-                        ),
-                        color="light",
-                        spinner_style={"width": "2.5rem", "height": "2.5rem"}
-                    ),
-                    md=6, xs=12
-                ),
-            ], justify="center", align="stretch", style={'marginBottom': '10px', 'rowGap': '10px' }),
-
-        ], fluid=True)
+                for card in cards
+            ],
+            fluid=True
+        )
 
         # COLORES 
         color_principal = "#0064AF"
@@ -807,7 +828,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         if not n_clicks or not periodo or not pathname:
             return None
 
-        codcas = pathname.rstrip('/').split('/')[-1] if pathname else None
+        import secure_code as sc
+
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
         if not codcas:
             return None
 
@@ -821,6 +845,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 ce.cod_servicio,
                 ce.cod_especialidad,
                 ca.cenasides,
+                ag.agrupador AS agrupador,
                 am.actdes AS actividad,
                 a.actespnom AS subactividad,
                 ce.cod_tipo_consulta,
@@ -852,6 +877,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON ce.cod_oricentro = ca.oricenasicod
                 AND ce.cod_centro = ca.cenasicod
+            LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
             WHERE ce.cod_centro = '{codcas}'
             AND ce.cod_actividad = '91'
             AND ce.clasificacion in (2,4,6)
@@ -886,6 +912,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             SELECT 			
                 p.*,c.servhosdes,
                 e.especialidad,
+                ag.agrupador AS agrupador,
                 a.actespnom,
                 am.actdes,
                 ca.cenasides 
@@ -902,6 +929,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON p.cod_oricentro = ca.oricenasicod
                 AND p.cod_centro = ca.cenasicod
+            LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
             WHERE p.cod_variable = '001'
             AND (
                     p.cod_motivo_suspension IS NULL 
@@ -937,32 +965,57 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             AND p.cod_estado <>'0';
         """
         query5=f"""
-            SELECT 			
-                p.*,c.servhosdes,
-                e.especialidad,
-                a.actespnom,
-                am.actdes,
-                ca.cenasides 
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON p.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON p.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON p.cod_actividad = a.actcod
-                AND p.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON p.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON p.cod_oricentro = ca.oricenasicod
-                AND p.cod_centro = ca.cenasicod
-            WHERE p.cod_centro = '{codcas}'
-            AND p.cod_actividad = '91'
-            AND p.cod_variable = '001'
-            AND p.cod_estado ='5';
+                SELECT            
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides
+                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON ce.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_oricentro = ca.oricenasicod
+                    AND ce.cod_centro = ca.cenasicod
+                WHERE ce.cod_centro = '{codcas}'
+                AND ce.cod_actividad = '91'
+                AND ce.clasificacion IN (1,3,0)
+                AND ce.cod_variable = '001'
+
+                UNION ALL
+
+                SELECT 			
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                WHERE p.cod_centro = '{codcas}'
+                AND p.cod_actividad = '91'
+                AND p.cod_variable = '001'
+                AND p.cod_estado IN ('1','2','5');
 
         """
-
         query6=f"""
             SELECT
                 f.periodo,
@@ -988,44 +1041,126 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 f.cod_oricentro,
                 f.cod_centro;
         """
+        import polars as pl
 
-        df = pd.read_sql(query, engine)
-        df2 = pd.read_sql(query2, engine)
-        df3 = pd.read_sql(query3, engine)
-        df4= pd.read_sql(query4, engine)
-        df5= pd.read_sql(query5, engine)
-        #df6= pd.read_sql(query6, engine)
+        periodo_sql = f"2025{periodo.zfill(2)}"
+        query7 =f"""
+                WITH fecha_min_paciente AS (
+            SELECT 
+                cod_oricentro,
+                cod_centro,
+                doc_paciente,
+                to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
+            FROM dwsge.dwe_consulta_externa_homologacion_2025
+            WHERE cod_variable = '001'
+            AND cod_actividad = '91'
+            AND clasificacion IN (2,4,6)
+            AND cod_centro = '{codcas}'
+            GROUP BY 
+                cod_oricentro,
+                cod_centro, 
+                doc_paciente
+        )
+        SELECT
+            COUNT(DISTINCT doc_paciente) AS cantidad
+        FROM fecha_min_paciente 
+        WHERE periodo = '{periodo_sql}'
+        """
+        
+        query8 =f"""
+            WITH fecha_min_paciente AS (
+                SELECT 
+                    p.doc_paciente,
+                    ag.agrupador,
+                    to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                LEFT JOIN dwsge.dim_agrupador ag 
+                    ON p.cod_agrupador = ag.cod_agrupador
+                WHERE p.cod_variable = '001'
+                AND p.cod_actividad = '91'
+                AND p.clasificacion IN (2,4,6)
+                AND p.cod_centro = '{codcas}'
+                GROUP BY 
+                    p.doc_paciente,
+                    ag.agrupador
+            )
+            SELECT 
+                agrupador,
+                COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente
+            WHERE periodo = '{periodo_sql}'
+            GROUP BY agrupador"""
+        
+        from concurrent.futures import ThreadPoolExecutor
+        import pandas as pd
 
+        queries = [query, query2, query3, query4, query5]
+
+        def read_query(q):
+            return pd.read_sql(q, engine)
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            dfs = list(executor.map(read_query, queries))
+
+        df, df2, df3, df4, df5 = dfs
+
+        df7 = pl.read_database(query7, engine)
+        df8 = pl.read_database(query8, engine)
+
+        # TARJETAS RESUMEN ===
         total_atenciones = len(df)
-        total_atendidos = df[['doc_paciente', 'cod_tipdoc_paciente']].drop_duplicates().shape[0]
+        total_atenciones_agru = (df.groupby("agrupador").size().reset_index(name="counts").sort_values("counts", ascending=False))
+        total_consultantes = df7.select("cantidad").item()
+        total_consultantes_por_servicio = df8.select(["agrupador", "cantidad"]).to_pandas()
+        total_consultantes_por_servicio_table = total_consultantes_por_servicio.rename(columns={"cantidad": "counts"})
         total_medicos = df['dni_medico'].nunique()
+        medicos_por_agrupador = (df.groupby('agrupador')['dni_medico'].nunique().reset_index(name='total_medicos').sort_values('total_medicos', ascending=False))
+        medicos_por_agrupador_table = medicos_por_agrupador.rename(columns={'total_medicos': 'counts'})
         df2["hras_prog"] = pd.to_numeric(df2["hras_prog"], errors="coerce")
         total_horas_efectivas = df2['hras_prog'].sum()
         df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
         total_horas_programadas = df3['total_horas'].sum()
+        horas_programadas_por_agrupador = (df3.groupby('agrupador', dropna=False)['total_horas'].sum().reset_index(name='total_horas_programadas').sort_values('total_horas_programadas', ascending=False))
+        horas_programadas_table = horas_programadas_por_agrupador.rename(columns={'total_horas_programadas': 'counts'})
         total_citados = df4.shape[0]
         total_desercion_citas = df5.shape[0]
-        #promedio_ponderado_diferimiento = df6['promedio_ponderado_diferimiento'].iloc[0] if not df6.empty else None
 
-        # Crear un diccionario con los totales
-        resumen = {
-            'Total de Atenciones': total_atenciones,
-            'Total de Atendidos': total_atendidos,
-            'Total de Medicos': total_medicos,
-            'Total Horas Efectivas': total_horas_efectivas,
-            'Total Horas Programadas': total_horas_programadas,
-            'Total Citados': total_citados,
-            'Total Desercion de Citas': total_desercion_citas
-        }
+        indicadores = pd.DataFrame({
+            "Indicador": [
+                "Total atenciones",
+                "Total consultantes",
+                "Total médicos",
+                "Total horas efectivas",
+                "Total horas programadas",
+                "Total citados",
+                "Total deserción citas"
+            ],
+            "Valor": [
+                total_atenciones,
+                total_consultantes,
+                total_medicos,
+                total_horas_efectivas,
+                total_horas_programadas,
+                total_citados,
+                total_desercion_citas
+            ]
+        })
 
-        # Convertir a DataFrame
-        df_resumen = pd.DataFrame(list(resumen.items()), columns=['Métrica', 'Valor'])
-      
-        if df_resumen.empty:
-            return None
+        import io
 
-        filename = f"variables_{codcas}_{periodo}.csv"
-        return dcc.send_data_frame(df_resumen.to_csv, filename, index=False)
+        output = io.BytesIO()
 
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            indicadores.to_excel(writer, sheet_name="Indicadores_Generales", index=False)
+            total_atenciones_agru.to_excel(writer, sheet_name="Atenciones_por_Servicio", index=False)
+            total_consultantes_por_servicio_table.to_excel(writer, sheet_name="Consultantes_por_Servicio", index=False)
+            medicos_por_agrupador_table.to_excel(writer, sheet_name="Medicos_por_Servicio", index=False)
+            horas_programadas_table.to_excel(writer, sheet_name="Horas_Programadas_por_Servicio", index=False)
+
+        output.seek(0)
+
+        filename = f"reporte_{codcas}_{periodo}.xlsx"
+
+        return dcc.send_bytes(output.getvalue(), filename)
     dash_app.layout = serve_layout
     return dash_app
