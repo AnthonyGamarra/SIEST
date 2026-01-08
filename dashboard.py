@@ -478,31 +478,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 AND p.cod_estado IN ('1','2','5');
 
         """
-        query6=f"""
-            SELECT
-                f.periodo,
-                f.cod_oricentro,	
-                f.cod_centro,
-                TRUNC(
-                    CASE 
-                        WHEN SUM(f.num_citas::int) = 0 THEN NULL
-                        ELSE SUM(f.diferimiento::int * f.num_citas::int)::numeric 
-                            / SUM(f.num_citas::int)
-                    END
-                , 2) AS promedio_ponderado_diferimiento
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} f
-            WHERE f.flag_calidad IN ('1','2','3','6')
-            AND f.cod_estado = '4'
-            AND f.cod_actividad = '91'
-            AND f.diferimiento IS NOT NULL
-            AND f.diferimiento::int >= 0
-            AND f.cod_variable = '001'
-            AND f.cod_centro = '{codcas}'
-            GROUP BY 
-                f.periodo,
-                f.cod_oricentro,
-                f.cod_centro;
-        """
         import polars as pl
 
         periodo_sql = f"2025{periodo.zfill(2)}"
@@ -717,8 +692,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "href": f"{base}dash/horas_programadas/{codcas_url}?periodo={periodo}",
                 "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
             },
-
-
             {
                 "title": "Total de Horas Efectivas",
                 "value": f"{total_horas_efectivas:,.0f}",
@@ -1015,31 +988,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 AND p.cod_variable = '001'
                 AND p.cod_estado IN ('1','2','5');
 
-        """
-        query6=f"""
-            SELECT
-                f.periodo,
-                f.cod_oricentro,	
-                f.cod_centro,
-                TRUNC(
-                    CASE 
-                        WHEN SUM(f.num_citas::int) = 0 THEN NULL
-                        ELSE SUM(f.diferimiento::int * f.num_citas::int)::numeric 
-                            / SUM(f.num_citas::int)
-                    END
-                , 2) AS promedio_ponderado_diferimiento
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} f
-            WHERE f.flag_calidad IN ('1','2','3','6')
-            AND f.cod_estado = '4'
-            AND f.cod_actividad = '91'
-            AND f.diferimiento IS NOT NULL
-            AND f.diferimiento::int >= 0
-            AND f.cod_variable = '001'
-            AND f.cod_centro = '{codcas}'
-            GROUP BY 
-                f.periodo,
-                f.cod_oricentro,
-                f.cod_centro;
         """
         import polars as pl
 
