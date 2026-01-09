@@ -1,14 +1,17 @@
+import io
+import importlib
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
+from functools import lru_cache
+
+import dash
+import dash_bootstrap_components as dbc
+import pandas as pd
 from dash import Dash, html, dcc, Input, Output, State
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine
-import pandas as pd
-import dash_bootstrap_components as dbc
-import plotly.express as px
-from datetime import date
-import dash_ag_grid as dag
-import dash
-import importlib
+from sqlalchemy import create_engine, text
+
 
 def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     external_stylesheets = [
@@ -17,11 +20,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
     ]
 
-    # Paleta y estilos
     BRAND = "#0064AF"
     BRAND_SOFT = "#D7E9FF"
     ACCENT = "#00AEEF"
-    EXEC_BG = "#F6F8FB"
     CARD_BG = "#FFFFFF"
     TEXT = "#1C1F26"
     MUTED = "#6B7280"
@@ -61,17 +62,18 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         pkg_name = f"{__package__}.Indicadores" if __package__ else "Indicadores"
         try:
             pkg = importlib.import_module(pkg_name)
-        except Exception as e:
-            print(f"[Dash Pages] No se pudo importar el paquete '{pkg_name}': {e}")
+        except Exception as exc:
+            print(f"[Dash Pages] No se pudo importar el paquete '{pkg_name}': {exc}")
             return
         import pkgutil
-        for m in pkgutil.iter_modules(pkg.__path__):
-            mod_name = f"{pkg_name}.{m.name}"
+
+        for module in pkgutil.iter_modules(pkg.__path__):
+            mod_name = f"{pkg_name}.{module.name}"
             try:
                 importlib.import_module(mod_name)
-                print(f"[Dash Pages] Página importada: {mod_name}")
-            except Exception as e:
-                print(f"[Dash Pages] Error importando {mod_name}: {e}")
+                print(f"[Dash Pages] Pagina importada: {mod_name}")
+            except Exception as exc:
+                print(f"[Dash Pages] Error importando {mod_name}: {exc}")
 
     dash_app = Dash(
         __name__,
@@ -86,18 +88,449 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
     dash_app.title = "SIEST"
 
-
     _import_indicator_pages()
 
     meses = [
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     ]
-
     valores = [f"{i:02d}" for i in range(1, 13)]
     df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
 
-    # LAYOUT ==========
+    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
+        link_content = html.H5(
+            title,
+            className="card-title",
+            style={
+                'color': BRAND,
+                'marginBottom': '6px',
+                'fontFamily': FONT_FAMILY,
+                'letterSpacing': '-0.1px'
+            }
+        )
+        heading = dcc.Link(
+            link_content,
+            href=href,
+            className=(
+                "link-underline-primary link-underline-opacity-0 "
+                "link-underline-opacity-100-hover link-offset-2-hover text-reset"
+            )
+        ) if href else link_content
+
+        card_style = {**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
+        if extra_style:
+            card_style.update(extra_style)
+
+        return dbc.Card(
+            dbc.CardBody([
+                heading,
+                html.H2(value, style={
+                    'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0,
+                    'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
+                }),
+                html.P(subtitle_text, style={
+                    'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY
+                })
+            ], style=CARD_BODY_STYLE),
+            style=card_style
+        )
+
+    def render_agrupador_table(dataframe, value_format="{:,.0f}"):
+        if dataframe.empty:
+            return dbc.Card(
+                dbc.CardBody(
+                    html.P(
+                        "Sin registros",
+                        className="text-muted mb-0",
+                        style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}
+                    ),
+                    style={**CARD_BODY_STYLE, 'padding': '14px'}
+                ),
+                style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
+            )
+
+        table_body = html.Tbody([
+            html.Tr([
+                html.Td(
+                    row.get('agrupador') or "Sin agrupador",
+                    style={'padding': '4px 8px', 'lineHeight': '1.1'}
+                ),
+                html.Td(
+                    "-" if pd.isna(row.get('counts')) else value_format.format(row.get('counts')),
+                    style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1'}
+                )
+            ])
+            for _, row in dataframe.iterrows()
+        ])
+
+        return dbc.Card(
+            dbc.CardBody([
+                dbc.Table(
+                    [table_body],
+                    bordered=False,
+                    hover=True,
+                    responsive=True,
+                    striped=True,
+                    className="mb-0",
+                    style={'fontSize': '10px'}
+                )
+            ], style={**CARD_BODY_STYLE, 'padding': '14px'}),
+            style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
+        )
+
+    @lru_cache(maxsize=1)
+    def create_connection():
+        try:
+            engine = create_engine('postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/DW_ESTADISTICA')
+            with engine.connect():
+                pass
+            return engine
+        except Exception as exc:
+            print(f"Failed to connect to the database: {exc}")
+            return None
+
+    def load_dashboard_data(periodo, codcas, engine):
+        if not periodo or not codcas:
+            return None
+
+        periodo_str = f"{int(periodo):02d}" if str(periodo).isdigit() else str(periodo)
+        periodo_sql = f"2025{periodo_str}"
+        params = {"codcas": codcas}
+
+        queries = [
+            (
+                "atenciones",
+                text(f"""
+                    SELECT 
+                        ce.cod_servicio,
+                        ce.cod_especialidad,
+                        ca.cenasides,
+                        ag.agrupador AS agrupador,
+                        am.actdes AS actividad,
+                        a.actespnom AS subactividad,
+                        ce.cod_tipo_consulta,
+                        ce.cod_diag,
+                        c.servhosdes AS descripcion_servicio,
+                        e.especialidad AS descripcion_especialidad,
+                        t.tipcondes AS descripcion_tipo_consulta,
+                        d.diagdes AS descripcion_diagnostico,
+                        dni_medico,
+                        doc_paciente,
+                        cod_tipdoc_paciente,
+                        sexo,
+                        fecha_atencion,
+                        acto_med
+                    FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.dim_especialidad AS e
+                        ON ce.cod_especialidad = e.cod_especialidad
+                    LEFT JOIN dwsge.sgss_cmtco10 AS t
+                        ON ce.cod_tipo_consulta = t.tipconcod
+                    LEFT JOIN dwsge.sgss_cmdia10 AS d
+                        ON ce.cod_diag = d.diagcod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                    WHERE ce.cod_centro = :codcas
+                    AND ce.cod_actividad = '91'
+                    AND ce.clasificacion in (2,4,6)
+                    AND ce.cod_variable = '001'
+                """),
+                params.copy()
+            ),
+            (
+                "horas_efectivas",
+                text(f"""
+                    SELECT 
+                        ce.*,
+                        c.servhosdes,
+                        e.especialidad,
+                        a.actespnom,
+                        am.actdes,
+                        ca.cenasides
+                    FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.dim_especialidad AS e
+                        ON ce.cod_especialidad = e.cod_especialidad
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    WHERE ce.cod_centro = :codcas
+                    AND ce.cod_actividad = '91'
+                    AND ce.cod_variable = '001'
+                """),
+                params.copy()
+            ),
+            (
+                "horas_programadas",
+                text(f"""
+                    SELECT 
+                        p.*,
+                        c.servhosdes,
+                        e.especialidad,
+                        ag.agrupador,
+                        a.actespnom,
+                        am.actdes,
+                        ca.cenasides 
+                    FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo_str} p
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON p.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.dim_especialidad AS e
+                        ON p.cod_especialidad = e.cod_especialidad
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON p.cod_actividad = a.actcod
+                        AND p.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON p.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON p.cod_oricentro = ca.oricenasicod
+                        AND p.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                    WHERE p.cod_variable = '001'
+                    AND (
+                            p.cod_motivo_suspension IS NULL 
+                            OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        )
+                    AND p.cod_centro = :codcas
+                    AND p.cod_actividad = '91'
+                """),
+                params.copy()
+            ),
+            (
+                "citados",
+                text(f"""
+                    SELECT 
+                        p.*,
+                        c.servhosdes,
+                        e.especialidad,
+                        a.actespnom,
+                        am.actdes,
+                        ca.cenasides 
+                    FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON p.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.dim_especialidad AS e
+                        ON p.cod_especialidad = e.cod_especialidad
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON p.cod_actividad = a.actcod
+                        AND p.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON p.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON p.cod_oricentro = ca.oricenasicod
+                        AND p.cod_centro = ca.cenasicod
+                    WHERE p.cod_centro = :codcas
+                    AND p.cod_actividad = '91'
+                    AND p.cod_variable = '001'
+                    AND p.cod_estado <> '0'
+                """),
+                params.copy()
+            ),
+            (
+                "desercion",
+                text(f"""
+                    SELECT            
+                        c.servhosdes,
+                        e.especialidad,
+                        a.actespnom,
+                        am.actdes,
+                        ca.cenasides
+                    FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.dim_especialidad AS e
+                        ON ce.cod_especialidad = e.cod_especialidad
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    WHERE ce.cod_centro = :codcas
+                    AND ce.cod_actividad = '91'
+                    AND ce.clasificacion IN (1,3,0)
+                    AND ce.cod_variable = '001'
+
+                    UNION ALL
+
+                    SELECT 
+                        c.servhosdes,
+                        e.especialidad,
+                        a.actespnom,
+                        am.actdes,
+                        ca.cenasides 
+                    FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON p.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.dim_especialidad AS e
+                        ON p.cod_especialidad = e.cod_especialidad
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON p.cod_actividad = a.actcod
+                        AND p.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON p.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON p.cod_oricentro = ca.oricenasicod
+                        AND p.cod_centro = ca.cenasicod
+                    WHERE p.cod_centro = :codcas
+                    AND p.cod_actividad = '91'
+                    AND p.cod_variable = '001'
+                    AND p.cod_estado IN ('1','2','5')
+                """),
+                params.copy()
+            ),
+        ]
+
+        results = {}
+
+        def run_query(job):
+            key, stmt, job_params = job
+            return key, pd.read_sql(stmt, engine, params=job_params)
+
+        with ThreadPoolExecutor(max_workers=len(queries)) as executor:
+            for key, df in executor.map(run_query, queries):
+                results[key] = df
+
+        query7 = text("""
+            WITH fecha_min_paciente AS (
+                SELECT 
+                    cod_oricentro,
+                    cod_centro,
+                    doc_paciente,
+                    to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025
+                WHERE cod_variable = '001'
+                AND cod_actividad = '91'
+                AND clasificacion IN (2,4,6)
+                AND cod_centro = :codcas
+                GROUP BY 
+                    cod_oricentro,
+                    cod_centro, 
+                    doc_paciente
+            )
+            SELECT
+                COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente 
+            WHERE periodo = :periodo_sql
+        """)
+
+        query8 = text("""
+            WITH fecha_min_paciente AS (
+                SELECT 
+                    p.doc_paciente,
+                    ag.agrupador,
+                    to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                LEFT JOIN dwsge.dim_agrupador ag 
+                    ON p.cod_agrupador = ag.cod_agrupador
+                WHERE p.cod_variable = '001'
+                AND p.cod_actividad = '91'
+                AND p.clasificacion IN (2,4,6)
+                AND p.cod_centro = :codcas
+                GROUP BY 
+                    p.doc_paciente,
+                    ag.agrupador
+            )
+            SELECT 
+                agrupador,
+                COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente
+            WHERE periodo = :periodo_sql
+            GROUP BY agrupador
+        """)
+
+        df7 = pd.read_sql(query7, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
+        df8 = pd.read_sql(query8, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
+
+        atenciones_df = results.get("atenciones", pd.DataFrame())
+        horas_efectivas_df = results.get("horas_efectivas", pd.DataFrame())
+        horas_programadas_df = results.get("horas_programadas", pd.DataFrame())
+        citados_df = results.get("citados", pd.DataFrame())
+        desercion_df = results.get("desercion", pd.DataFrame())
+
+        if not horas_efectivas_df.empty and 'hras_prog' in horas_efectivas_df:
+            horas_efectivas_df['hras_prog'] = pd.to_numeric(horas_efectivas_df['hras_prog'], errors='coerce').fillna(0)
+        if not horas_programadas_df.empty and 'total_horas' in horas_programadas_df:
+            horas_programadas_df['total_horas'] = pd.to_numeric(horas_programadas_df['total_horas'], errors='coerce').fillna(0)
+
+        nombre_centro_values = atenciones_df['cenasides'].dropna().unique() if 'cenasides' in atenciones_df else []
+        nombre_centro = nombre_centro_values[0] if len(nombre_centro_values) > 0 else codcas
+
+        total_atenciones = len(atenciones_df)
+        total_atenciones_agru = (
+            atenciones_df.groupby(["agrupador"])
+            .size()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+            if not atenciones_df.empty else pd.DataFrame(columns=['agrupador', 'counts'])
+        )
+
+        total_consultantes = int(df7['cantidad'].iloc[0]) if not df7.empty else 0
+        total_consultantes_por_servicio = (
+            df8.rename(columns={"cantidad": "counts"}) if not df8.empty else pd.DataFrame(columns=['agrupador', 'counts'])
+        )
+
+        total_medicos = atenciones_df['dni_medico'].nunique() if 'dni_medico' in atenciones_df else 0
+        medicos_por_agrupador = (
+            atenciones_df.groupby('agrupador')['dni_medico']
+            .nunique()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+            if not atenciones_df.empty else pd.DataFrame(columns=['agrupador', 'counts'])
+        )
+
+        total_horas_efectivas = float(horas_efectivas_df['hras_prog'].sum()) if 'hras_prog' in horas_efectivas_df else 0
+        total_horas_programadas = float(horas_programadas_df['total_horas'].sum()) if 'total_horas' in horas_programadas_df else 0
+
+        horas_programadas_por_agrupador = (
+            horas_programadas_df.groupby('agrupador', dropna=False)['total_horas']
+            .sum()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+            if 'agrupador' in horas_programadas_df else pd.DataFrame(columns=['agrupador', 'counts'])
+        )
+
+        total_citados = len(citados_df)
+        total_desercion_citas = len(desercion_df)
+
+        stats = {
+            'total_atenciones': total_atenciones,
+            'total_consultantes': total_consultantes,
+            'total_medicos': total_medicos,
+            'total_horas_efectivas': total_horas_efectivas,
+            'total_horas_programadas': total_horas_programadas,
+            'total_citados': total_citados,
+            'total_desercion_citas': total_desercion_citas
+        }
+
+        tables = {
+            'atenciones_por_agrupador': total_atenciones_agru,
+            'consultantes_por_servicio': total_consultantes_por_servicio,
+            'medicos_por_agrupador': medicos_por_agrupador,
+            'horas_programadas_por_agrupador': horas_programadas_por_agrupador
+        }
+
+        return {
+            'nombre_centro': nombre_centro,
+            'stats': stats,
+            'tables': tables
+        }
+
     def serve_layout():
         if not has_request_context():
             return html.Div()
@@ -117,7 +550,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     html.Div([
                         html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
                         html.H2(
-                            "Consulta externa 2025 - Atenciones médicas",
+                            "Consulta externa 2025 - Atenciones medicas",
                             style={
                                 'color': BRAND,
                                 'fontFamily': FONT_FAMILY,
@@ -128,7 +561,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         ),
                     ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
                     html.P(
-                        f"📅 Información actualizada al {date.today().strftime('%d/%m/%Y')} | Sistema de Gestión Hospitalaria",
+                        f"Informacion actualizada al 31/12/2025 | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,
@@ -189,7 +622,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                             }
                         ),
                         dbc.Button(
-                            [html.I(className="bi bi-download me-2"), "Exportar CSV"],
+                            [html.I(className="bi bi-download me-2"), "Exportar Excel"],
                             id='download-button',
                             color='success',
                             size='md',
@@ -212,37 +645,27 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                             n_clicks=0,
                             style={
                                 'marginLeft': 'auto',
-                                'color': BRAND,
-                                'borderColor': BRAND,
                                 'padding': '8px 12px'
                             }
                         ),
                     ], style={
                         **CONTROL_BAR_STYLE
-                        
                     }),
 
-                    dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom',
-                                style={'zIndex': 9999}),
-
-                    dbc.Tooltip("Buscar datos", target='search-button', placement='bottom',
-                                style={'zIndex': 9999}),
-
-                    dbc.Tooltip("Descargar CSV", target='download-button', placement='bottom',
-                                style={'zIndex': 9999}),
+                    dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom', style={'zIndex': 9999}),
+                    dbc.Tooltip("Buscar datos", target='search-button', placement='bottom', style={'zIndex': 9999}),
+                    dbc.Tooltip("Descargar Excel", target='download-button', placement='bottom', style={'zIndex': 9999}),
 
                     dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
                     html.Br(),
-                    dbc.Row([dbc.Col(
-                        html.Div(id='charts-container')
-                    , width=12)]),
+                    dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
                     html.Br(),
                 ], id='main-dashboard-content'),
 
                 html.Div(
                     children=dash.page_container,
                     id='page-container-wrapper',
-                    style={'display': 'none'} 
+                    style={'display': 'none'}
                 )
             ], style={
                 'marginTop': '10px',
@@ -263,22 +686,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
         return html.Div([
             html.H3('No autenticado'),
-            html.P('Debes iniciar sesión para ver el dashboard.'),
+            html.P('Debes iniciar sesion para ver el dashboard.'),
             html.A('Ir a inicio', href='/', target='_top')
         ])
 
-    # CONEXIÓN DB ==========
-    def create_connection():
-        try:
-            engine = create_engine('postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/DW_ESTADISTICA')
-            with engine.connect() as conn:
-                pass
-            return engine
-        except Exception as e:
-            print(f"Failed to connect to the database: {e}")
-            return None
-
-    # CALLBACK PRINCIPAL ==========
     @dash_app.callback(
         [Output('summary-container', 'children'),
          Output('charts-container', 'children')],
@@ -289,367 +700,42 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     def on_search(n_clicks, periodo, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
-        
+
         import secure_code as sc
 
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_url) if codcas_url else None
 
         if not periodo or not codcas:
-            return html.Div("Seleccione un periodo y asegúrese de tener un centro válido."), html.Div()
+            return html.Div("Seleccione un periodo y asegurese de tener un centro valido."), html.Div()
 
         engine = create_connection()
         if engine is None:
-            return html.Div("Error de conexión a la base de datos."), html.Div()
+            return html.Div("Error de conexion a la base de datos."), html.Div()
 
-        query = f"""
-            SELECT 
-                ce.cod_servicio,
-                ce.cod_especialidad,
-                ca.cenasides,
-                ag.agrupador AS agrupador,
-                am.actdes AS actividad,
-                a.actespnom AS subactividad,
-                ce.cod_tipo_consulta,
-                ce.cod_diag,
-                c.servhosdes AS descripcion_servicio,
-                e.especialidad AS descripcion_especialidad,
-                t.tipcondes AS descripcion_tipo_consulta,
-                d.diagdes AS descripcion_diagnostico,
-                dni_medico,
-                doc_paciente,
-                cod_tipdoc_paciente,
-                sexo,
-                fecha_atencion,
-                acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON ce.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON ce.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmtco10 AS t
-                ON ce.cod_tipo_consulta = t.tipconcod
-            LEFT JOIN dwsge.sgss_cmdia10 AS d
-                ON ce.cod_diag = d.diagcod
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON ce.cod_actividad = a.actcod
-                AND ce.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON ce.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON ce.cod_oricentro = ca.oricenasicod
-                AND ce.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
-            WHERE ce.cod_centro = '{codcas}'
-            AND ce.cod_actividad = '91'
-            AND ce.clasificacion in (2,4,6)
-            AND ce.cod_variable = '001';
-        """
-        query2 = f"""
-            SELECT 
-                ce.*,
-				c.servhosdes,
-				e.especialidad,
-				a.actespnom,
-				am.actdes,
-				ca.cenasides
-            FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo} AS ce
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON ce.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON ce.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON ce.cod_actividad = a.actcod
-                AND ce.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON ce.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON ce.cod_oricentro = ca.oricenasicod
-                AND ce.cod_centro = ca.cenasicod
-            WHERE ce.cod_centro = '{codcas}'
-            AND ce.cod_actividad = '91'
-            AND ce.cod_variable = '001';
-        """
-        query3 = f"""
-            SELECT 			
-                p.*,c.servhosdes,
-                e.especialidad,
-                ag.agrupador AS agrupador,
-                a.actespnom,
-                am.actdes,
-                ca.cenasides 
-            FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo} p
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON p.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON p.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON p.cod_actividad = a.actcod
-                AND p.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON p.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON p.cod_oricentro = ca.oricenasicod
-                AND p.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
-            WHERE p.cod_variable = '001'
-            AND (
-                    p.cod_motivo_suspension IS NULL 
-                    OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
-                )
-            AND p.cod_centro = '{codcas}'
-            AND p.cod_actividad = '91'
-            AND p.cod_variable = '001'
-        """
-        query4=f"""
-            SELECT 			
-                p.*,c.servhosdes,
-                e.especialidad,
-                a.actespnom,
-                am.actdes,
-                ca.cenasides 
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON p.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON p.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON p.cod_actividad = a.actcod
-                AND p.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON p.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON p.cod_oricentro = ca.oricenasicod
-                AND p.cod_centro = ca.cenasicod
-            WHERE p.cod_centro = '{codcas}'
-            AND p.cod_actividad = '91'
-            AND p.cod_variable = '001'
-            AND p.cod_estado <>'0';
-        """
-        query5=f"""
-                SELECT            
-                    c.servhosdes,
-                    e.especialidad,
-                    a.actespnom,
-                    am.actdes,
-                    ca.cenasides
-                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} ce
-                LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                    ON ce.cod_servicio = c.servhoscod
-                LEFT JOIN dwsge.dim_especialidad AS e
-                    ON ce.cod_especialidad = e.cod_especialidad
-                LEFT JOIN dwsge.sgss_cmace10 AS a
-                    ON ce.cod_actividad = a.actcod
-                    AND ce.cod_subactividad = a.actespcod
-                LEFT JOIN dwsge.sgss_cmact10 AS am
-                    ON ce.cod_actividad = am.actcod
-                LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                    ON ce.cod_oricentro = ca.oricenasicod
-                    AND ce.cod_centro = ca.cenasicod
-                WHERE ce.cod_centro = '{codcas}'
-                AND ce.cod_actividad = '91'
-                AND ce.clasificacion IN (1,3,0)
-                AND ce.cod_variable = '001'
+        data = load_dashboard_data(periodo, codcas, engine)
+        if not data:
+            return html.Div("Sin datos para mostrar."), html.Div()
 
-                UNION ALL
+        stats = data['stats']
+        tables = data['tables']
+        nombre_centro = data['nombre_centro']
 
-                SELECT 			
-                    c.servhosdes,
-                    e.especialidad,
-                    a.actespnom,
-                    am.actdes,
-                    ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
-                LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                    ON p.cod_servicio = c.servhoscod
-                LEFT JOIN dwsge.dim_especialidad AS e
-                    ON p.cod_especialidad = e.cod_especialidad
-                LEFT JOIN dwsge.sgss_cmace10 AS a
-                    ON p.cod_actividad = a.actcod
-                    AND p.cod_subactividad = a.actespcod
-                LEFT JOIN dwsge.sgss_cmact10 AS am
-                    ON p.cod_actividad = am.actcod
-                LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                    ON p.cod_oricentro = ca.oricenasicod
-                    AND p.cod_centro = ca.cenasicod
-                WHERE p.cod_centro = '{codcas}'
-                AND p.cod_actividad = '91'
-                AND p.cod_variable = '001'
-                AND p.cod_estado IN ('1','2','5');
+        total_atenciones = stats['total_atenciones']
+        total_consultantes = stats['total_consultantes']
+        total_medicos = stats['total_medicos']
+        total_horas_programadas = stats['total_horas_programadas']
+        total_horas_efectivas = stats['total_horas_efectivas']
+        total_citados = stats['total_citados']
+        total_desercion_citas = stats['total_desercion_citas']
 
-        """
-        import polars as pl
+        total_atenciones_agru = tables['atenciones_por_agrupador']
+        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
+        medicos_por_agrupador_table = tables['medicos_por_agrupador']
+        horas_programadas_table = tables['horas_programadas_por_agrupador']
 
-        periodo_sql = f"2025{periodo.zfill(2)}"
-        query7 =f"""
-                WITH fecha_min_paciente AS (
-            SELECT 
-                cod_oricentro,
-                cod_centro,
-                doc_paciente,
-                to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
-            FROM dwsge.dwe_consulta_externa_homologacion_2025
-            WHERE cod_variable = '001'
-            AND cod_actividad = '91'
-            AND clasificacion IN (2,4,6)
-            AND cod_centro = '{codcas}'
-            GROUP BY 
-                cod_oricentro,
-                cod_centro, 
-                doc_paciente
-        )
-        SELECT
-            COUNT(DISTINCT doc_paciente) AS cantidad
-        FROM fecha_min_paciente 
-        WHERE periodo = '{periodo_sql}'
-        """
-        
-        query8 =f"""
-            WITH fecha_min_paciente AS (
-                SELECT 
-                    p.doc_paciente,
-                    ag.agrupador,
-                    to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
-                LEFT JOIN dwsge.dim_agrupador ag 
-                    ON p.cod_agrupador = ag.cod_agrupador
-                WHERE p.cod_variable = '001'
-                AND p.cod_actividad = '91'
-                AND p.clasificacion IN (2,4,6)
-                AND p.cod_centro = '{codcas}'
-                GROUP BY 
-                    p.doc_paciente,
-                    ag.agrupador
-            )
-            SELECT 
-                agrupador,
-                COUNT(DISTINCT doc_paciente) AS cantidad
-            FROM fecha_min_paciente
-            WHERE periodo = '{periodo_sql}'
-            GROUP BY agrupador"""
-
-
-        from concurrent.futures import ThreadPoolExecutor
-        import pandas as pd
-
-        queries = [query, query2, query3, query4, query5]
-
-        def read_query(q):
-            return pd.read_sql(q, engine)
-
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            dfs = list(executor.map(read_query, queries))
-
-        df, df2, df3, df4, df5 = dfs
-
-        df7 = pl.read_database(query7, engine)
-        df8 = pl.read_database(query8, engine)
-
-        # NOMBRE DEL CENTRO ===
-        nombre_centro = df['cenasides'].dropna().unique()
-        nombre_centro = nombre_centro[0] if len(nombre_centro) > 0 else codcas
-
-        # TARJETAS RESUMEN ===
-        total_atenciones = len(df)
-        total_atenciones_agru = (
-            df.groupby(["agrupador"])  # total por agrupador
-            .size()
-            .reset_index(name='counts')
-            .sort_values('counts', ascending=False)
-        )
-        total_consultantes = df7.select("cantidad").item()
-        total_consultantes_por_servicio = df8.select(["agrupador", "cantidad"]).to_pandas()
-        total_consultantes_por_servicio_table = total_consultantes_por_servicio.rename(
-            columns={"cantidad": "counts"}
-        )
-        total_medicos = df['dni_medico'].nunique()
-        medicos_por_agrupador = (
-            df.groupby('agrupador')['dni_medico']
-            .nunique()
-            .reset_index(name='total_medicos')
-            .sort_values('total_medicos', ascending=False)
-        )
-        medicos_por_agrupador_table = medicos_por_agrupador.rename(columns={'total_medicos': 'counts'})
-        df2["hras_prog"] = pd.to_numeric(df2["hras_prog"], errors="coerce")
-        total_horas_efectivas = df2['hras_prog'].sum()
-        df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
-        total_horas_programadas = df3['total_horas'].sum()
-        horas_programadas_por_agrupador = (
-            df3.groupby('agrupador', dropna=False)['total_horas']
-            .sum()
-            .reset_index(name='total_horas_programadas')
-            .sort_values('total_horas_programadas', ascending=False)
-        )
-        horas_programadas_table = horas_programadas_por_agrupador.rename(
-            columns={'total_horas_programadas': 'counts'}
-        )
-        total_citados = df4.shape[0]
-        total_desercion_citas = df5.shape[0]
-        ##promedio_ponderado_diferimiento = (round(df6['promedio_ponderado_diferimiento'].iloc[0], 2)if not df6.empty else None)
-
-        # Construir hrefs usando url_base_pathname para evitar rutas hardcodeadas
         base = url_base_pathname.rstrip('/') + '/'
-
         subtitle = f"Periodo {periodo} | {nombre_centro}"
-
-        def render_card(title, value, border_color, href=None, subtitle_text=subtitle, extra_style=None):
-            heading = dcc.Link(
-                html.H5(title, className="card-title",
-                        style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}),
-                href=href,
-                className="link-underline-primary link-underline-opacity-0 link-underline-opacity-100-hover link-offset-2-hover text-reset"
-            ) if href else html.H5(
-                title, className="card-title",
-                style={'color': BRAND, 'marginBottom': '6px', 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'}
-            )
-
-            card_style = {**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
-            if extra_style:
-                card_style.update(extra_style)
-
-            return dbc.Card(
-                dbc.CardBody([
-                    heading,
-                    html.H2(value, style={
-                        'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0,
-                        'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
-                    }),
-                    html.P(subtitle_text, style={
-                        'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY
-                    })
-                ], style=CARD_BODY_STYLE),
-                style=card_style
-            )
-
-        def render_agrupador_table(dataframe, value_format="{:,.0f}"):
-            if dataframe.empty:
-                return dbc.Card(
-                    dbc.CardBody(
-                        html.P("Sin registros", className="text-muted mb-0", style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}),
-                        style={**CARD_BODY_STYLE, 'padding': '14px'}
-                    ),
-                    style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
-                )
-            body = html.Tbody([
-                html.Tr([
-                    html.Td(
-                        row['agrupador'] or "Sin agrupador",
-                        style={'padding': '4px 8px', 'lineHeight': '1.1'}
-                    ),
-                    html.Td(
-                        "-" if pd.isna(row['counts']) else value_format.format(row['counts']),
-                        style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1'}
-                    )
-                ])
-                for _, row in dataframe.iterrows()
-            ])
-            table = dbc.Table([body], bordered=False, hover=True, responsive=True, striped=True, className="mb-0", style={'fontSize': '10px'})
-            return dbc.Card(
-                dbc.CardBody([
-                    html.Div(table, style={'maxHeight': '200px', 'overflowY': 'auto'})
-                ], style={**CARD_BODY_STYLE, 'padding': '14px'}),
-                style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
-            )
 
         cards = [
             {
@@ -665,9 +751,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "href": f"{base}dash/total_atenciones/{codcas_url}?periodo={periodo}",
                 "side_component": render_agrupador_table(total_atenciones_agru),
             },
-
             {
-                "title": "Total de Médicos Programados",
+                "title": "Total de Medicos Programados",
                 "value": f"{total_medicos:,.0f}",
                 "border_color": BRAND_SOFT,
                 "href": f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
@@ -696,9 +781,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "title": "Total de Horas Efectivas",
                 "value": f"{total_horas_efectivas:,.0f}",
                 "border_color": ACCENT,
-                "href": f"{base}dash/horas_efectivas/{codcas}?periodo={periodo}",
+                "href": f"{base}dash/horas_efectivas/{codcas_url}?periodo={periodo}",
             }
-
         ]
 
         summary_row = dbc.Container(
@@ -712,8 +796,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                         title=card["title"],
                                         value=card["value"],
                                         border_color=card["border_color"],
-                                        href=card.get("href"),
                                         subtitle_text=card.get("subtitle", subtitle),
+                                        href=card.get("href"),
                                         extra_style=card.get("extra_style")
                                     ),
                                     style={'width': '100%'}
@@ -740,8 +824,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     title=card["title"],
                                     value=card["value"],
                                     border_color=card["border_color"],
-                                    href=card.get("href"),
                                     subtitle_text=card.get("subtitle", subtitle),
+                                    href=card.get("href"),
                                     extra_style=card.get("extra_style")
                                 ),
                                 style={'width': '100%'}
@@ -758,15 +842,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             fluid=True
         )
 
-        # COLORES 
-        color_principal = "#0064AF"
-        color_secundario = "#00AEEF"
-        font_family = "Calibri"
-
-        charts_container = html.Div() 
+        charts_container = html.Div()
         return summary_row, charts_container
 
-    # Callback para ocultar/mostrar el contenido principal y el contenedor de páginas según la ruta
     @dash_app.callback(
         Output('main-dashboard-content', 'style'),
         Output('page-container-wrapper', 'style'),
@@ -775,21 +853,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     def toggle_main_content(pathname):
         base = url_base_pathname.rstrip('/') + '/'
         if pathname and pathname.startswith(f"{base}dash/"):
-            # Estamos en una página registrada -> ocultar principal, mostrar page container
             return {'display': 'none'}, {'display': 'block'}
-        # Ruta principal -> mostrar principal, ocultar page container
         return {'display': 'block'}, {'display': 'none'}
 
-    # Callback botón retroceso: redirigir a raíz del sitio (ip/)
     @dash_app.callback(
         Output('url', 'pathname'),
         Input('back-button', 'n_clicks'),
         prevent_initial_call=True
     )
-    def go_root(n):
+    def go_root(n_clicks):
         return "/"
 
-    # CALLBACK DESCARGA CSV ==========
     @dash_app.callback(
         Output("download-dataframe-csv", "data"),
         Input("download-button", "n_clicks"),
@@ -812,303 +886,46 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         if engine is None:
             return None
 
+        data = load_dashboard_data(periodo, codcas, engine)
+        if not data:
+            return None
 
-        query = f"""
-            SELECT 
-                ce.cod_servicio,
-                ce.cod_especialidad,
-                ca.cenasides,
-                ag.agrupador AS agrupador,
-                am.actdes AS actividad,
-                a.actespnom AS subactividad,
-                ce.cod_tipo_consulta,
-                ce.cod_diag,
-                c.servhosdes AS descripcion_servicio,
-                e.especialidad AS descripcion_especialidad,
-                t.tipcondes AS descripcion_tipo_consulta,
-                d.diagdes AS descripcion_diagnostico,
-                dni_medico,
-                doc_paciente,
-                cod_tipdoc_paciente,
-                sexo,
-                fecha_atencion,
-                acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON ce.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON ce.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmtco10 AS t
-                ON ce.cod_tipo_consulta = t.tipconcod
-            LEFT JOIN dwsge.sgss_cmdia10 AS d
-                ON ce.cod_diag = d.diagcod
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON ce.cod_actividad = a.actcod
-                AND ce.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON ce.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON ce.cod_oricentro = ca.oricenasicod
-                AND ce.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
-            WHERE ce.cod_centro = '{codcas}'
-            AND ce.cod_actividad = '91'
-            AND ce.clasificacion in (2,4,6)
-            AND ce.cod_variable = '001';
-        """
-        query2 = f"""
-            SELECT 
-                ce.*,
-				c.servhosdes,
-				e.especialidad,
-				a.actespnom,
-				am.actdes,
-				ca.cenasides
-            FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo} AS ce
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON ce.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON ce.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON ce.cod_actividad = a.actcod
-                AND ce.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON ce.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON ce.cod_oricentro = ca.oricenasicod
-                AND ce.cod_centro = ca.cenasicod
-            WHERE ce.cod_centro = '{codcas}'
-            AND ce.cod_actividad = '91'
-            AND ce.cod_variable = '001';
-        """
-        query3 = f"""
-            SELECT 			
-                p.*,c.servhosdes,
-                e.especialidad,
-                ag.agrupador AS agrupador,
-                a.actespnom,
-                am.actdes,
-                ca.cenasides 
-            FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo} p
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON p.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON p.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON p.cod_actividad = a.actcod
-                AND p.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON p.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON p.cod_oricentro = ca.oricenasicod
-                AND p.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
-            WHERE p.cod_variable = '001'
-            AND (
-                    p.cod_motivo_suspension IS NULL 
-                    OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
-                )
-            AND p.cod_centro = '{codcas}'
-            AND p.cod_actividad = '91'
-            AND p.cod_variable = '001'
-        """
-        query4=f"""
-            SELECT 			
-                p.*,c.servhosdes,
-                e.especialidad,
-                a.actespnom,
-                am.actdes,
-                ca.cenasides 
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON p.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.dim_especialidad AS e
-                ON p.cod_especialidad = e.cod_especialidad
-            LEFT JOIN dwsge.sgss_cmace10 AS a
-                ON p.cod_actividad = a.actcod
-                AND p.cod_subactividad = a.actespcod
-            LEFT JOIN dwsge.sgss_cmact10 AS am
-                ON p.cod_actividad = am.actcod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                ON p.cod_oricentro = ca.oricenasicod
-                AND p.cod_centro = ca.cenasicod
-            WHERE p.cod_centro = '{codcas}'
-            AND p.cod_actividad = '91'
-            AND p.cod_variable = '001'
-            AND p.cod_estado <>'0';
-        """
-        query5=f"""
-                SELECT            
-                    c.servhosdes,
-                    e.especialidad,
-                    a.actespnom,
-                    am.actdes,
-                    ca.cenasides
-                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} ce
-                LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                    ON ce.cod_servicio = c.servhoscod
-                LEFT JOIN dwsge.dim_especialidad AS e
-                    ON ce.cod_especialidad = e.cod_especialidad
-                LEFT JOIN dwsge.sgss_cmace10 AS a
-                    ON ce.cod_actividad = a.actcod
-                    AND ce.cod_subactividad = a.actespcod
-                LEFT JOIN dwsge.sgss_cmact10 AS am
-                    ON ce.cod_actividad = am.actcod
-                LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                    ON ce.cod_oricentro = ca.oricenasicod
-                    AND ce.cod_centro = ca.cenasicod
-                WHERE ce.cod_centro = '{codcas}'
-                AND ce.cod_actividad = '91'
-                AND ce.clasificacion IN (1,3,0)
-                AND ce.cod_variable = '001'
-
-                UNION ALL
-
-                SELECT 			
-                    c.servhosdes,
-                    e.especialidad,
-                    a.actespnom,
-                    am.actdes,
-                    ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
-                LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                    ON p.cod_servicio = c.servhoscod
-                LEFT JOIN dwsge.dim_especialidad AS e
-                    ON p.cod_especialidad = e.cod_especialidad
-                LEFT JOIN dwsge.sgss_cmace10 AS a
-                    ON p.cod_actividad = a.actcod
-                    AND p.cod_subactividad = a.actespcod
-                LEFT JOIN dwsge.sgss_cmact10 AS am
-                    ON p.cod_actividad = am.actcod
-                LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                    ON p.cod_oricentro = ca.oricenasicod
-                    AND p.cod_centro = ca.cenasicod
-                WHERE p.cod_centro = '{codcas}'
-                AND p.cod_actividad = '91'
-                AND p.cod_variable = '001'
-                AND p.cod_estado IN ('1','2','5');
-
-        """
-        import polars as pl
-
-        periodo_sql = f"2025{periodo.zfill(2)}"
-        query7 =f"""
-                WITH fecha_min_paciente AS (
-            SELECT 
-                cod_oricentro,
-                cod_centro,
-                doc_paciente,
-                to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
-            FROM dwsge.dwe_consulta_externa_homologacion_2025
-            WHERE cod_variable = '001'
-            AND cod_actividad = '91'
-            AND clasificacion IN (2,4,6)
-            AND cod_centro = '{codcas}'
-            GROUP BY 
-                cod_oricentro,
-                cod_centro, 
-                doc_paciente
-        )
-        SELECT
-            COUNT(DISTINCT doc_paciente) AS cantidad
-        FROM fecha_min_paciente 
-        WHERE periodo = '{periodo_sql}'
-        """
-        
-        query8 =f"""
-            WITH fecha_min_paciente AS (
-                SELECT 
-                    p.doc_paciente,
-                    ag.agrupador,
-                    to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
-                LEFT JOIN dwsge.dim_agrupador ag 
-                    ON p.cod_agrupador = ag.cod_agrupador
-                WHERE p.cod_variable = '001'
-                AND p.cod_actividad = '91'
-                AND p.clasificacion IN (2,4,6)
-                AND p.cod_centro = '{codcas}'
-                GROUP BY 
-                    p.doc_paciente,
-                    ag.agrupador
-            )
-            SELECT 
-                agrupador,
-                COUNT(DISTINCT doc_paciente) AS cantidad
-            FROM fecha_min_paciente
-            WHERE periodo = '{periodo_sql}'
-            GROUP BY agrupador"""
-        
-        from concurrent.futures import ThreadPoolExecutor
-        import pandas as pd
-
-        queries = [query, query2, query3, query4, query5]
-
-        def read_query(q):
-            return pd.read_sql(q, engine)
-
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            dfs = list(executor.map(read_query, queries))
-
-        df, df2, df3, df4, df5 = dfs
-
-        df7 = pl.read_database(query7, engine)
-        df8 = pl.read_database(query8, engine)
-
-        # TARJETAS RESUMEN ===
-        total_atenciones = len(df)
-        total_atenciones_agru = (df.groupby("agrupador").size().reset_index(name="counts").sort_values("counts", ascending=False))
-        total_consultantes = df7.select("cantidad").item()
-        total_consultantes_por_servicio = df8.select(["agrupador", "cantidad"]).to_pandas()
-        total_consultantes_por_servicio_table = total_consultantes_por_servicio.rename(columns={"cantidad": "counts"})
-        total_medicos = df['dni_medico'].nunique()
-        medicos_por_agrupador = (df.groupby('agrupador')['dni_medico'].nunique().reset_index(name='total_medicos').sort_values('total_medicos', ascending=False))
-        medicos_por_agrupador_table = medicos_por_agrupador.rename(columns={'total_medicos': 'counts'})
-        df2["hras_prog"] = pd.to_numeric(df2["hras_prog"], errors="coerce")
-        total_horas_efectivas = df2['hras_prog'].sum()
-        df3["total_horas"] = pd.to_numeric(df3["total_horas"], errors="coerce")
-        total_horas_programadas = df3['total_horas'].sum()
-        horas_programadas_por_agrupador = (df3.groupby('agrupador', dropna=False)['total_horas'].sum().reset_index(name='total_horas_programadas').sort_values('total_horas_programadas', ascending=False))
-        horas_programadas_table = horas_programadas_por_agrupador.rename(columns={'total_horas_programadas': 'counts'})
-        total_citados = df4.shape[0]
-        total_desercion_citas = df5.shape[0]
+        stats = data['stats']
+        tables = data['tables']
 
         indicadores = pd.DataFrame({
-            "Indicador": [
-                "Total atenciones",
-                "Total consultantes",
-                "Total médicos",
-                "Total horas efectivas",
-                "Total horas programadas",
-                "Total citados",
-                "Total deserción citas"
+            'Indicador': [
+                'Total de Consultas',
+                'Total de Consultantes',
+                'Total de Medicos',
+                'Total Horas Efectivas',
+                'Total Horas Programadas',
+                'Total Citados',
+                'Total Desercion de Citas'
             ],
-            "Valor": [
-                total_atenciones,
-                total_consultantes,
-                total_medicos,
-                total_horas_efectivas,
-                total_horas_programadas,
-                total_citados,
-                total_desercion_citas
+            'Valor': [
+                stats['total_atenciones'],
+                stats['total_consultantes'],
+                stats['total_medicos'],
+                stats['total_horas_efectivas'],
+                stats['total_horas_programadas'],
+                stats['total_citados'],
+                stats['total_desercion_citas']
             ]
         })
-
-        import io
 
         output = io.BytesIO()
 
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             indicadores.to_excel(writer, sheet_name="Indicadores_Generales", index=False)
-            total_atenciones_agru.to_excel(writer, sheet_name="Atenciones_por_Servicio", index=False)
-            total_consultantes_por_servicio_table.to_excel(writer, sheet_name="Consultantes_por_Servicio", index=False)
-            medicos_por_agrupador_table.to_excel(writer, sheet_name="Medicos_por_Servicio", index=False)
-            horas_programadas_table.to_excel(writer, sheet_name="Horas_Programadas_por_Servicio", index=False)
+            tables['atenciones_por_agrupador'].to_excel(writer, sheet_name="Atenciones_por_Servicio", index=False)
+            tables['consultantes_por_servicio'].to_excel(writer, sheet_name="Consultantes_por_Servicio", index=False)
+            tables['medicos_por_agrupador'].to_excel(writer, sheet_name="Medicos_por_Servicio", index=False)
+            tables['horas_programadas_por_agrupador'].to_excel(writer, sheet_name="Horas_Programadas_por_Servicio", index=False)
 
         output.seek(0)
-
         filename = f"reporte_{codcas}_{periodo}.xlsx"
-
         return dcc.send_bytes(output.getvalue(), filename)
+
     dash_app.layout = serve_layout
     return dash_app

@@ -131,7 +131,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                 )
                             ], style={'display': 'flex', 'alignItems': 'center'}),
                             html.P(
-                                f"📅 Información actualizada al {date.today().strftime('%d/%m/%Y')} | Sistema de Gestión Hospitalaria",
+                                f"📅 Información actualizada al 31/12/2025 | Sistema de Gestión Estadístico",
                                 style={
                                     'color': MUTED,
                                     'fontFamily': FONT_FAMILY,
@@ -144,15 +144,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                             'flexDirection': 'column',
                             'justifyContent': 'center',
                             'flex': '1'
-                        }),
-                        dbc.Button(
-                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                                id="btn-volver-eme",
-                                color='secondary',
-                                outline=True,
-                                n_clicks=0
-                            ),
-                        dbc.Tooltip("Regresar a la página principal", target='btn-volver-eme', placement='bottom')
+                        })
                     ], style={
                         'display': 'flex',
                         'alignItems': 'center',
@@ -212,7 +204,19 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                             'padding': '8px 20px'
                         }
                     ),
-                    dcc.Download(id="download-dataframe-csv")
+                    dcc.Download(id="download-dataframe-csv"),
+                    dbc.Button(
+                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                                id="btn-volver-eme",
+                                color='secondary',
+                                outline=True,
+                                n_clicks=0,
+                                style={
+                                'marginLeft': 'auto',
+                                'padding': '8px 12px'
+                                    }
+                            ),
+                        dbc.Tooltip("Regresar a la página principal", target='btn-volver-eme', placement='bottom')
                 ], style={
                     'display': 'flex',
                     'alignItems': 'center',
@@ -494,6 +498,39 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             except Exception as e:
                 print(f"Error en query de prioridad {prioridad}: {e}")
                 prioridades_data[prioridad] = 0
+
+        query_mayor_24h = f"""
+            SELECT des_estancia, COUNT(*) AS total
+            FROM dwsge.dwe_emergencia_estancia_homologacion_2025_{periodo} estancias
+            LEFT JOIN dwsge.dim_estancia est ON est.id_estancia = estancias.rango_estancia
+            WHERE estancias.cod_centro = '{codcas}'
+              AND des_estancia = 'Mayor 24h'
+              AND estancia_horas IS NOT NULL
+            GROUP BY des_estancia
+        """
+        
+        query_menor_24h = f"""
+            SELECT des_estancia, COUNT(*) AS total
+            FROM dwsge.dwe_emergencia_estancia_homologacion_2025_{periodo} estancias
+            LEFT JOIN dwsge.dim_estancia est ON est.id_estancia = estancias.rango_estancia
+            WHERE estancias.cod_centro = '{codcas}'
+              AND des_estancia = 'Menor 24h'
+              AND estancia_horas IS NOT NULL
+            GROUP BY des_estancia
+        """
+
+        def obtener_total_estancia(query, etiqueta):
+            try:
+                df_estancia = pd.read_sql(query, engine)
+                if df_estancia.empty or 'total' not in df_estancia.columns:
+                    return 0
+                return int(df_estancia['total'].sum())
+            except Exception as e:
+                print(f"Error en query de estancia {etiqueta}: {e}")
+                return 0
+
+        mayor_24h_total = obtener_total_estancia(query_mayor_24h, 'mayor_24h')
+        menor_24h_total = obtener_total_estancia(query_menor_24h, 'menor_24h')
         
         # Crear 5 cards manualmente con layout responsivo
         def crear_card_prioridad(prioridad, codcas, periodo, nombre_centro, cantidad):
@@ -659,6 +696,85 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             lg=4, md=6, sm=12, xs=12, className='mb-4'
         )
         
+        ESTANCIA_COLORS = {
+            'mayor': {'gradient': 'linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%)', 'icon': 'bi-clock-history', 'bg': '#5e35b1', 'label': 'Mayor a 24h'},
+            'menor': {'gradient': 'linear-gradient(135deg, #20c997 0%, #0ca678 100%)', 'icon': 'bi-stopwatch', 'bg': '#0ca678', 'label': 'Menor a 24h'}
+        }
+
+        def crear_card_estancia(tipo, total):
+            config = ESTANCIA_COLORS[tipo]
+            descripcion = "Estancia en sala de observación"
+            return dbc.Col(
+                dbc.Card([
+                    html.Div(style={
+                        'height': '6px',
+                        'background': config['gradient'],
+                        'borderRadius': '16px 16px 0 0'
+                    }),
+                    dbc.CardBody([
+                        html.Div([
+                            html.Div([
+                                html.I(className=f"bi {config['icon']}", style={
+                                    'fontSize': '40px',
+                                    'background': config['gradient'],
+                                    '-webkit-background-clip': 'text',
+                                    '-webkit-text-fill-color': 'transparent',
+                                    'marginRight': '15px'
+                                }),
+                                html.Div([
+                                    html.H5(config['label'], style={
+                                        'color': config['bg'],
+                                        'marginBottom': '4px',
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontSize': '16px',
+                                        'fontWeight': '700'
+                                    }),
+                                    html.P(descripcion, style={
+                                        'fontSize': '13px',
+                                        'color': MUTED,
+                                        'margin': 0,
+                                        'fontFamily': FONT_FAMILY
+                                    })
+                                ])
+                            ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '15px'})
+                        ]),
+                        html.H2(f"{total:,.0f}", style={
+                            'fontWeight': '800',
+                            'background': config['gradient'],
+                            '-webkit-background-clip': 'text',
+                            '-webkit-text-fill-color': 'transparent',
+                            'fontSize': '48px',
+                            'margin': '15px 0',
+                            'fontFamily': FONT_FAMILY,
+                            'textAlign': 'center'
+                        }),
+                        html.Div([
+                            html.I(className="bi bi-calendar-check me-2", style={'color': MUTED}),
+                            html.Span(f"Periodo {periodo}", style={
+                                'fontSize': '12px',
+                                'color': MUTED,
+                                'fontFamily': FONT_FAMILY
+                            })
+                        ], style={'marginTop': '15px', 'paddingTop': '15px', 'borderTop': f'1px solid #e9ecef'}),
+                        html.Div([
+                            html.I(className="bi bi-hospital me-2", style={'color': MUTED}),
+                            html.Span(nombre_centro, style={
+                                'fontSize': '11px',
+                                'color': MUTED,
+                                'fontFamily': FONT_FAMILY
+                            })
+                        ], style={'marginTop': '8px'})
+                    ])
+                ], style={
+                    **CARD_STYLE,
+                    'height': '100%'
+                }, className='h-100'),
+                lg=4, md=6, sm=12, xs=12, className='mb-4'
+            )
+
+        card_estancia_mayor = crear_card_estancia('mayor', mayor_24h_total)
+        card_estancia_menor = crear_card_estancia('menor', menor_24h_total)
+        
         # Estadísticas totales con estadísticas adicionales
         total_atenciones = sum(prioridades_data.values())
         stats_header = html.Div([
@@ -723,7 +839,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 'marginBottom': '25px',
                 'marginTop': '10px'
             }),
-            dbc.Row([card1, card2, card3, card4, card5, card_defunciones], className='g-4')
+            dbc.Row([card1, card2, card3, card4, card5, card_defunciones, card_estancia_mayor, card_estancia_menor], className='g-4')
         ], fluid=True)
 
         return summary_row, html.Div()
