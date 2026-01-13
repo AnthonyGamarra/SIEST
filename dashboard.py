@@ -394,6 +394,39 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 """),
                 params.copy()
             ),
+                        (
+                "medicos_agrup",
+                text(f"""
+                    SELECT c.cod_centro,
+                        c.dni_medico,
+                        c.agrupador,
+                        c.periodo,
+                        c.cantidad_medicos,
+                        c.medico
+                    FROM ( SELECT b.cod_centro,
+                                b.dni_medico,
+                                b.agrupador,
+                                b.periodo,
+                                b.cantidad_medicos,
+                                row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                            FROM ( SELECT a.cod_centro,
+                                        a.dni_medico,
+                                        ag.agrupador,
+                                        a.periodo,
+                                        count(*) AS cantidad_medicos
+                                    FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
+                                    LEFT JOIN dwsge.dim_agrupador ag 
+                                    ON a.cod_agrupador = ag.cod_agrupador
+                                    WHERE a.cod_centro=:codcas
+                                    AND a.cod_actividad = '91'
+                                    AND a.cod_variable = '001'
+                                    AND a.clasificacion in (2,4,6)
+                                    GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo
+                                    ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                    WHERE c.medico = '1'::bigint
+                """),
+                params.copy()
+            ),
         ]
 
         results = {}
@@ -462,9 +495,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         horas_programadas_df = results.get("horas_programadas", pd.DataFrame())
         citados_df = results.get("citados", pd.DataFrame())
         desercion_df = results.get("desercion", pd.DataFrame())
+        medicos_agr= results.get("medicos_agrup", pd.DataFrame())
 
-        if not horas_efectivas_df.empty and 'hras_prog' in horas_efectivas_df:
-            horas_efectivas_df['hras_prog'] = pd.to_numeric(horas_efectivas_df['hras_prog'], errors='coerce').fillna(0)
+        if not horas_efectivas_df.empty and 'horas_efec_def' in horas_efectivas_df:
+            horas_efectivas_df['horas_efec_def'] = pd.to_numeric(horas_efectivas_df['horas_efec_def'], errors='coerce').fillna(0)
         if not horas_programadas_df.empty and 'total_horas' in horas_programadas_df:
             horas_programadas_df['total_horas'] = pd.to_numeric(horas_programadas_df['total_horas'], errors='coerce').fillna(0)
 
@@ -487,14 +521,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
         total_medicos = atenciones_df['dni_medico'].nunique() if 'dni_medico' in atenciones_df else 0
         medicos_por_agrupador = (
-            atenciones_df.groupby('agrupador')['dni_medico']
+            medicos_agr.groupby('agrupador')['dni_medico']
             .nunique()
             .reset_index(name='counts')
             .sort_values('counts', ascending=False)
             if not atenciones_df.empty else pd.DataFrame(columns=['agrupador', 'counts'])
         )
 
-        total_horas_efectivas = float(horas_efectivas_df['hras_prog'].sum()) if 'hras_prog' in horas_efectivas_df else 0
+        total_horas_efectivas = float(horas_efectivas_df['horas_efec_def'].sum()) if 'horas_efec_def' in horas_efectivas_df else 0
         total_horas_programadas = float(horas_programadas_df['total_horas'].sum()) if 'total_horas' in horas_programadas_df else 0
 
         horas_programadas_por_agrupador = (
