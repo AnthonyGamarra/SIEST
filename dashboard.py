@@ -50,12 +50,36 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "backgroundColor": CARD_BG,
         "border": f"1px solid {BORDER}",
         "padding": "14px 16px",
-        "borderRadius": "14px",
+        
+        # Solo esquinas inferiores redondeadas
+        "borderTopLeftRadius": "0px",
+        "borderTopRightRadius": "0px",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+
         "boxShadow": "0 4px 10px rgba(0,0,0,0.05)",
         "backdropFilter": "blur(3px)",
         "overflow": "visible",
         "position": "relative",
         "zIndex": 1100,
+    }
+    TAB_STYLE = {
+        "padding": "10px 18px",
+        "border": f"1px solid {BORDER}",
+        "borderBottom": "none",
+        "borderTopLeftRadius": "10px",
+        "borderTopRightRadius": "10px",
+        "fontFamily": FONT_FAMILY,
+        "fontWeight": "600",
+        "color": MUTED,
+        "backgroundColor": CARD_BG,
+        "marginRight": "0"
+    }
+    TAB_SELECTED_STYLE = {
+        **TAB_STYLE,
+        "color": BRAND,
+        "borderBottom": f"3px solid {BRAND}",
+        "boxShadow": "0 6px 12px rgba(0,0,0,0.06)"
     }
 
     def _import_indicator_pages():
@@ -189,246 +213,421 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             print(f"Failed to connect to the database: {exc}")
             return None
 
-    def load_dashboard_data(periodo, codcas, engine):
+    def build_queries_consulta(periodo_str, params):
+        queries = [
+            ("atenciones", text(f"""
+                SELECT 
+                    ce.cod_servicio,
+                    ce.cod_especialidad,
+                    ca.cenasides,
+                    ag.agrupador AS agrupador,
+                    am.actdes AS actividad,
+                    a.actespnom AS subactividad,
+                    ce.cod_tipo_consulta,
+                    ce.cod_diag,
+                    c.servhosdes AS descripcion_servicio,
+                    e.especialidad AS descripcion_especialidad,
+                    t.tipcondes AS descripcion_tipo_consulta,
+                    d.diagdes AS descripcion_diagnostico,
+                    dni_medico,
+                    doc_paciente,
+                    cod_tipdoc_paciente,
+                    sexo,
+                    fecha_atencion,
+                    acto_med
+                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON ce.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmtco10 AS t
+                    ON ce.cod_tipo_consulta = t.tipconcod
+                LEFT JOIN dwsge.sgss_cmdia10 AS d
+                    ON ce.cod_diag = d.diagcod
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_oricentro = ca.oricenasicod
+                    AND ce.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                WHERE ce.cod_centro = :codcas
+                AND ce.cod_actividad = '91'
+                AND ce.clasificacion in (2,4,6)
+                AND ce.cod_variable = '001'
+            """),
+            params.copy()),
+            ("horas_efectivas", text(f"""
+                SELECT 
+                    ce.*,
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON ce.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_oricentro = ca.oricenasicod
+                    AND ce.cod_centro = ca.cenasicod
+                WHERE ce.cod_centro = :codcas
+                AND ce.cod_actividad = '91'
+                AND ce.cod_variable = '001'
+            """),
+            params.copy()),
+            ("horas_programadas", text(f"""
+                SELECT 
+                    p.*,
+                    c.servhosdes,
+                    e.especialidad,
+                    ag.agrupador,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE p.cod_variable = '001'
+                AND (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND p.cod_actividad = '91'
+            """),
+            params.copy()),
+            ("citados", text(f"""
+                SELECT 
+                    p.*,
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                WHERE p.cod_centro = :codcas
+                AND p.cod_actividad = '91'
+                AND p.cod_variable = '001'
+                AND p.cod_estado <> '0'
+            """),
+            params.copy()),
+            ("desercion", text(f"""
+                SELECT            
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides
+                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON ce.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_oricentro = ca.oricenasicod
+                    AND ce.cod_centro = ca.cenasicod
+                WHERE ce.cod_centro = :codcas
+                AND ce.cod_actividad = '91'
+                AND ce.clasificacion IN (1,3,0)
+                AND ce.cod_variable = '001'
+
+                UNION ALL
+
+                SELECT 
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                WHERE p.cod_centro = :codcas
+                AND p.cod_actividad = '91'
+                AND p.cod_variable = '001'
+                AND p.cod_estado IN ('1','2','5')
+            """),
+            params.copy()),
+            ("medicos_agrup", text(f"""
+                SELECT c.cod_centro,
+                    c.dni_medico,
+                    c.agrupador,
+                    c.periodo,
+                    c.cantidad_medicos,
+                    c.medico
+                FROM ( SELECT b.cod_centro,
+                            b.dni_medico,
+                            b.agrupador,
+                            b.periodo,
+                            b.cantidad_medicos,
+                            row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                        FROM ( SELECT a.cod_centro,
+                                    a.dni_medico,
+                                    ag.agrupador,
+                                    a.periodo,
+                                    count(*) AS cantidad_medicos
+                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
+                                LEFT JOIN dwsge.dim_agrupador ag 
+                                ON a.cod_agrupador = ag.cod_agrupador
+                                WHERE a.cod_centro=:codcas
+                                AND a.cod_actividad = '91'
+                                AND a.cod_variable = '001'
+                                AND a.clasificacion in (2,4,6)
+                                GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo
+                                ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                WHERE c.medico = '1'::bigint
+            """),
+            params.copy()),
+        ]
+        primera_vez = text("""
+            WITH fecha_min_paciente AS (
+                SELECT cod_oricentro,cod_centro,doc_paciente,
+                       to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025
+                WHERE cod_variable='001' AND cod_actividad='91'
+                AND clasificacion IN (2,4,6) AND cod_centro=:codcas
+                GROUP BY cod_oricentro,cod_centro,doc_paciente
+            )
+            SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente WHERE periodo=:periodo_sql
+        """)
+        primera_vez_agr = text("""
+            WITH fecha_min_paciente AS (
+                SELECT p.doc_paciente,ag.agrupador,
+                       to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE p.cod_variable='001' AND p.cod_actividad='91'
+                AND p.clasificacion IN (2,4,6) AND p.cod_centro=:codcas
+                GROUP BY p.doc_paciente,ag.agrupador
+            )
+            SELECT agrupador,COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente WHERE periodo=:periodo_sql GROUP BY agrupador
+        """)
+        return {
+            "queries": queries,
+            "primeras_consultas_query": primera_vez,
+            "primeras_consultas_agrupador_query": primera_vez_agr,
+        }
+
+    def build_queries_complementaria(periodo_str, params):
+        queries = [
+            ("atenciones", text(f"""
+                SELECT 
+                    ce.cod_servicio,
+                    ce.cod_especialidad,
+                    ca.cenasides,
+                    ag.agrupador AS agrupador,
+                    am.actdes AS actividad,
+                    a.actespnom AS subactividad,
+                    ce.cod_tipo_consulta,
+                    ce.cod_diag,
+                    c.servhosdes AS descripcion_servicio,
+                    e.especialidad AS descripcion_especialidad,
+                    t.tipcondes AS descripcion_tipo_consulta,
+                    d.diagdes AS descripcion_diagnostico,
+                    dni_medico,
+                    doc_paciente,
+                    cod_tipdoc_paciente,
+                    sexo,
+                    fecha_atencion,
+                    acto_med
+                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON ce.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmtco10 AS t
+                    ON ce.cod_tipo_consulta = t.tipconcod
+                LEFT JOIN dwsge.sgss_cmdia10 AS d
+                    ON ce.cod_diag = d.diagcod
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_oricentro = ca.oricenasicod
+                    AND ce.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                WHERE ce.cod_centro = :codcas
+                AND cod_servicio= 'A91'
+                AND ce.clasificacion in (2,4,6)
+            """),
+            params.copy()),
+            ("horas_efectivas", text(f"""
+                SELECT 
+                    ce.*,
+                    c.servhosdes,
+                    e.especialidad,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON ce.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_oricentro = ca.oricenasicod
+                    AND ce.cod_centro = ca.cenasicod
+                WHERE ce.cod_centro = :codcas
+                AND cod_servicio= 'A91'
+            """),
+            params.copy()),
+            ("horas_programadas", text(f"""
+                SELECT 
+                    p.*,
+                    c.servhosdes,
+                    e.especialidad,
+                    ag.agrupador,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND cod_servicio= 'A91'
+            """),
+            params.copy()),
+            ("medicos_agrup", text(f"""
+                SELECT c.cod_centro,
+                    c.dni_medico,
+                    c.agrupador,
+                    c.periodo,
+                    c.cantidad_medicos,
+                    c.medico
+                FROM ( SELECT b.cod_centro,
+                            b.dni_medico,
+                            b.agrupador,
+                            b.periodo,
+                            b.cantidad_medicos,
+                            row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                        FROM ( SELECT a.cod_centro,
+                                    a.dni_medico,
+                                    ag.agrupador,
+                                    a.periodo,
+                                    count(*) AS cantidad_medicos
+                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
+                                LEFT JOIN dwsge.dim_agrupador ag 
+                                ON a.cod_agrupador = ag.cod_agrupador
+                                WHERE a.cod_centro=:codcas
+                                AND cod_servicio= 'A91'
+                                AND a.clasificacion in (2,4,6)
+                                GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo
+                                ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                WHERE c.medico = '1'::bigint
+            """),
+            params.copy()),
+        ]
+        primera_vez = text("""
+            WITH fecha_min_paciente AS (
+                SELECT cod_oricentro,cod_centro,doc_paciente,
+                       to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025
+                WHERE cod_servicio='A91'
+                AND clasificacion IN (2,4,6) AND cod_centro=:codcas
+                GROUP BY cod_oricentro,cod_centro,doc_paciente
+            )
+            SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente WHERE periodo=:periodo_sql
+        """)
+        primera_vez_agr = text("""
+            WITH fecha_min_paciente AS (
+                SELECT p.doc_paciente,ag.agrupador,
+                       to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE p.cod_servicio='A91'
+                AND p.clasificacion IN (2,4,6) AND p.cod_centro=:codcas
+                GROUP BY p.doc_paciente,ag.agrupador
+            )
+            SELECT agrupador,COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente WHERE periodo=:periodo_sql GROUP BY agrupador
+        """)
+        return {
+            "queries": queries,
+            "primeras_consultas_query": primera_vez,
+            "primeras_consultas_agrupador_query": primera_vez_agr,
+        }
+ 
+    def _load_dashboard_data(periodo, codcas, engine, query_builder):
         if not periodo or not codcas:
             return None
-
         periodo_str = f"{int(periodo):02d}" if str(periodo).isdigit() else str(periodo)
         periodo_sql = f"2025{periodo_str}"
         params = {"codcas": codcas}
-
-        queries = [
-            (
-                "atenciones",
-                text(f"""
-                    SELECT 
-                        ce.cod_servicio,
-                        ce.cod_especialidad,
-                        ca.cenasides,
-                        ag.agrupador AS agrupador,
-                        am.actdes AS actividad,
-                        a.actespnom AS subactividad,
-                        ce.cod_tipo_consulta,
-                        ce.cod_diag,
-                        c.servhosdes AS descripcion_servicio,
-                        e.especialidad AS descripcion_especialidad,
-                        t.tipcondes AS descripcion_tipo_consulta,
-                        d.diagdes AS descripcion_diagnostico,
-                        dni_medico,
-                        doc_paciente,
-                        cod_tipdoc_paciente,
-                        sexo,
-                        fecha_atencion,
-                        acto_med
-                    FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.dim_especialidad AS e
-                        ON ce.cod_especialidad = e.cod_especialidad
-                    LEFT JOIN dwsge.sgss_cmtco10 AS t
-                        ON ce.cod_tipo_consulta = t.tipconcod
-                    LEFT JOIN dwsge.sgss_cmdia10 AS d
-                        ON ce.cod_diag = d.diagcod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                    LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
-                    WHERE ce.cod_centro = :codcas
-                    AND ce.cod_actividad = '91'
-                    AND ce.clasificacion in (2,4,6)
-                    AND ce.cod_variable = '001'
-                """),
-                params.copy()
-            ),
-            (
-                "horas_efectivas",
-                text(f"""
-                    SELECT 
-                        ce.*,
-                        c.servhosdes,
-                        e.especialidad,
-                        a.actespnom,
-                        am.actdes,
-                        ca.cenasides
-                    FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.dim_especialidad AS e
-                        ON ce.cod_especialidad = e.cod_especialidad
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                    WHERE ce.cod_centro = :codcas
-                    AND ce.cod_actividad = '91'
-                    AND ce.cod_variable = '001'
-                """),
-                params.copy()
-            ),
-            (
-                "horas_programadas",
-                text(f"""
-                    SELECT 
-                        p.*,
-                        c.servhosdes,
-                        e.especialidad,
-                        ag.agrupador,
-                        a.actespnom,
-                        am.actdes,
-                        ca.cenasides 
-                    FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo_str} p
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON p.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.dim_especialidad AS e
-                        ON p.cod_especialidad = e.cod_especialidad
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON p.cod_actividad = a.actcod
-                        AND p.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON p.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON p.cod_oricentro = ca.oricenasicod
-                        AND p.cod_centro = ca.cenasicod
-                    LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
-                    WHERE p.cod_variable = '001'
-                    AND (
-                            p.cod_motivo_suspension IS NULL 
-                            OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
-                        )
-                    AND p.cod_centro = :codcas
-                    AND p.cod_actividad = '91'
-                """),
-                params.copy()
-            ),
-            (
-                "citados",
-                text(f"""
-                    SELECT 
-                        p.*,
-                        c.servhosdes,
-                        e.especialidad,
-                        a.actespnom,
-                        am.actdes,
-                        ca.cenasides 
-                    FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON p.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.dim_especialidad AS e
-                        ON p.cod_especialidad = e.cod_especialidad
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON p.cod_actividad = a.actcod
-                        AND p.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON p.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON p.cod_oricentro = ca.oricenasicod
-                        AND p.cod_centro = ca.cenasicod
-                    WHERE p.cod_centro = :codcas
-                    AND p.cod_actividad = '91'
-                    AND p.cod_variable = '001'
-                    AND p.cod_estado <> '0'
-                """),
-                params.copy()
-            ),
-            (
-                "desercion",
-                text(f"""
-                    SELECT            
-                        c.servhosdes,
-                        e.especialidad,
-                        a.actespnom,
-                        am.actdes,
-                        ca.cenasides
-                    FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} ce
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.dim_especialidad AS e
-                        ON ce.cod_especialidad = e.cod_especialidad
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                    WHERE ce.cod_centro = :codcas
-                    AND ce.cod_actividad = '91'
-                    AND ce.clasificacion IN (1,3,0)
-                    AND ce.cod_variable = '001'
-
-                    UNION ALL
-
-                    SELECT 
-                        c.servhosdes,
-                        e.especialidad,
-                        a.actespnom,
-                        am.actdes,
-                        ca.cenasides 
-                    FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON p.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.dim_especialidad AS e
-                        ON p.cod_especialidad = e.cod_especialidad
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON p.cod_actividad = a.actcod
-                        AND p.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON p.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON p.cod_oricentro = ca.oricenasicod
-                        AND p.cod_centro = ca.cenasicod
-                    WHERE p.cod_centro = :codcas
-                    AND p.cod_actividad = '91'
-                    AND p.cod_variable = '001'
-                    AND p.cod_estado IN ('1','2','5')
-                """),
-                params.copy()
-            ),
-                        (
-                "medicos_agrup",
-                text(f"""
-                    SELECT c.cod_centro,
-                        c.dni_medico,
-                        c.agrupador,
-                        c.periodo,
-                        c.cantidad_medicos,
-                        c.medico
-                    FROM ( SELECT b.cod_centro,
-                                b.dni_medico,
-                                b.agrupador,
-                                b.periodo,
-                                b.cantidad_medicos,
-                                row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
-                            FROM ( SELECT a.cod_centro,
-                                        a.dni_medico,
-                                        ag.agrupador,
-                                        a.periodo,
-                                        count(*) AS cantidad_medicos
-                                    FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
-                                    LEFT JOIN dwsge.dim_agrupador ag 
-                                    ON a.cod_agrupador = ag.cod_agrupador
-                                    WHERE a.cod_centro=:codcas
-                                    AND a.cod_actividad = '91'
-                                    AND a.cod_variable = '001'
-                                    AND a.clasificacion in (2,4,6)
-                                    GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo
-                                    ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
-                    WHERE c.medico = '1'::bigint
-                """),
-                params.copy()
-            ),
-        ]
-
+        builder_payload = query_builder(periodo_str, params)
+        queries = builder_payload.get("queries", [])
         results = {}
 
         def run_query(job):
@@ -439,63 +638,23 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             for key, df in executor.map(run_query, queries):
                 results[key] = df
 
-        query7 = text("""
-            WITH fecha_min_paciente AS (
-                SELECT 
-                    cod_oricentro,
-                    cod_centro,
-                    doc_paciente,
-                    to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025
-                WHERE cod_variable = '001'
-                AND cod_actividad = '91'
-                AND clasificacion IN (2,4,6)
-                AND cod_centro = :codcas
-                GROUP BY 
-                    cod_oricentro,
-                    cod_centro, 
-                    doc_paciente
-            )
-            SELECT
-                COUNT(DISTINCT doc_paciente) AS cantidad
-            FROM fecha_min_paciente 
-            WHERE periodo = :periodo_sql
-        """)
-
-        query8 = text("""
-            WITH fecha_min_paciente AS (
-                SELECT 
-                    p.doc_paciente,
-                    ag.agrupador,
-                    to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')), 'YYYYMM') AS periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
-                LEFT JOIN dwsge.dim_agrupador ag 
-                    ON p.cod_agrupador = ag.cod_agrupador
-                WHERE p.cod_variable = '001'
-                AND p.cod_actividad = '91'
-                AND p.clasificacion IN (2,4,6)
-                AND p.cod_centro = :codcas
-                GROUP BY 
-                    p.doc_paciente,
-                    ag.agrupador
-            )
-            SELECT 
-                agrupador,
-                COUNT(DISTINCT doc_paciente) AS cantidad
-            FROM fecha_min_paciente
-            WHERE periodo = :periodo_sql
-            GROUP BY agrupador
-        """)
-
-        df7 = pd.read_sql(query7, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
-        df8 = pd.read_sql(query8, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
+        patient_stmt = builder_payload.get("primeras_consultas_query")
+        df7 = (
+            pd.read_sql(patient_stmt, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
+            if patient_stmt is not None else pd.DataFrame()
+        )
+        patient_agr_stmt = builder_payload.get("primeras_consultas_agrupador_query")
+        df8 = (
+            pd.read_sql(patient_agr_stmt, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
+            if patient_agr_stmt is not None else pd.DataFrame()
+        )
 
         atenciones_df = results.get("atenciones", pd.DataFrame())
         horas_efectivas_df = results.get("horas_efectivas", pd.DataFrame())
         horas_programadas_df = results.get("horas_programadas", pd.DataFrame())
         citados_df = results.get("citados", pd.DataFrame())
         desercion_df = results.get("desercion", pd.DataFrame())
-        medicos_agr= results.get("medicos_agrup", pd.DataFrame())
+        medicos_agr = results.get("medicos_agrup", pd.DataFrame())
 
         if not horas_efectivas_df.empty and 'horas_efec_def' in horas_efectivas_df:
             horas_efectivas_df['horas_efec_def'] = pd.to_numeric(horas_efectivas_df['horas_efec_def'], errors='coerce').fillna(0)
@@ -565,6 +724,50 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             'tables': tables
         }
 
+    def load_dashboard_data(periodo, codcas, engine):
+        return _load_dashboard_data(periodo, codcas, engine, build_queries_consulta)
+
+    def load_dashboard_data_complementaria(periodo, codcas, engine):
+        return _load_dashboard_data(periodo, codcas, engine, build_queries_complementaria)
+
+    def build_download_response(periodo, pathname, data_loader, include_citas=True, include_desercion=True):
+        if not periodo or not pathname:
+            return None
+        import secure_code as sc
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+        if not codcas:
+            return None
+        engine = create_connection()
+        if engine is None:
+            return None
+        data = data_loader(periodo, codcas, engine)
+        if not data:
+            return None
+        stats = data['stats']
+        tables = data['tables']
+        indicadores_rows = [
+            ("Total de Consultas", stats['total_atenciones']),
+            ("Total de Consultantes", stats['total_consultantes']),
+            ("Total de Medicos", stats['total_medicos']),
+            ("Total Horas Efectivas", stats['total_horas_efectivas']),
+            ("Total Horas Programadas", stats['total_horas_programadas']),
+        ]
+        if include_citas:
+            indicadores_rows.append(("Total Citados", stats['total_citados']))
+        if include_desercion:
+            indicadores_rows.append(("Total Desercion de Citas", stats['total_desercion_citas']))
+        indicadores = pd.DataFrame(indicadores_rows, columns=['Indicador', 'Valor'])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            indicadores.to_excel(writer, sheet_name="Indicadores_Generales", index=False)
+            tables['atenciones_por_agrupador'].to_excel(writer, sheet_name="Atenciones_por_Servicio", index=False)
+            tables['consultantes_por_servicio'].to_excel(writer, sheet_name="Consultantes_por_Servicio", index=False)
+            tables['medicos_por_agrupador'].to_excel(writer, sheet_name="Medicos_por_Servicio", index=False)
+            tables['horas_programadas_por_agrupador'].to_excel(writer, sheet_name="Horas_Programadas_por_Servicio", index=False)
+        output.seek(0)
+        return dcc.send_bytes(output.getvalue(), f"reporte_{codcas}_{periodo}.xlsx")
+
     def serve_layout():
         if not has_request_context():
             return html.Div()
@@ -624,76 +827,164 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 html.Div([
                     header,
                     html.Br(),
-
-                    html.Div([
-                        html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
-                        dcc.Dropdown(
-                            id='filter-periodo',
-                            className='periodo-dropdown',
-                            options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                            placeholder='Seleccione un periodo',
-                            clearable=True,
-                            style={
-                                'width': '240px',
-                                'fontFamily': FONT_FAMILY,
-                                'position': 'relative',
-                                'zIndex': 1200
-                            }
-                        ),
-                        dbc.Button(
-                            [html.I(className="bi bi-search me-2"), "Buscar"],
-                            id='search-button',
-                            color='primary',
-                            size='md',
-                            style={
-                                'backgroundColor': BRAND,
-                                'borderColor': BRAND,
-                                'padding': '8px 12px',
-                                'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
-                                'fontFamily': FONT_FAMILY,
-                                'fontWeight': '600',
-                                'borderRadius': '8px'
-                            }
-                        ),
-                        dbc.Button(
-                            [html.I(className="bi bi-download me-2"), "Exportar Excel"],
-                            id='download-button',
-                            color='success',
-                            size='md',
-                            style={
-                                'backgroundColor': '#28a745',
-                                'borderColor': '#28a745',
-                                'padding': '8px 12px',
-                                'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
-                                'fontFamily': FONT_FAMILY,
-                                'fontWeight': '600',
-                                'borderRadius': '8px'
-                            }
-                        ),
-                        dcc.Download(id="download-dataframe-csv"),
-                        dbc.Button(
-                            [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                            id='back-button',
-                            color='secondary',
-                            outline=True,
-                            n_clicks=0,
-                            style={
-                                'marginLeft': 'auto',
-                                'padding': '8px 12px'
-                            }
-                        ),
-                    ], style={
-                        **CONTROL_BAR_STYLE
-                    }),
-
-                    dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom', style={'zIndex': 9999}),
-                    dbc.Tooltip("Buscar datos", target='search-button', placement='bottom', style={'zIndex': 9999}),
-                    dbc.Tooltip("Descargar Excel", target='download-button', placement='bottom', style={'zIndex': 9999}),
-
-                    dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
-                    html.Br(),
-                    dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
-                    html.Br(),
+                    dcc.Tabs(
+                        id='dashboard-tabs',
+                        value='tab-atenciones',
+                        children=[
+                            dcc.Tab(
+                                label="Atenciones médicas",
+                                value='tab-atenciones',
+                                style=TAB_STYLE,
+                                selected_style=TAB_SELECTED_STYLE,
+                                children=[
+                                    html.Div([
+                                        html.Div([
+                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
+                                            dcc.Dropdown(
+                                                id='filter-periodo',
+                                                className='periodo-dropdown',
+                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
+                                                placeholder='Seleccione un periodo',
+                                                clearable=True,
+                                                style={
+                                                    'width': '240px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-search me-2"), "Buscar"],
+                                                id='search-button',
+                                                color='primary',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': BRAND,
+                                                    'borderColor': BRAND,
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
+                                                id='download-button',
+                                                color='success',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': '#28a745',
+                                                    'borderColor': '#28a745',
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dcc.Download(id="download-dataframe-csv"),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                                                id='back-button',
+                                                color='secondary',
+                                                outline=True,
+                                                n_clicks=0,
+                                                style={
+                                                    'marginLeft': 'auto',
+                                                    'padding': '8px 12px'
+                                                }
+                                            ),
+                                        ], style={**CONTROL_BAR_STYLE}),
+                                        dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Buscar datos", target='search-button', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Descargar Excel", target='download-button', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
+                                        html.Br(),
+                                        dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
+                                        html.Br(),
+                                    ], id='tab-atenciones-content')
+                                ]
+                            ),
+                            dcc.Tab(
+                                label="Medicina complementaria",
+                                value='tab-complementaria',
+                                style=TAB_STYLE,
+                                selected_style=TAB_SELECTED_STYLE,
+                                children=[
+                                    html.Div([
+                                        html.Div([
+                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
+                                            dcc.Dropdown(
+                                                id='filter-periodo-complementaria',
+                                                className='periodo-dropdown',
+                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
+                                                placeholder='Seleccione un periodo',
+                                                clearable=True,
+                                                style={
+                                                    'width': '240px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-search me-2"), "Buscar"],
+                                                id='search-button-complementaria',
+                                                color='primary',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': BRAND,
+                                                    'borderColor': BRAND,
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
+                                                id='download-button-complementaria',
+                                                color='success',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': '#28a745',
+                                                    'borderColor': '#28a745',
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dcc.Download(id="download-dataframe-csv-complementaria"),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                                                id='back-button-complementaria',
+                                                color='secondary',
+                                                outline=True,
+                                                n_clicks=0,
+                                                style={
+                                                    'marginLeft': 'auto',
+                                                    'padding': '8px 12px'
+                                                }
+                                            ),
+                                        ], style={**CONTROL_BAR_STYLE}),
+                                        dbc.Tooltip("Regresar al inicio", target='back-button-complementaria', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Buscar datos", target='search-button-complementaria', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Descargar Excel", target='download-button-complementaria', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Row([dbc.Col(html.Div(id='summary-container-complementaria'), width=12)]),
+                                        html.Br(),
+                                        dbc.Row([dbc.Col(html.Div(id='charts-container-complementaria'), width=12)]),
+                                        html.Br(),
+                                    ], id='tab-complementaria-content')
+                                ]
+                            )
+                        ],
+                        style={'backgroundColor': 'transparent', 'marginBottom': '0'},
+                        content_style={'padding': '0', 'border': 'none', 'marginTop': '-1px'}
+                    )
                 ], id='main-dashboard-content'),
 
                 html.Div(
@@ -767,10 +1058,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
         medicos_por_agrupador_table = tables['medicos_por_agrupador']
         horas_programadas_table = tables['horas_programadas_por_agrupador']
-
         base = url_base_pathname.rstrip('/') + '/'
         subtitle = f"Periodo {periodo} | {nombre_centro}"
-
         cards = [
             {
                 "title": "Total de consultantes al establecimiento",
@@ -816,6 +1105,144 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "value": f"{total_horas_efectivas:,.0f}",
                 "border_color": ACCENT,
                 "href": f"{base}dash/horas_efectivas/{codcas_url}?periodo={periodo}",
+            }
+        ]
+        summary_row = dbc.Container(
+            [
+                (
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    render_card(
+                                        title=card["title"],
+                                        value=card["value"],
+                                        border_color=card["border_color"],
+                                        subtitle_text=card.get("subtitle", subtitle),
+                                        href=card.get("href"),
+                                        extra_style=card.get("extra_style")
+                                    ),
+                                    style={'width': '100%'}
+                                ),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            ),
+                            dbc.Col(
+                                html.Div(card["side_component"], style={'width': '100%'}),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            )
+                        ],
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                    if card.get("side_component")
+                    else dbc.Row(
+                        dbc.Col(
+                            html.Div(
+                                render_card(
+                                    title=card["title"],
+                                    value=card["value"],
+                                    border_color=card["border_color"],
+                                    subtitle_text=card.get("subtitle", subtitle),
+                                    href=card.get("href"),
+                                    extra_style=card.get("extra_style")
+                                ),
+                                style={'width': '100%'}
+                            ),
+                            width=12,
+                            lg=8
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                for card in cards
+            ],
+            fluid=True
+        )
+
+        charts_container = html.Div()
+        return summary_row, charts_container
+
+    @dash_app.callback(
+        [Output('summary-container-complementaria', 'children'),
+         Output('charts-container-complementaria', 'children')],
+        Input('search-button-complementaria', 'n_clicks'),
+        State('filter-periodo-complementaria', 'value'),
+        State('url', 'pathname')
+    )
+    def on_search_complementaria(n_clicks, periodo, pathname):
+        if not n_clicks:
+            return html.Div(), html.Div()
+
+        import secure_code as sc
+
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+
+        if not periodo or not codcas:
+            return html.Div("Seleccione un periodo y asegurese de tener un centro valido."), html.Div()
+
+        engine = create_connection()
+        if engine is None:
+            return html.Div("Error de conexion a la base de datos."), html.Div()
+
+        data = load_dashboard_data_complementaria(periodo, codcas, engine)
+        if not data:
+            return html.Div("Sin datos para mostrar."), html.Div()
+
+        stats = data['stats']
+        tables = data['tables']
+        nombre_centro = data['nombre_centro']
+
+        total_atenciones = stats['total_atenciones']
+        total_consultantes = stats['total_consultantes']
+        total_medicos = stats['total_medicos']
+        total_horas_programadas = stats['total_horas_programadas']
+        total_horas_efectivas = stats['total_horas_efectivas']
+
+        total_atenciones_agru = tables['atenciones_por_agrupador']
+        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
+        medicos_por_agrupador_table = tables['medicos_por_agrupador']
+        horas_programadas_table = tables['horas_programadas_por_agrupador']
+
+        subtitle = f"Periodo {periodo} | {nombre_centro}"
+        cards = [
+            {
+                "title": "Total de consultantes al establecimiento",
+                "value": f"{total_consultantes:,.0f}",
+                "border_color": ACCENT,
+                "side_component": render_agrupador_table(total_consultantes_por_servicio_table),
+            },
+            {
+                "title": "Total de Consultas",
+                "value": f"{total_atenciones:,.0f}",
+                "border_color": BRAND,
+                "href": None,
+                "side_component": render_agrupador_table(total_atenciones_agru),
+            },
+            {
+                "title": "Total de Medicos Programados",
+                "value": f"{total_medicos:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": None,
+                "side_component": render_agrupador_table(medicos_por_agrupador_table),
+            },
+            {
+                "title": "Total horas programadas",
+                "value": f"{total_horas_programadas:,.0f}",
+                "border_color": BRAND,
+                "href": None,
+                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
+            },
+            {
+                "title": "Total de Horas Efectivas",
+                "value": f"{total_horas_efectivas:,.0f}",
+                "border_color": ACCENT,
+                "href": None,
             }
         ]
 
@@ -893,9 +1320,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     @dash_app.callback(
         Output('url', 'pathname'),
         Input('back-button', 'n_clicks'),
+        Input('back-button-complementaria', 'n_clicks'),
         prevent_initial_call=True
     )
-    def go_root(n_clicks):
+    def go_root(*_):
         return "/"
 
     @dash_app.callback(
@@ -906,60 +1334,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         prevent_initial_call=True
     )
     def download_csv(n_clicks, periodo, pathname):
-        if not n_clicks or not periodo or not pathname:
+        if not n_clicks:
             return None
-
-        import secure_code as sc
-
-        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
-        codcas = sc.decode_code(codcas_url) if codcas_url else None
-        if not codcas:
+        return build_download_response(
+            periodo,
+            pathname,
+            load_dashboard_data,
+            include_citas=True,
+            include_desercion=True
+        )
+ 
+    @dash_app.callback(
+        Output("download-dataframe-csv-complementaria", "data"),
+        Input("download-button-complementaria", "n_clicks"),
+        State('filter-periodo-complementaria', 'value'),
+        State('url', 'pathname'),
+        prevent_initial_call=True
+    )
+    def download_csv_complementaria(n_clicks, periodo, pathname):
+        if not n_clicks:
             return None
-
-        engine = create_connection()
-        if engine is None:
-            return None
-
-        data = load_dashboard_data(periodo, codcas, engine)
-        if not data:
-            return None
-
-        stats = data['stats']
-        tables = data['tables']
-
-        indicadores = pd.DataFrame({
-            'Indicador': [
-                'Total de Consultas',
-                'Total de Consultantes',
-                'Total de Medicos',
-                'Total Horas Efectivas',
-                'Total Horas Programadas',
-                'Total Citados',
-                'Total Desercion de Citas'
-            ],
-            'Valor': [
-                stats['total_atenciones'],
-                stats['total_consultantes'],
-                stats['total_medicos'],
-                stats['total_horas_efectivas'],
-                stats['total_horas_programadas'],
-                stats['total_citados'],
-                stats['total_desercion_citas']
-            ]
-        })
-
-        output = io.BytesIO()
-
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            indicadores.to_excel(writer, sheet_name="Indicadores_Generales", index=False)
-            tables['atenciones_por_agrupador'].to_excel(writer, sheet_name="Atenciones_por_Servicio", index=False)
-            tables['consultantes_por_servicio'].to_excel(writer, sheet_name="Consultantes_por_Servicio", index=False)
-            tables['medicos_por_agrupador'].to_excel(writer, sheet_name="Medicos_por_Servicio", index=False)
-            tables['horas_programadas_por_agrupador'].to_excel(writer, sheet_name="Horas_Programadas_por_Servicio", index=False)
-
-        output.seek(0)
-        filename = f"reporte_{codcas}_{periodo}.xlsx"
-        return dcc.send_bytes(output.getvalue(), filename)
+        return build_download_response(
+            periodo,
+            pathname,
+            load_dashboard_data_complementaria,
+            include_citas=False,
+            include_desercion=False
+        )
 
     dash_app.layout = serve_layout
     return dash_app

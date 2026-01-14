@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
+import secure_code as sc
 
 # Paleta similar a dashboard.py
 BRAND = "#0064AF"
@@ -138,9 +139,7 @@ def _parse_periodo(search: str) -> str | None:
 def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
     if not pathname:
         return None, None
-    import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
-    codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
     return codcas, periodo
 
@@ -336,7 +335,7 @@ def build_query(periodo: str, codcas: str) -> str:
             ag.agrupador,
             e.especialidad,
             a.actespnom as subactividad,
-            ce.hras_prog
+            ce.horas_efec_def
         FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c 
             ON ce.cod_servicio = c.servhoscod
@@ -375,6 +374,7 @@ def load_data(pathname, search):
     if not pathname:
         return None
     codcas = pathname.rstrip("/").split("/")[-1]
+    codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or "01"
     engine = create_connection()
     if engine is None:
@@ -399,52 +399,52 @@ def update_figs(data):
     if not data:
         return empty_fig("Horas Efectivas por Servicio"), empty_fig("Horas Efectivas por Subactividad")
     df = pd.DataFrame(data)
-    df["hras_prog"] = pd.to_numeric(df["hras_prog"], errors="coerce").fillna(0)
-    total_global = float(df["hras_prog"].sum()) or 0.0
+    df["horas_efec_def"] = pd.to_numeric(df["horas_efec_def"], errors="coerce").fillna(0)
+    total_global = float(df["horas_efec_def"].sum()) or 0.0
 
     svc = (
-        df.groupby("servicio", dropna=False)["hras_prog"]
+        df.groupby("servicio", dropna=False)["horas_efec_def"]
           .sum()
           .sort_values(ascending=False)
           .head(10)
           .reset_index()
     )
-    svc["pct"] = svc["hras_prog"] / total_global if total_global else 0
+    svc["pct"] = svc["horas_efec_def"] / total_global if total_global else 0
     svc["pct"] = svc["pct"].fillna(0)
-    svc["text_label"] = svc.apply(lambda r: f"{r['hras_prog']:,} ({r['pct']:.1%})", axis=1)
+    svc["text_label"] = svc.apply(lambda r: f"{r['horas_efec_def']:,} ({r['pct']:.1%})", axis=1)
 
     fig_serv = px.bar(
         svc,
-        x="hras_prog",
+        x="horas_efec_def",
         y="servicio",
         orientation="h",
         title="Horas Efectivas por Servicio",
         custom_data=["pct"],
-        color="hras_prog",
+        color="horas_efec_def",
         color_continuous_scale=BAR_COLOR_SCALE,
         text="text_label",
     )
     fig_serv = style_horizontal_bar(fig_serv, "Horas efectivas", "Servicio")
 
     sub = (
-        df.groupby("subactividad", dropna=False)["hras_prog"]
+        df.groupby("subactividad", dropna=False)["horas_efec_def"]
           .sum()
           .sort_values(ascending=False)
           .head(10)
           .reset_index()
     )
-    sub["pct"] = sub["hras_prog"] / total_global if total_global else 0
+    sub["pct"] = sub["horas_efec_def"] / total_global if total_global else 0
     sub["pct"] = sub["pct"].fillna(0)
-    sub["text_label"] = sub.apply(lambda r: f"{r['hras_prog']:,} ({r['pct']:.1%})", axis=1)
+    sub["text_label"] = sub.apply(lambda r: f"{r['horas_efec_def']:,} ({r['pct']:.1%})", axis=1)
 
     fig_sub = px.bar(
         sub,
-        x="hras_prog",
+        x="horas_efec_def",
         y="subactividad",
         orientation="h",
         title="Horas Efectivas por Subactividad",
         custom_data=["pct"],
-        color="hras_prog",
+        color="horas_efec_def",
         color_continuous_scale=BAR_COLOR_SCALE,
         text="text_label",
     )
@@ -460,52 +460,52 @@ def update_second_figs(data):
     if not data:
         return empty_fig("Horas Efectivas por Agrupador"), empty_fig("Horas Efectivas por Especialidad")
     df = pd.DataFrame(data)
-    df["hras_prog"] = pd.to_numeric(df["hras_prog"], errors="coerce").fillna(0)
-    total_global = float(df["hras_prog"].sum()) or 0.0
+    df["horas_efec_def"] = pd.to_numeric(df["horas_efec_def"], errors="coerce").fillna(0)
+    total_global = float(df["horas_efec_def"].sum()) or 0.0
 
     agr = (
-        df.groupby("agrupador", dropna=False)["hras_prog"]
+        df.groupby("agrupador", dropna=False)["horas_efec_def"]
           .sum()
           .sort_values(ascending=False)
           .head(10)
           .reset_index()
     )
-    agr["pct"] = agr["hras_prog"] / total_global if total_global else 0
+    agr["pct"] = agr["horas_efec_def"] / total_global if total_global else 0
     agr["pct"] = agr["pct"].fillna(0)
-    agr["text_label"] = agr.apply(lambda r: f"{r['hras_prog']:,} ({r['pct']:.1%})", axis=1)
+    agr["text_label"] = agr.apply(lambda r: f"{r['horas_efec_def']:,} ({r['pct']:.1%})", axis=1)
 
     fig_agr = px.bar(
         agr,
-        x="hras_prog",
+        x="horas_efec_def",
         y="agrupador",
         orientation="h",
         title="Horas Efectivas por Agrupador",
         custom_data=["pct"],
-        color="hras_prog",
+        color="horas_efec_def",
         color_continuous_scale=BAR_COLOR_SCALE,
         text="text_label",
     )
     fig_agr = style_horizontal_bar(fig_agr, "Horas efectivas", "Agrupador")
 
     esp = (
-        df.groupby("especialidad", dropna=False)["hras_prog"]
+        df.groupby("especialidad", dropna=False)["horas_efec_def"]
           .sum()
           .sort_values(ascending=False)
           .head(10)
           .reset_index()
     )
-    esp["pct"] = esp["hras_prog"] / total_global if total_global else 0
+    esp["pct"] = esp["horas_efec_def"] / total_global if total_global else 0
     esp["pct"] = esp["pct"].fillna(0)
-    esp["text_label"] = esp.apply(lambda r: f"{r['hras_prog']:,} ({r['pct']:.1%})", axis=1)
+    esp["text_label"] = esp.apply(lambda r: f"{r['horas_efec_def']:,} ({r['pct']:.1%})", axis=1)
 
     fig_esp = px.bar(
         esp,
-        x="hras_prog",
+        x="horas_efec_def",
         y="especialidad",
         orientation="h",
         title="Horas Efectivas por Especialidad",
         custom_data=["pct"],
-        color="hras_prog",
+        color="horas_efec_def",
         color_continuous_scale=BAR_COLOR_SCALE,
         text="text_label",
     )
@@ -528,11 +528,11 @@ def update_grid(data):
             {"headerName": "Horas Efectivas", "field": "horas_efectivas"}
         ], []
     df = pd.DataFrame(data)
-    df = df[["servicio", "subactividad", "agrupador", "especialidad", "hras_prog"]].copy()
-    df.rename(columns={"hras_prog": "horas_efectivas"}, inplace=True)
+    df = df[["servicio", "subactividad", "agrupador", "especialidad", "horas_efec_def"]].copy()
+    df.rename(columns={"horas_efec_def": "horas_efectivas"}, inplace=True)
+    df["horas_efectivas"] = pd.to_numeric(df["horas_efectivas"], errors="coerce").fillna(0)
     total = df["horas_efectivas"].sum()
     df["total_variable"] = total
-    # Formatear horas como int
     df["horas_efectivas"] = df["horas_efectivas"].round(0).astype(int)
     df["total_variable"] = df["total_variable"].round(0).astype(int)
 
