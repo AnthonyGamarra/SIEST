@@ -6,6 +6,8 @@ from flask import current_app
 from bi import get_bi_url
 from secure_code import encode_code
 from backend.centro_asistencial import get_centro_asistencial
+from backend.centro_asistencial import get_centro_asistencial_by_code_red
+
 
 def register_routes(app):
 
@@ -19,10 +21,15 @@ def register_routes(app):
 		}
 
 	@bp.route('/')
+	@login_required
 	def index():
 		df = get_centro_asistencial()
+		code_red=current_user.code_red
+		df_by_code_red = (get_centro_asistencial_by_code_red(code_red) if code_red  else df)
 		centros_asistenciales = df.to_dict(orient='records')
-		return render_template('index.html', centros_asistenciales=centros_asistenciales)
+		centros_asistenciales_by_code_red = df_by_code_red.to_dict(orient='records')
+		return render_template('index.html', centros_asistenciales=centros_asistenciales, centros_asistenciales_by_code_red=centros_asistenciales_by_code_red)
+
 
 	@bp.route('/register', methods=['GET', 'POST'])
 	@login_required
@@ -40,6 +47,8 @@ def register_routes(app):
 			username = request.form.get('username', '')
 			password = request.form.get('password', '')
 			role = request.form.get('rol', 'user')
+			code_red = request.form.get('code_red', '')
+
 			
 			if User.query.filter_by(username=username).first():
 				flash('El usuario ya existe', 'danger')
@@ -49,6 +58,7 @@ def register_routes(app):
 				new_user.name = name
 				new_user.lastname = lastname
 				new_user.codcas = codcas
+				new_user.code_red = code_red
 				new_user.role = role
 				db.session.add(new_user)
 				db.session.commit()

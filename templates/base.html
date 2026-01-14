@@ -89,7 +89,7 @@
     {% if current_user.is_authenticated %} {% if show_modules|default(True) %}
 
     <div class="main">
-      {% if current_user.role == 'admin' %}
+      {%  if current_user.role != 'user' %}
       <div class="modules-section">
         <form class="codcas-selector">
           <div class="d-flex align-items-center mb-3">
@@ -100,15 +100,39 @@
             />
             <div>
               <h2>Seleccione un centro</h2>
+              {% if  current_user.code_red != None %}
+              <p class="text-muted mb-0 small">
+                Elija el centro para ver los módulos disponibles de su red {{
+                current_user.code_red }}
+              </p>
+              {% else %}
               <p class="text-muted mb-0 small">
                 Elija el centro para ver los módulos disponibles
               </p>
+              {% endif %}
             </div>
           </div>
           <div class="form-group mb-0">
             <label for="codcas" class="form-label" style="font-weight: 500"
               >Centro asistencial</label
             >
+            {% if  current_user.code_red != None %}
+            <select
+              id="codcas"
+              name="codcas"
+              class="form-select form-select-lg"
+              required
+              style="border-radius: 0.7rem; width: 100%"
+            >
+              <option value="">Seleccionar centro...</option>
+              {% for centro in
+              centros_asistenciales_by_code_red %}
+              <option value="{{ centro.cenasicod }}">
+                {{ centro.cenasidescor }}
+              </option>
+              {% endfor %}
+            </select>
+            {% else %}
             <select
               id="codcas"
               name="codcas"
@@ -123,6 +147,7 @@
               </option>
               {% endfor %}
             </select>
+            {% endif %}
             <!-- Botón selección -->
             <div class="register-submit">
               <button type="submit" id="btn-seleccionar-centro">
@@ -134,7 +159,7 @@
       </div>
       {% endif %}
 
-      <div class="modules-container" >
+      <div class="modules-container">
         <div class="modules-header" style="color: #ffffff">
           <h1 class="modules-title">Módulos disponibles</h1>
           <p class="modules-subtitle">
@@ -197,7 +222,7 @@
           </div>
 
           <!-- Módulo 5: reportes gerenciales -->
-          {% if current_user.role == 'admin' %}
+          {% if current_user.role == 'admin' or current_user.role == 'admin_red'%}
           <a href="{{ url_for('main.reportes_gerenciales') }}" class="module">
             <img
               src="{{ url_for('static', filename='analytics.png') }}"

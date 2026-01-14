@@ -8,7 +8,7 @@ def dashboard_code_for_user(user, request):
 
     if not getattr(user, 'is_authenticated', False):
         return ''
-    if getattr(user, 'role', None) == 'admin':
+    if getattr(user, 'role', None) == 'admin' or getattr(user, 'role', None) == 'admin_red':
         code = request.form.get('codcas', '') or request.args.get('codcas', '')
     else:
         code = getattr(user, 'dashboard_code', lambda: '')()
@@ -47,6 +47,7 @@ class User(UserMixin, db.Model):
     lastname = db.Column(db.String(50), nullable=True)
     codcas = db.Column(db.String(50), nullable=True)
     role = db.Column(db.String(20), nullable=True)
+    code_red = db.Column(db.String(50), nullable=True)
 
     def is_hashed(self):
         return bool(self.password) and isinstance(self.password, str) and self.password.startswith('pbkdf2:')

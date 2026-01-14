@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 import pandas as pd
+from backend.models import User
 
 df=pd.DataFrame()
 
@@ -25,6 +26,24 @@ def get_centro_asistencial():
 
     df=pd.read_sql_query(query, create_connection())
     return df
+def get_centro_asistencial_by_code_red(code_red):
+    query = """
+        SELECT 
+            r.redasiscod,
+            r.redasisdes,
+            c.cenasicod,
+            c.cenasidescor
+        FROM dwsge.sgss_cmcas10 c
+        LEFT JOIN dwsge.sgss_cmras10 r
+            ON c.redasiscod = r.redasiscod
+        WHERE c.redasiscod = %(code_red)s
+    """
+    df=pd.read_sql_query(query,create_connection(),params={"code_red": str(code_red)})
+    return df
+
+
+
+
 def getNombreCentroAsistencial(request):
     cod_cas = request.form.get('cod_cas', '')
     df = get_centro_asistencial()
