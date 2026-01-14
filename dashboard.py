@@ -1081,12 +1081,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         horas_programadas_table = tables['horas_programadas_por_agrupador']
         base = url_base_pathname.rstrip('/') + '/'
         subtitle = f"Periodo {periodo} | {nombre_centro}"
+        total_consultantes_servicio = (
+            int(total_consultantes_por_servicio_table['counts'].sum())
+            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
+            else 0
+        )
         cards = [
             {
-                "title": "Total de consultantes al establecimiento",
+                "title": "Total de consultantes a la atención médica",
                 "value": f"{total_consultantes:,.0f}",
                 "border_color": ACCENT,
-                "stacked_side_component": True,
+            },
+            {
+                "title": "Total de consultantes al servicio",
+                "value": f"{total_consultantes_servicio:,.0f}",
+                "border_color": ACCENT,
                 "side_component": render_agrupador_table(
                     total_consultantes_por_servicio_table,
                     title="Consultantes al servicio"
@@ -1164,7 +1173,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         dbc.Col(
                             html.Div(card["side_component"], style={'width': '100%'}),
                             width=12,
-                            lg=8,
+                            lg=12,
                             style={'display': 'flex'}
                         ),
                         justify="center",
@@ -1254,12 +1263,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         horas_programadas_table = tables['horas_programadas_por_agrupador']
 
         subtitle = f"Periodo {periodo} | {nombre_centro}"
+        total_consultantes_servicio = (
+            int(total_consultantes_por_servicio_table['counts'].sum())
+            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
+            else 0
+        )
         cards = [
             {
-                "title": "Total de consultantes al establecimiento",
+                "title": "Total de consultantes a medicina complementaria",
                 "value": f"{total_consultantes:,.0f}",
                 "border_color": ACCENT,
-                "stacked_side_component": True,
+            },
+            {
+                "title": "Total de consultantes al servicio",
+                "value": f"{total_consultantes_servicio:,.0f}",
+                "border_color": ACCENT,
                 "side_component": render_agrupador_table(
                     total_consultantes_por_servicio_table,
                     title="Consultantes por servicio"
@@ -1326,7 +1344,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         dbc.Col(
                             html.Div(card["side_component"], style={'width': '100%'}),
                             width=12,
-                            lg=8,
+                            lg=12,
                             style={'display': 'flex'}
                         ),
                         justify="center",

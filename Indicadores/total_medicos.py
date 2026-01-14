@@ -168,6 +168,27 @@ def _tm_apply_filter(data_records, filter_model):
             df_local = df_local[mask]
     return df_local.to_dict("records")
 
+
+def _tm_format_fecha_atencion(serie: pd.Series) -> pd.Series:
+    """Normaliza la fecha al formato AAAA-MM-DD manteniendo valores válidos."""
+    if serie.empty:
+        return pd.Series([], index=serie.index, dtype=object)
+    parsed = pd.to_datetime(serie, errors="coerce", infer_datetime_format=True)
+    needs_dayfirst = parsed.isna() & serie.notna()
+    if needs_dayfirst.any():
+        parsed.loc[needs_dayfirst] = pd.to_datetime(
+            serie[needs_dayfirst],
+            errors="coerce",
+            infer_datetime_format=True,
+            dayfirst=True,
+        )
+    formatted = parsed.dt.strftime("%Y-%m-%d")
+    serie_str = serie.astype(str).str.strip()
+    mask_missing = serie.isna() | serie_str.eq("") | serie_str.str.lower().isin({"nan", "nat", "none"})
+    formatted = formatted.fillna(serie_str.str[:10])
+    formatted = formatted.where(~mask_missing, "Sin fecha")
+    return formatted.fillna("Sin fecha")
+
 # Layout sin verificador de query
 layout = html.Div([
     dcc.Location(id="tm-location", refresh=False),
@@ -305,12 +326,12 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
         return html.Div(f"Error consulta: {e}", style={"color": "#b00"})
     if df.empty:
         return html.Div("Sin datos producción por médico.", style={"color": "#b00"})
-    fechas = pd.to_datetime(df["fecha_atencion"], errors="coerce").dt.strftime("%Y-%m-%d")
+    fechas = _tm_format_fecha_atencion(df["fecha_atencion"])
     prod_med_df = (
         df.assign(
             descripcion_servicio=df["descripcion_servicio"].fillna("Sin servicio"),
             dni_medico=df["dni_medico"].fillna("Sin DNI"),
-            fecha_atencion=fechas.fillna("Sin fecha")
+            fecha_atencion=fechas
         )
         .groupby(["descripcion_servicio", "dni_medico", "fecha_atencion"])
         .size().reset_index(name="Atenciones")
@@ -318,7 +339,6 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
     )
     total_att = int(prod_med_df["Atenciones"].sum())
     col_defs = [
-        
         {"headerName": "DNI Médico", "field": "dni_medico", "minWidth": 120},
         {"headerName": "Fecha atención", "field": "fecha_atencion", "minWidth": 140},
         {"headerName": "Servicio", "field": "descripcion_servicio", "minWidth": 350, "flex": 2},

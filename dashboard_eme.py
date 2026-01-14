@@ -27,34 +27,41 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
 
     # Paleta y estilos consistentes con dashboard.py
     BRAND = "#0064AF"
-    EXEC_BG = "#F5F7FB"
+    BRAND_SOFT = "#D7E9FF"
+    ACCENT = "#00AEEF"
     CARD_BG = "#FFFFFF"
-    TEXT = "#212529"
-    MUTED = "#6c757d"
+    TEXT = "#1C1F26"
+    MUTED = "#6B7280"
+    BORDER = "#E5E7EB"
     FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
-    
+
     # Colores por prioridad
     PRIORIDAD_COLORS = {
-        '1': {'gradient': 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', 'icon': 'bi-exclamation-triangle-fill', 'bg': '#dc3545'},
-        '2': {'gradient': 'linear-gradient(135deg, #fd7e14 0%, #e8590c 100%)', 'icon': 'bi-exclamation-circle-fill', 'bg': '#fd7e14'},
-        '3': {'gradient': 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)', 'icon': 'bi-exclamation-diamond-fill', 'bg': '#ffc107'},
-        '4': {'gradient': 'linear-gradient(135deg, #28a745 0%, #218838 100%)', 'icon': 'bi-check-circle-fill', 'bg': '#28a745'},
-        '5': {'gradient': 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', 'icon': 'bi-info-circle-fill', 'bg': '#17a2b8'}
+        '1': '#dc3545',
+        '2': '#fd7e14',
+        '3': '#ffc107',
+        '4': '#28a745',
+        '5': '#17a2b8'
     }
-    
+
     CARD_STYLE = {
         "cursor": "pointer",
-        "border": "none",
-        "borderRadius": "16px",
+        "border": f"1px solid {BORDER}",
+        "borderRadius": "14px",
         "backgroundColor": CARD_BG,
-        "boxShadow": "0 10px 30px rgba(0,0,0,0.1)",
-        "transition": "all 0.3s ease",
-        "position": "relative",
-        "overflow": "hidden"
+        "boxShadow": "0 10px 24px rgba(0,0,0,0.08)",
+        "padding": "6px",
+        "transition": "transform .12s ease, box-shadow .12s ease",
+    }
+    CARD_BODY_STYLE = {
+        "padding": "18px",
+        "background": "linear-gradient(180deg, #ffffff 0%, #f9fbff 100%)",
+        "borderRadius": "12px",
     }
 
     # Use a unique name for the Dash instance to avoid conflicts when mounting multiple apps on the same Flask server
     app_name = f"dash_{url_base_pathname.strip('/').replace('/', '_') or 'alt'}"
+    
 
     # asegurar carpeta de assets correcta (assets junto a este archivo) y assets_url_path consistente
     assets_path = os.path.join(os.path.dirname(__file__), "assets")
@@ -70,7 +77,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         external_stylesheets=external_stylesheets,
         suppress_callback_exceptions=True,
     )
-
+    dash_app.title = "SIEST"
     # Registrar callbacks de páginas de detalle
     from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
     ate_topicos_1.register_callbacks(dash_app)
@@ -88,6 +95,101 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
     # Generar periodos "01".."12"
     valores = [f"{i:02d}" for i in range(1, 13)]
     df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
+
+    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
+        link_content = html.H5(
+            title,
+            className="card-title",
+            style={
+                'color': BRAND,
+                'marginBottom': '6px',
+                'fontFamily': FONT_FAMILY,
+                'letterSpacing': '-0.1px'
+            }
+        )
+        heading = dcc.Link(
+            link_content,
+            href=href,
+            className=(
+                "link-underline-primary link-underline-opacity-0 "
+                "link-underline-opacity-100-hover link-offset-2-hover text-reset"
+            )
+        ) if href else link_content
+
+        card_style = {**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
+        if extra_style:
+            card_style.update(extra_style)
+
+        return dbc.Card(
+            dbc.CardBody([
+                heading,
+                html.H2(value, style={
+                    'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0,
+                    'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
+                }),
+                html.P(subtitle_text, style={
+                    'fontSize': '12px', 'color': MUTED, 'margin': '6px 0 0 0', 'fontFamily': FONT_FAMILY
+                })
+            ], style=CARD_BODY_STYLE),
+            style=card_style
+        )
+
+    def render_priority_table(dataframe, title):
+        heading = html.H6(
+            title,
+            className="fw-semibold",
+            style={
+                'fontSize': '11px',
+                'color': BRAND,
+                'letterSpacing': '0.6px',
+                'marginBottom': '8px',
+            }
+        ) if title else None
+
+        if dataframe is None or dataframe.empty:
+            body_children = [heading] if heading else []
+            body_children.append(
+                html.P(
+                    "Sin registros",
+                    className="text-muted mb-0",
+                    style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}
+                )
+            )
+        else:
+            table_body = html.Tbody([
+                html.Tr([
+                    html.Td(
+                        row.get('des_estandar') or "Sin tópico",
+                        style={'padding': '4px 8px', 'lineHeight': '1.1'}
+                    ),
+                    html.Td(
+                        f"{row.get('Atenciones', 0):,.0f}",
+                        style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1'}
+                    )
+                ])
+                for _, row in dataframe.iterrows()
+            ])
+
+            body_children = [heading] if heading else []
+            body_children.append(
+                dbc.Table(
+                    [table_body],
+                    bordered=False,
+                    hover=True,
+                    responsive=True,
+                    striped=True,
+                    className="mb-0",
+                    style={'fontSize': '10px'}
+                )
+            )
+
+        return dbc.Card(
+            dbc.CardBody(
+                body_children,
+                style={**CARD_BODY_STYLE, 'padding': '14px'}
+            ),
+            style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
+        )
 
     # ========== LAYOUT ==========
     def serve_layout():
@@ -474,7 +576,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
                 ) c	
             ) d
-
             WHERE
                 d.SECUENCIA = '1'
             and cod_centro = '{codcas}'
@@ -482,6 +583,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         
         # Obtener datos para cada prioridad (1-5)
         prioridades_data = {}
+        priority_tables = {}
         prioridad_labels = {
             '1': 'Total de Atenciones por Prioridad 1',
             '2': 'Total de Atenciones por Prioridad 2',
@@ -494,10 +596,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             query_prioridad = query_base + f" and cod_prioridad_n = '{prioridad}'"
             try:
                 df_prioridad = pd.read_sql(query_prioridad, engine)
+                topic_col = 'topico_ses' if 'topico_ses' in df_prioridad.columns else 'des_estandar'
+                df_prioridad_tabla = (
+                    df_prioridad
+                    .groupby(df_prioridad[topic_col])
+                    .size()
+                    .reset_index(name='Atenciones')
+                    .sort_values(by='Atenciones', ascending=False)
+                )
+                df_prioridad_tabla = df_prioridad_tabla.rename(columns={topic_col: 'des_estandar'})
+                priority_tables[prioridad] = df_prioridad_tabla
                 prioridades_data[prioridad] = len(df_prioridad)
             except Exception as e:
                 print(f"Error en query de prioridad {prioridad}: {e}")
                 prioridades_data[prioridad] = 0
+                priority_tables[prioridad] = pd.DataFrame(columns=['des_estandar', 'Atenciones'])
 
         query_mayor_24h = f"""
             SELECT des_estancia, COUNT(*) AS total
@@ -532,315 +645,121 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         mayor_24h_total = obtener_total_estancia(query_mayor_24h, 'mayor_24h')
         menor_24h_total = obtener_total_estancia(query_menor_24h, 'menor_24h')
         
-        # Crear 5 cards manualmente con layout responsivo
-        def crear_card_prioridad(prioridad, codcas, periodo, nombre_centro, cantidad):
-            color_config = PRIORIDAD_COLORS[prioridad]
-            return dbc.Col(
-                html.A([
-                    dbc.Card([
-                        # Barra de color superior
-                        html.Div(style={
-                            'height': '6px',
-                            'background': color_config['gradient'],
-                            'borderRadius': '16px 16px 0 0'
-                        }),
-                        dbc.CardBody([
-                            # Header con icono y prioridad
-                            html.Div([
-                                html.Div([
-                                    html.I(className=f"bi {color_config['icon']}", style={
-                                        'fontSize': '40px',
-                                        'background': color_config['gradient'],
-                                        '-webkit-background-clip': 'text',
-                                        '-webkit-text-fill-color': 'transparent',
-                                        'marginRight': '15px'
-                                    }),
-                                    html.Div([
-                                        html.H5(f"Prioridad {prioridad}", style={
-                                            'color': color_config['bg'],
-                                            'marginBottom': '4px',
-                                            'fontFamily': FONT_FAMILY,
-                                            'fontSize': '16px',
-                                            'fontWeight': '700'
-                                        }),
-                                        html.P(prioridad_labels[prioridad], style={
-                                            'fontSize': '13px',
-                                            'color': MUTED,
-                                            'margin': 0,
-                                            'fontFamily': FONT_FAMILY
-                                        })
-                                    ])
-                                ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '15px'})
-                            ]),
-                            # Cantidad grande
-                            html.H2(f"{cantidad:,.0f}", style={
-                                'fontWeight': '800',
-                                'background': color_config['gradient'],
-                                '-webkit-background-clip': 'text',
-                                '-webkit-text-fill-color': 'transparent',
-                                'fontSize': '48px',
-                                'margin': '15px 0',
-                                'fontFamily': FONT_FAMILY,
-                                'textAlign': 'center'
-                            }),
-                            # Footer info
-                            html.Div([
-                                html.I(className="bi bi-calendar-check me-2", style={'color': MUTED}),
-                                html.Span(f"Periodo {periodo}", style={
-                                    'fontSize': '12px',
-                                    'color': MUTED,
-                                    'fontFamily': FONT_FAMILY
-                                })
-                            ], style={'marginTop': '15px', 'paddingTop': '15px', 'borderTop': f'1px solid #e9ecef'}),
-                            html.Div([
-                                html.I(className="bi bi-hospital me-2", style={'color': MUTED}),
-                                html.Span(nombre_centro, style={
-                                    'fontSize': '11px',
-                                    'color': MUTED,
-                                    'fontFamily': FONT_FAMILY
-                                })
-                            ], style={'marginTop': '8px'})
-                        ])
-                    ], style={
-                        **CARD_STYLE,
-                        'height': '100%'
-                    }, className='h-100')
-                ], href=f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}",
-                   style={'textDecoration': 'none'},
-                   className='hover-scale'),
-                lg=4, md=6, sm=12, xs=12, className='mb-4'
-            )
-        
-        # Card 1
-        card1 = crear_card_prioridad('1', codcas, periodo, nombre_centro, prioridades_data.get('1', 0))
-        
-        # Cards 2-5 usando la función auxiliar
-        card2 = crear_card_prioridad('2', codcas, periodo, nombre_centro, prioridades_data.get('2', 0))
-        card3 = crear_card_prioridad('3', codcas, periodo, nombre_centro, prioridades_data.get('3', 0))
-        card4 = crear_card_prioridad('4', codcas, periodo, nombre_centro, prioridades_data.get('4', 0))
-        card5 = crear_card_prioridad('5', codcas, periodo, nombre_centro, prioridades_data.get('5', 0))
-        
-        # Card Defunciones
-        color_defunciones = {'gradient': 'linear-gradient(135deg, #6c757d 0%, #5a6268 100%)', 'icon': 'bi-exclamation-triangle-fill', 'bg': '#6c757d'}
-        card_defunciones = dbc.Col(
-            html.A([
-                dbc.Card([
-                    # Barra de color superior
-                    html.Div(style={
-                        'height': '6px',
-                        'background': color_defunciones['gradient'],
-                        'borderRadius': '16px 16px 0 0'
-                    }),
-                    dbc.CardBody([
-                        # Header con icono y prioridad
-                        html.Div([
-                            html.Div([
-                                html.I(className=f"bi {color_defunciones['icon']}", style={
-                                    'fontSize': '40px',
-                                    'background': color_defunciones['gradient'],
-                                    '-webkit-background-clip': 'text',
-                                    '-webkit-text-fill-color': 'transparent',
-                                    'marginRight': '15px'
-                                }),
-                                html.Div([
-                                    html.H5("Defunciones", style={
-                                        'color': color_defunciones['bg'],
-                                        'marginBottom': '4px',
-                                        'fontFamily': FONT_FAMILY,
-                                        'fontSize': '16px',
-                                        'fontWeight': '700'
-                                    }),
-                                    html.P("Total de Defunciones", style={
-                                        'fontSize': '13px',
-                                        'color': MUTED,
-                                        'margin': 0,
-                                        'fontFamily': FONT_FAMILY
-                                    })
-                                ])
-                            ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '15px'})
-                        ]),
-                        # Cantidad grande
-                        html.H2(f"{defunciones_data:,.0f}", style={
-                            'fontWeight': '800',
-                            'background': color_defunciones['gradient'],
-                            '-webkit-background-clip': 'text',
-                            '-webkit-text-fill-color': 'transparent',
-                            'fontSize': '48px',
-                            'margin': '15px 0',
-                            'fontFamily': FONT_FAMILY,
-                            'textAlign': 'center'
-                        }),
-                        # Footer info
-                        html.Div([
-                            html.I(className="bi bi-calendar-check me-2", style={'color': MUTED}),
-                            html.Span(f"Periodo {periodo}", style={
-                                'fontSize': '12px',
-                                'color': MUTED,
-                                'fontFamily': FONT_FAMILY
-                            })
-                        ], style={'marginTop': '15px', 'paddingTop': '15px', 'borderTop': f'1px solid #e9ecef'}),
-                        html.Div([
-                            html.I(className="bi bi-hospital me-2", style={'color': MUTED}),
-                            html.Span(nombre_centro, style={
-                                'fontSize': '11px',
-                                'color': MUTED,
-                                'fontFamily': FONT_FAMILY
-                            })
-                        ], style={'marginTop': '8px'})
-                    ])
-                ], style={
-                    **CARD_STYLE,
-                    'height': '100%'
-                }, className='h-100')
-            ], style={'textDecoration': 'none'}, className='hover-scale'),
-            lg=4, md=6, sm=12, xs=12, className='mb-4'
-        )
-        
-        ESTANCIA_COLORS = {
-            'mayor': {'gradient': 'linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%)', 'icon': 'bi-clock-history', 'bg': '#5e35b1', 'label': 'Mayor a 24h'},
-            'menor': {'gradient': 'linear-gradient(135deg, #20c997 0%, #0ca678 100%)', 'icon': 'bi-stopwatch', 'bg': '#0ca678', 'label': 'Menor a 24h'}
-        }
-
-        def crear_card_estancia(tipo, total):
-            config = ESTANCIA_COLORS[tipo]
-            descripcion = "Estancia en sala de observación"
-            return dbc.Col(
-                dbc.Card([
-                    html.Div(style={
-                        'height': '6px',
-                        'background': config['gradient'],
-                        'borderRadius': '16px 16px 0 0'
-                    }),
-                    dbc.CardBody([
-                        html.Div([
-                            html.Div([
-                                html.I(className=f"bi {config['icon']}", style={
-                                    'fontSize': '40px',
-                                    'background': config['gradient'],
-                                    '-webkit-background-clip': 'text',
-                                    '-webkit-text-fill-color': 'transparent',
-                                    'marginRight': '15px'
-                                }),
-                                html.Div([
-                                    html.H5(config['label'], style={
-                                        'color': config['bg'],
-                                        'marginBottom': '4px',
-                                        'fontFamily': FONT_FAMILY,
-                                        'fontSize': '16px',
-                                        'fontWeight': '700'
-                                    }),
-                                    html.P(descripcion, style={
-                                        'fontSize': '13px',
-                                        'color': MUTED,
-                                        'margin': 0,
-                                        'fontFamily': FONT_FAMILY
-                                    })
-                                ])
-                            ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '15px'})
-                        ]),
-                        html.H2(f"{total:,.0f}", style={
-                            'fontWeight': '800',
-                            'background': config['gradient'],
-                            '-webkit-background-clip': 'text',
-                            '-webkit-text-fill-color': 'transparent',
-                            'fontSize': '48px',
-                            'margin': '15px 0',
-                            'fontFamily': FONT_FAMILY,
-                            'textAlign': 'center'
-                        }),
-                        html.Div([
-                            html.I(className="bi bi-calendar-check me-2", style={'color': MUTED}),
-                            html.Span(f"Periodo {periodo}", style={
-                                'fontSize': '12px',
-                                'color': MUTED,
-                                'fontFamily': FONT_FAMILY
-                            })
-                        ], style={'marginTop': '15px', 'paddingTop': '15px', 'borderTop': f'1px solid #e9ecef'}),
-                        html.Div([
-                            html.I(className="bi bi-hospital me-2", style={'color': MUTED}),
-                            html.Span(nombre_centro, style={
-                                'fontSize': '11px',
-                                'color': MUTED,
-                                'fontFamily': FONT_FAMILY
-                            })
-                        ], style={'marginTop': '8px'})
-                    ])
-                ], style={
-                    **CARD_STYLE,
-                    'height': '100%'
-                }, className='h-100'),
-                lg=4, md=6, sm=12, xs=12, className='mb-4'
-            )
-
-        card_estancia_mayor = crear_card_estancia('mayor', mayor_24h_total)
-        card_estancia_menor = crear_card_estancia('menor', menor_24h_total)
-        
-        # Estadísticas totales con estadísticas adicionales
         total_atenciones = sum(prioridades_data.values())
-        stats_header = html.Div([
-            # Card principal de total
-            html.Div([
-                html.Div([
-                    html.I(className="bi bi-clipboard2-pulse", style={
-                        'fontSize': '64px',
-                        'background': 'linear-gradient(135deg, #0064AF 0%, #0085d4 100%)',
-                        '-webkit-background-clip': 'text',
-                        '-webkit-text-fill-color': 'transparent',
-                        'marginRight': '25px'
-                    }),
-                    html.Div([
-                        html.H3("Total de Atenciones de Emergencia", style={
-                            'color': TEXT,
-                            'fontFamily': FONT_FAMILY,
-                            'fontSize': '20px',
-                            'margin': 0,
-                            'fontWeight': '700',
-                            'letterSpacing': '-0.5px'
-                        }),
-                        html.H1(f"{total_atenciones:,.0f}", style={
-                            'background': 'linear-gradient(135deg, #0064AF 0%, #0085d4 100%)',
-                            '-webkit-background-clip': 'text',
-                            '-webkit-text-fill-color': 'transparent',
-                            'fontFamily': FONT_FAMILY,
-                            'fontSize': '56px',
-                            'margin': '12px 0 8px 0',
-                            'fontWeight': '900',
-                            'letterSpacing': '-2px',
-                            'lineHeight': '1'
-                        }),
-                        html.P(f"📍 {nombre_centro} | 📅 Periodo {periodo}", style={
-                            'fontSize': '14px',
-                            'color': MUTED,
-                            'margin': 0,
-                            'fontFamily': FONT_FAMILY,
-                            'fontWeight': '500'
-                        })
-                    ], style={'flex': '1'})
-                ], style={'display': 'flex', 'alignItems': 'center'})
-            ], style={
-                'padding': '35px 40px',
-                'backgroundColor': CARD_BG,
-                'borderRadius': '20px',
-                'boxShadow': '0 15px 40px rgba(0,100,175,0.12)',
-                'marginBottom': '30px',
-                'background': f'linear-gradient(135deg, {CARD_BG} 0%, #f0f7ff 100%)',
-                'border': '1px solid rgba(0,100,175,0.1)'
-            }),
-            
+        subtitle = f"Periodo {periodo} | {nombre_centro}"
+
+        cards = []
+
+        for prioridad, label in prioridad_labels.items():
+            prioridad_table = priority_tables.get(prioridad)
+            cards.append({
+                "title": label,
+                "value": f"{prioridades_data.get(prioridad, 0):,.0f}",
+                "border_color": PRIORIDAD_COLORS.get(prioridad, BRAND),
+                "href": f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}",
+                "subtitle": f"Periodo {periodo} | {nombre_centro}",
+                "side_component": render_priority_table(
+                    prioridad_table,
+                    title=f"Atenciones por tópico prioridad {prioridad}"
+                )
+            })
+
+        cards.extend([
+            {
+                "title": "Defunciones registradas",
+                "value": f"{defunciones_data:,.0f}",
+                "border_color": "#6c757d",
+                "subtitle": subtitle,
+            },
+            {
+                "title": "Estancias mayor a 24h",
+                "value": f"{mayor_24h_total:,.0f}",
+                "border_color": ACCENT,
+                "subtitle": "Observación prolongada",
+            },
+            {
+                "title": "Estancias menor o igual a 24h",
+                "value": f"{menor_24h_total:,.0f}",
+                "border_color": BRAND_SOFT,
+                "subtitle": "Observación corta",
+            },
         ])
-        
-        summary_row = dbc.Container([
-            stats_header,
-            html.H4("📊 Atenciones por Nivel de Prioridad", style={
-                'color': '#ffffff',
-                'fontFamily': FONT_FAMILY,
-                'fontSize': '20px',
-                'fontWeight': '700',
-                'marginBottom': '25px',
-                'marginTop': '10px'
-            }),
-            dbc.Row([card1, card2, card3, card4, card5, card_defunciones, card_estancia_mayor, card_estancia_menor], className='g-4')
-        ], fluid=True)
+
+        summary_sections = []
+        for card in cards:
+            card_component = html.Div(
+                render_card(
+                    title=card["title"],
+                    value=card["value"],
+                    border_color=card["border_color"],
+                    subtitle_text=card.get("subtitle", subtitle),
+                    href=card.get("href"),
+                    extra_style=card.get("extra_style")
+                ),
+                style={'width': '100%'}
+            )
+
+            if card.get("side_component") and card.get("stacked_side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(card["side_component"], style={'width': '100%'}),
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '20px'}
+                    )
+                )
+            elif card.get("side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                card_component,
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            ),
+                            dbc.Col(
+                                html.Div(card["side_component"], style={'width': '100%'}),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            )
+                        ],
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+            else:
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+
+        summary_row = dbc.Container(summary_sections, fluid=True)
 
         return summary_row, html.Div()
        # ========== CALLBACK DESCARGA CSV ==========
