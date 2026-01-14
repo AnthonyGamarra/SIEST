@@ -263,11 +263,12 @@ layout = html.Div([
                             className="ag-theme-alpine",
                             style={"height": "430px", "width": "100%"},
                             columnDefs=[
-                                {"headerName": "Servicio", "field": "descripcion_servicio", "width": 400},
-                                {"headerName": "Subactividad", "field": "detalle_subactividad","width": 400},
+                                {"headerName": "Fecha programada", "field": "fecha_prog", "width": 140},
+                                {"headerName": "DNI Médico", "field": "dni_medico"},
+                                {"headerName": "Servicio", "field": "descripcion_servicio", "width": 360},
+                                {"headerName": "Subactividad", "field": "detalle_subactividad","width": 360},
                                 {"headerName": "Agrupador", "field": "agrupador"},
                                 {"headerName": "Especialidad", "field": "descripcion_especialidad"},
-                                {"headerName": "DNI Médico", "field": "dni_medico"},
                                 {"headerName": "Total horas programadas", "field": "total_horas", "filter": "agNumberColumnFilter"}
                             ],
                             defaultColDef={"sortable": True, "resizable": True,
@@ -334,7 +335,8 @@ def build_query(periodo: str, codcas: str) -> str:
         a.actespnom AS detalle_subactividad,
         c.servhosdes AS descripcion_servicio,
         e.especialidad AS descripcion_especialidad,
-		ce.total_horas
+		ce.total_horas,
+        ce.fecha_prog
 	FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo} ce
     LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
     LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
@@ -532,6 +534,7 @@ def build_tabla_horas(data):
         return []
     df = pd.DataFrame(data)
     df["total_horas"] = pd.to_numeric(df.get("total_horas", 0), errors="coerce").fillna(0).astype(float)
+    df["fecha_prog"] = pd.to_datetime(df.get("fecha_prog"), errors="coerce").dt.strftime("%Y-%m-%d").fillna("Sin fecha")
     df = df.assign(
         descripcion_servicio=df.get("descripcion_servicio", "").fillna("Sin servicio").replace("", "Sin servicio"),
         detalle_subactividad=df.get("detalle_subactividad", "").fillna("Sin subactividad").replace("", "Sin subactividad"),
@@ -541,7 +544,7 @@ def build_tabla_horas(data):
         dni_medico=df.get("dni_medico", "").fillna("Sin DNI").replace("", "Sin DNI"),
     )
     grouped = (df.groupby(
-        ["descripcion_servicio", "detalle_subactividad", "agrupador", "descripcion_especialidad", "cod_tipdoc_medico", "dni_medico"],
+        ["fecha_prog", "descripcion_servicio", "detalle_subactividad", "agrupador", "descripcion_especialidad", "cod_tipdoc_medico", "dni_medico"],
         as_index=False)["total_horas"].sum()
                .sort_values("total_horas", ascending=False))
     # CASTEO EXPLÍCITO TRAS EL GROUPBY
@@ -616,6 +619,7 @@ def actualizar_total_horas(filter_model, row_data):
     if not row_data:
         return {
             "pinnedBottomRowData": [{
+                "fecha_prog": "",
                 "descripcion_servicio": "Total horas: 0.00",
                 "total_horas": 0
             }]
@@ -628,6 +632,7 @@ def actualizar_total_horas(filter_model, row_data):
     label = "Total horas filtradas" if is_filtered else "Total horas"
     return {
         "pinnedBottomRowData": [{
+            "fecha_prog": "",
             "descripcion_servicio": f"{label}: {total:,.2f}",
             "total_horas": total
         }],

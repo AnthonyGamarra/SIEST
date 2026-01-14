@@ -279,7 +279,7 @@ layout = html.Div([
                     html.Div([
                         html.Div([
                             html.I(className="bi bi-gender-ambiguous me-2", style={'color': BRAND, 'fontSize': '20px'}),
-                            html.H5("Sexo y grupo etario vs atenciones",
+                            html.H5("Atenciones por grupo etario y sexo",
                                     style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700, "marginBottom": 0, "letterSpacing": "-0.2px"}),
                         ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '12px'}),
                         dcc.Loading(
@@ -923,10 +923,34 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
         m = re.match(r"^\s*(\d+)", str(label))
         return int(m.group(1)) if m else 999
 
-    age_order = sorted(list(pv.index), key=age_key)
+    preferred_groups = [
+        ("adulto mayor", "Adulto mayor (60+ años)"),
+        ("adulto", "Adulto (30-59 años)"),
+        ("joven", "Joven (18-29 años)"),
+        ("adolescente", "Adolescente (12-17 años)"),
+        ("niño", "Niño (0-11 años)")
+    ]
+
+    def order_tuple(label):
+        label_lower = str(label).lower()
+        for idx, (keyword, _) in enumerate(preferred_groups):
+            if keyword in label_lower:
+                return (idx, 0)
+        return (len(preferred_groups), age_key(label))
+
+    age_order = sorted(list(pv.index), key=order_tuple)
+
+    def prettify_label(label: str) -> str:
+        label_lower = str(label).lower()
+        for keyword, pretty in preferred_groups:
+            if keyword in label_lower:
+                return pretty
+        return str(label)
 
     male_vals = pv["Masculino"].reindex(age_order, fill_value=0) if "Masculino" in pv.columns else pd.Series(0, index=age_order)
     fem_vals  = pv["Femenino"].reindex(age_order, fill_value=0) if "Femenino" in pv.columns else pd.Series(0, index=age_order)
+
+    display_labels = [prettify_label(label) for label in age_order]
 
     grand_total = int(male_vals.sum() + fem_vals.sum())
     male_labels = [f"{v:,} ({(v/grand_total):.1%})" if grand_total else f"{v:,} (0.0%)" for v in male_vals.tolist()]
@@ -934,7 +958,7 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
 
     fig = go.Figure()
     fig.add_bar(
-        y=age_order,
+        y=display_labels,
         x=(-male_vals).tolist(),
         name="Masculino",
         orientation="h",
@@ -946,9 +970,10 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
         text=male_labels,
         texttemplate="%{text}",
         textposition="outside",
+        textfont=dict(size=13, color="#0F172A"),
     )
     fig.add_bar(
-        y=age_order,
+        y=display_labels,
         x=fem_vals.tolist(),
         name="Femenino",
         orientation="h",
@@ -959,6 +984,7 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
         text=fem_labels,
         texttemplate="%{text}",
         textposition="outside",
+        textfont=dict(size=13, color="#0F172A"),
     )
     fig.update_layout(
         barmode="relative",
@@ -982,7 +1008,7 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
         yaxis=dict(
             title="Grupo etario",
             categoryorder="array",
-            categoryarray=age_order,
+            categoryarray=display_labels,
             showgrid=False,
             ticks="outside",
             tickfont=dict(color="#1F2937"),

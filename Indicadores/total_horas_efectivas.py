@@ -261,7 +261,7 @@ layout = html.Div([
                     ], style={**CARD_STYLE}),
                     # Tercer bloque: reemplazado por tabla resumen horas
                     html.Div([
-                        html.H5("Resumen horas programadas",
+                        html.H5("Resumen horas efectivas",
                                 style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700,
                                        "marginBottom": "12px", "letterSpacing": "-0.2px"}),
                         dag.AgGrid(
@@ -331,10 +331,13 @@ def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
 def build_query(periodo: str, codcas: str) -> str:
     return f"""
         SELECT 
+            ce.dni_medico,
             c.servhosdes as servicio,
             ag.agrupador,
             e.especialidad,
             a.actespnom as subactividad,
+            ce.dni_medico,
+            ce.fecha_prog,
             ce.horas_efec_def
         FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -528,8 +531,17 @@ def update_grid(data):
             {"headerName": "Horas Efectivas", "field": "horas_efectivas"}
         ], []
     df = pd.DataFrame(data)
-    df = df[["servicio", "subactividad", "agrupador", "especialidad", "horas_efec_def"]].copy()
-    df.rename(columns={"horas_efec_def": "horas_efectivas"}, inplace=True)
+    df = df[["fecha_prog", "dni_medico", "servicio", "subactividad", "agrupador", "especialidad", "horas_efec_def"]].copy()
+    df.rename(
+        columns={
+            "horas_efec_def": "horas_efectivas",
+            "fecha_prog": "fecha_prog_raw",
+            "dni_medico": "dni_medico_raw"
+        }, inplace=True
+    )
+    df["fecha_prog"] = pd.to_datetime(df["fecha_prog_raw"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("Sin fecha")
+    df["dni_medico"] = df["dni_medico_raw"].fillna("Sin DNI")
+    df.drop(columns=["fecha_prog_raw", "dni_medico_raw"], inplace=True)
     df["horas_efectivas"] = pd.to_numeric(df["horas_efectivas"], errors="coerce").fillna(0)
     total = df["horas_efectivas"].sum()
     df["total_variable"] = total
@@ -537,7 +549,9 @@ def update_grid(data):
     df["total_variable"] = df["total_variable"].round(0).astype(int)
 
     column_defs = [
-        {"headerName": "Servicio", "field": "servicio", "width": 500},
+        {"headerName": "Fecha programada", "field": "fecha_prog", "width": 140},
+        {"headerName": "DNI Médico", "field": "dni_medico", "width": 120},
+        {"headerName": "Servicio", "field": "servicio", "width": 360},
         {"headerName": "Subactividad", "field": "subactividad"},
         {"headerName": "Agrupador", "field": "agrupador"},
         {"headerName": "Especialidad", "field": "especialidad"},
@@ -545,6 +559,8 @@ def update_grid(data):
     ]
 
     pinned = [{
+        "fecha_prog": "",
+        "dni_medico": "",
         "servicio": "TOTAL",
         "subactividad": "",
         "agrupador": "",

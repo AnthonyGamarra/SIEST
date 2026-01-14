@@ -159,15 +159,30 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             style=card_style
         )
 
-    def render_agrupador_table(dataframe, value_format="{:,.0f}"):
+    def render_agrupador_table(dataframe, value_format="{:,.0f}", title=None):
+        heading = html.H6(
+            title,
+            className="fw-semibold",
+            style={
+                'fontSize': '11px',
+                'color': BRAND,
+                'letterSpacing': '0.6px',
+                'marginBottom': '8px',
+            }
+        ) if title else None
+
         if dataframe.empty:
+            body_children = [heading] if heading else []
+            body_children.append(
+                html.P(
+                    "Sin registros",
+                    className="text-muted mb-0",
+                    style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}
+                )
+            )
             return dbc.Card(
                 dbc.CardBody(
-                    html.P(
-                        "Sin registros",
-                        className="text-muted mb-0",
-                        style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}
-                    ),
+                    body_children,
                     style={**CARD_BODY_STYLE, 'padding': '14px'}
                 ),
                 style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
@@ -187,18 +202,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             for _, row in dataframe.iterrows()
         ])
 
+        body_children = [heading] if heading else []
+        body_children.append(
+            dbc.Table(
+                [table_body],
+                bordered=False,
+                hover=True,
+                responsive=True,
+                striped=True,
+                className="mb-0",
+                style={'fontSize': '10px'}
+            )
+        )
+
         return dbc.Card(
-            dbc.CardBody([
-                dbc.Table(
-                    [table_body],
-                    bordered=False,
-                    hover=True,
-                    responsive=True,
-                    striped=True,
-                    className="mb-0",
-                    style={'fontSize': '10px'}
-                )
-            ], style={**CARD_BODY_STYLE, 'padding': '14px'}),
+            dbc.CardBody(
+                body_children,
+                style={**CARD_BODY_STYLE, 'padding': '14px'}
+            ),
             style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
         )
 
@@ -1065,7 +1086,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "title": "Total de consultantes al establecimiento",
                 "value": f"{total_consultantes:,.0f}",
                 "border_color": ACCENT,
-                "side_component": render_agrupador_table(total_consultantes_por_servicio_table),
+                "stacked_side_component": True,
+                "side_component": render_agrupador_table(
+                    total_consultantes_por_servicio_table,
+                    title="Consultantes al servicio"
+                ),
             },
             {
                 "title": "Total de Consultas",
@@ -1075,14 +1100,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "side_component": render_agrupador_table(total_atenciones_agru),
             },
             {
-                "title": "Total de Medicos Programados",
+                "title": "Total de Médicos",
                 "value": f"{total_medicos:,.0f}",
                 "border_color": BRAND_SOFT,
                 "href": f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
                 "side_component": render_agrupador_table(medicos_por_agrupador_table),
             },
             {
-                "title": "Total desercion citas",
+                "title": "Total deserción citas",
                 "value": f"{total_desercion_citas:,.0f}",
                 "border_color": BRAND_SOFT,
                 "href": f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}",
@@ -1107,23 +1132,51 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "href": f"{base}dash/horas_efectivas/{codcas_url}?periodo={periodo}",
             }
         ]
-        summary_row = dbc.Container(
-            [
-                (
+        summary_sections = []
+        for card in cards:
+            card_component = html.Div(
+                render_card(
+                    title=card["title"],
+                    value=card["value"],
+                    border_color=card["border_color"],
+                    subtitle_text=card.get("subtitle", subtitle),
+                    href=card.get("href"),
+                    extra_style=card.get("extra_style")
+                ),
+                style={'width': '100%'}
+            )
+
+            if card.get("side_component") and card.get("stacked_side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(card["side_component"], style={'width': '100%'}),
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '20px'}
+                    )
+                )
+            elif card.get("side_component"):
+                summary_sections.append(
                     dbc.Row(
                         [
                             dbc.Col(
-                                html.Div(
-                                    render_card(
-                                        title=card["title"],
-                                        value=card["value"],
-                                        border_color=card["border_color"],
-                                        subtitle_text=card.get("subtitle", subtitle),
-                                        href=card.get("href"),
-                                        extra_style=card.get("extra_style")
-                                    ),
-                                    style={'width': '100%'}
-                                ),
+                                card_component,
                                 width=12,
                                 lg=4,
                                 style={'display': 'flex'}
@@ -1138,31 +1191,22 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         justify="center",
                         style={'marginBottom': '10px'}
                     )
-                    if card.get("side_component")
-                    else dbc.Row(
+                )
+            else:
+                summary_sections.append(
+                    dbc.Row(
                         dbc.Col(
-                            html.Div(
-                                render_card(
-                                    title=card["title"],
-                                    value=card["value"],
-                                    border_color=card["border_color"],
-                                    subtitle_text=card.get("subtitle", subtitle),
-                                    href=card.get("href"),
-                                    extra_style=card.get("extra_style")
-                                ),
-                                style={'width': '100%'}
-                            ),
+                            card_component,
                             width=12,
-                            lg=8
+                            lg=8,
+                            style={'display': 'flex'}
                         ),
                         justify="center",
                         style={'marginBottom': '10px'}
                     )
                 )
-                for card in cards
-            ],
-            fluid=True
-        )
+
+        summary_row = dbc.Container(summary_sections, fluid=True)
 
         charts_container = html.Div()
         return summary_row, charts_container
@@ -1215,7 +1259,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "title": "Total de consultantes al establecimiento",
                 "value": f"{total_consultantes:,.0f}",
                 "border_color": ACCENT,
-                "side_component": render_agrupador_table(total_consultantes_por_servicio_table),
+                "stacked_side_component": True,
+                "side_component": render_agrupador_table(
+                    total_consultantes_por_servicio_table,
+                    title="Consultantes por servicio"
+                ),
             },
             {
                 "title": "Total de Consultas",
@@ -1225,7 +1273,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "side_component": render_agrupador_table(total_atenciones_agru),
             },
             {
-                "title": "Total de Medicos Programados",
+                "title": "Total de Médicos",
                 "value": f"{total_medicos:,.0f}",
                 "border_color": BRAND_SOFT,
                 "href": None,
@@ -1246,23 +1294,51 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             }
         ]
 
-        summary_row = dbc.Container(
-            [
-                (
+        summary_sections = []
+        for card in cards:
+            card_component = html.Div(
+                render_card(
+                    title=card["title"],
+                    value=card["value"],
+                    border_color=card["border_color"],
+                    subtitle_text=card.get("subtitle", subtitle),
+                    href=card.get("href"),
+                    extra_style=card.get("extra_style")
+                ),
+                style={'width': '100%'}
+            )
+
+            if card.get("side_component") and card.get("stacked_side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(card["side_component"], style={'width': '100%'}),
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '20px'}
+                    )
+                )
+            elif card.get("side_component"):
+                summary_sections.append(
                     dbc.Row(
                         [
                             dbc.Col(
-                                html.Div(
-                                    render_card(
-                                        title=card["title"],
-                                        value=card["value"],
-                                        border_color=card["border_color"],
-                                        subtitle_text=card.get("subtitle", subtitle),
-                                        href=card.get("href"),
-                                        extra_style=card.get("extra_style")
-                                    ),
-                                    style={'width': '100%'}
-                                ),
+                                card_component,
                                 width=12,
                                 lg=4,
                                 style={'display': 'flex'}
@@ -1277,31 +1353,22 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         justify="center",
                         style={'marginBottom': '10px'}
                     )
-                    if card.get("side_component")
-                    else dbc.Row(
+                )
+            else:
+                summary_sections.append(
+                    dbc.Row(
                         dbc.Col(
-                            html.Div(
-                                render_card(
-                                    title=card["title"],
-                                    value=card["value"],
-                                    border_color=card["border_color"],
-                                    subtitle_text=card.get("subtitle", subtitle),
-                                    href=card.get("href"),
-                                    extra_style=card.get("extra_style")
-                                ),
-                                style={'width': '100%'}
-                            ),
+                            card_component,
                             width=12,
-                            lg=8
+                            lg=8,
+                            style={'display': 'flex'}
                         ),
                         justify="center",
                         style={'marginBottom': '10px'}
                     )
                 )
-                for card in cards
-            ],
-            fluid=True
-        )
+
+        summary_row = dbc.Container(summary_sections, fluid=True)
 
         charts_container = html.Div()
         return summary_row, charts_container

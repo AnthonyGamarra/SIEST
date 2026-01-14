@@ -1,7 +1,5 @@
 from dash import html, dcc, register_page, Input, Output, State, callback
-import re
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
@@ -81,36 +79,6 @@ def empty_fig(title: str | None = None) -> go.Figure:
         y=0.5,
         xref="paper",
         yref="paper",
-    )
-    return fig
-
-def style_line_chart(fig: go.Figure) -> go.Figure:
-    title_component = getattr(getattr(fig.layout, "title", None), "text", "") or ""
-    fig.update_layout(
-        title=dict(text=title_component, font=dict(size=18, color=BRAND, family=FONT_FAMILY), x=0, xanchor="left"),
-        plot_bgcolor="#F9FBFD",
-        paper_bgcolor="#F9FBFD",
-        margin=dict(l=70, r=32, t=70, b=50),
-        xaxis=dict(
-            title="Fecha",
-            showgrid=True,
-            gridcolor="rgba(10,76,140,0.08)",
-            zeroline=False,
-            ticks="outside",
-            tickfont=dict(color="#475569"),
-        ),
-        yaxis=dict(
-            title="Atenciones",
-            showgrid=True,
-            gridcolor="rgba(10,76,140,0.08)",
-            zeroline=False,
-            ticks="outside",
-            tickformat=",.0f",
-            tickfont=dict(color="#1F2937"),
-        ),
-        font=dict(family=FONT_FAMILY, size=12, color="#1F2937"),
-        hovermode="x unified",
-        hoverlabel=dict(bgcolor="#FFFFFF", font=dict(family=FONT_FAMILY, color="#0F172A")),
     )
     return fig
 
@@ -211,7 +179,7 @@ layout = html.Div([
                 html.Div([
                     html.H4("Detalle de producción médica",
                             style={"margin": 0, "color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700, "letterSpacing": "-0.3px"}),
-                    html.P("📈 Tendencia y tabla de atenciones por médico para el periodo seleccionado",
+                          html.P("📊 Tabla de atenciones por médico para el periodo seleccionado",
                            style={"color": MUTED, "fontSize": "13px", "marginTop": "6px", "fontFamily": FONT_FAMILY})
                 ])
             ], style={'display': 'flex', 'alignItems': 'center', 'flex': 1})
@@ -267,30 +235,6 @@ layout = html.Div([
                 style=TAB_STYLE,
                 selected_style=TAB_SELECTED_STYLE,
                 children=html.Div([
-                    # Primer bloque: filtro + línea
-                    html.Div([
-                        dcc.Loading(
-                            html.Div([
-                                html.Div([
-                                    html.Label("Filtrar por DNI del médico", style={"fontSize": "12px", "color": MUTED}),
-                                    dcc.Input(
-                                        id="tm-dni-filter",
-                                        type="text",
-                                        placeholder="Ingrese DNI médico y presione Enter",
-                                        debounce=True,
-                                        style={
-                                            "width": "240px", "padding": "6px 10px", "borderRadius": "8px",
-                                            "border": "1px solid #d0d7de", "fontFamily": FONT_FAMILY, "fontSize": "13px"
-                                        }
-                                    )
-                                ], style={"display": "flex", "flexDirection": "column", "gap": "6px"}),
-                                html.Div(style={"flex": 1}),
-                                dcc.Graph(id="tm-line-chart", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"})
-                            ], style={"display": "flex", "gap": "12px", "flexWrap": "wrap", "flexDirection": "column"}),
-                            type="dot"
-                        )
-                    ], style={**CARD_STYLE}),
-                    # Segundo bloque
                     html.Div([
                         dcc.Loading(
                             html.Div([
@@ -303,7 +247,7 @@ layout = html.Div([
                             style={"marginTop": "6px", "color": MUTED, "fontFamily": FONT_FAMILY, "fontSize": "12px", "fontWeight": "bold"}
                         ),
                         html.Div(id="tm-table-wrapper", style={"marginTop": "12px"})
-                    ], style={**CARD_STYLE, "marginTop": "12px"}),
+                    ], style={**CARD_STYLE}),
 
                 ], style={"padding": "8px"})
             )
@@ -329,67 +273,6 @@ register_page(
 )
 
 
-# Callback para el gráfico de línea y filtro por DNI
-@callback(
-    Output("tm-line-chart", "figure"),
-    Input("tm-location", "pathname"),
-    Input("tm-location", "search"),
-    Input("tm-dni-filter", "value"),
-    State("filter-periodo", "value"),
-)
-def update_line_atenciones_medico(pathname, search, dni_value, periodo_dropdown):
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas:
-        return empty_fig("Tendencia de atenciones (sin ruta)")
-    if not periodo:
-        return empty_fig("Tendencia de atenciones (sin periodo)")
-
-    # Sanitizar DNI (solo dígitos)
-    dni = (dni_value or "").strip()
-    dni_clean = re.sub(r"\D+", "", dni) if dni else ""
-
-    engine = create_connection()
-    if engine is None:
-        return empty_fig("Tendencia de atenciones (sin conexión)")
-
-    where_dni = f"AND ce.dni_medico = '{dni_clean}'" if dni_clean else ""
-    query_ts = f"""
-        SELECT CAST(ce.fecha_atencion AS date) AS fecha, COUNT(*) AS atenciones
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
-        WHERE ce.cod_centro = '{codcas}'
-          AND ce.cod_actividad = '91'
-          AND ce.clasificacion in (2,4,6)
-          AND ce.cod_variable = '001'
-          {where_dni}
-        GROUP BY CAST(ce.fecha_atencion AS date)
-        ORDER BY fecha
-    """
-    try:
-        ts = pd.read_sql(query_ts, engine)
-    except Exception:
-        return empty_fig("Tendencia de atenciones (error de consulta)")
-    if ts.empty:
-        return empty_fig(
-            f"Tendencia de atenciones - Periodo {periodo}" + (f" | DNI {dni_clean}" if dni_clean else "")
-        )
-
-    ts["fecha"] = pd.to_datetime(ts["fecha"])
-    fig = px.line(
-        ts,
-        x="fecha",
-        y="atenciones",
-        markers=True,
-        title=f"Tendencia de atenciones - Periodo {periodo}" + (f" | DNI {dni_clean}" if dni_clean else " | Todos"),
-    )
-    fig.update_traces(
-        line=dict(color=BRAND, width=2.2),
-        marker=dict(size=6, color=BRAND, line=dict(color="rgba(255,255,255,0.9)", width=1.5)),
-        hovertemplate="<b>%{x|%d-%m-%Y}</b><br>Atenciones: %{y:,}<extra></extra>",
-    )
-    fig = style_line_chart(fig)
-    return fig
-
-
 @callback(
     Output("tm-table-wrapper", "children"),
     Input("tm-location", "pathname"),
@@ -406,8 +289,9 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
     if engine is None:
         return html.Div("Error de conexión a la base de datos.", style={"color": "#b00"})
     query = f"""
-        SELECT c.servhosdes AS descripcion_servicio,
-               ce.dni_medico
+         SELECT c.servhosdes AS descripcion_servicio,
+             ce.dni_medico,
+             ce.fecha_atencion
         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         WHERE ce.cod_centro = '{codcas}'
@@ -421,19 +305,23 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
         return html.Div(f"Error consulta: {e}", style={"color": "#b00"})
     if df.empty:
         return html.Div("Sin datos producción por médico.", style={"color": "#b00"})
+    fechas = pd.to_datetime(df["fecha_atencion"], errors="coerce").dt.strftime("%Y-%m-%d")
     prod_med_df = (
         df.assign(
             descripcion_servicio=df["descripcion_servicio"].fillna("Sin servicio"),
             dni_medico=df["dni_medico"].fillna("Sin DNI"),
+            fecha_atencion=fechas.fillna("Sin fecha")
         )
-        .groupby(["descripcion_servicio", "dni_medico"])
+        .groupby(["descripcion_servicio", "dni_medico", "fecha_atencion"])
         .size().reset_index(name="Atenciones")
         .sort_values("Atenciones", ascending=False)
     )
     total_att = int(prod_med_df["Atenciones"].sum())
     col_defs = [
-        {"headerName": "Servicio", "field": "descripcion_servicio", "minWidth": 350, "flex": 2},
+        
         {"headerName": "DNI Médico", "field": "dni_medico", "minWidth": 120},
+        {"headerName": "Fecha atención", "field": "fecha_atencion", "minWidth": 140},
+        {"headerName": "Servicio", "field": "descripcion_servicio", "minWidth": 350, "flex": 2},
         {"headerName": "Atenciones", "field": "Atenciones", "filter": "agNumberColumnFilter", "minWidth": 130}
     ]
     return dag.AgGrid(
@@ -450,12 +338,13 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
         dashGridOptions={
             "pinnedBottomRowData": [{
                 "descripcion_servicio": f"Total atenciones: {total_att:,}",
+                "fecha_atencion": "",
                 "Atenciones": total_att
             }],
             "onFirstDataRendered": {"function": "params.api.autoSizeAllColumns();"}
         },
         className="ag-theme-alpine",
-        style={"height": "420px", "width": "100%"}
+        style={"height": "750px", "width": "100%"}
     )
 
 # --- NUEVO: total dinámico para la tabla (suma Atenciones filtradas) ---
@@ -466,13 +355,14 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
 )
 def tm_actualizar_total_grid(filter_model, row_data):
     if not row_data:
-        return {"pinnedBottomRowData": [{"descripcion_servicio": "Total atenciones: 0", "Atenciones": 0}]}
+        return {"pinnedBottomRowData": [{"descripcion_servicio": "Total atenciones: 0", "fecha_atencion": "", "Atenciones": 0}]}
     filtrados = _tm_apply_filter(row_data, filter_model)
     df_f = pd.DataFrame(filtrados) if filtrados else pd.DataFrame(columns=["Atenciones"])
     total_att = int(pd.to_numeric(df_f.get("Atenciones", pd.Series(dtype=float)), errors="coerce").fillna(0).sum())
     return {
         "pinnedBottomRowData": [{
             "descripcion_servicio": f"Total atenciones: {total_att:,}",
+            "fecha_atencion": "",
             "Atenciones": total_att
         }],
         "statusBar": {
