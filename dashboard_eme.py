@@ -77,8 +77,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         suppress_callback_exceptions=True,
     )
 
-    dash_app.title = "SIEST"
-
     # Registrar callbacks de páginas de detalle
     from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
     ate_topicos_1.register_callbacks(dash_app)
@@ -135,27 +133,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             style=card_style
         )
 
-    def render_priority_table(dataframe, title):
-        heading = html.H6(
-            title,
-            className="fw-semibold",
-            style={
-                'fontSize': '11px',
-                'color': BRAND,
-                'letterSpacing': '0.6px',
-                'marginBottom': '8px',
-            }
-        ) if title else None
-
+    def render_priority_table(dataframe):
         if dataframe is None or dataframe.empty:
-            body_children = [heading] if heading else []
-            body_children.append(
+            body_children = [
                 html.P(
                     "Sin registros",
                     className="text-muted mb-0",
                     style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'}
                 )
-            )
+            ]
         else:
             table_body = html.Tbody([
                 html.Tr([
@@ -171,18 +157,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 for _, row in dataframe.iterrows()
             ])
 
-            body_children = [heading] if heading else []
-            body_children.append(
+            body_children = [
                 dbc.Table(
                     [table_body],
                     bordered=False,
-                    hover=True,
+                    hover=False,
                     responsive=True,
-                    striped=True,
+                    striped=False,
                     className="mb-0",
-                    style={'fontSize': '13px'}
+                    style={'fontSize': '12px'}
                 )
-            )
+            ]
 
         return dbc.Card(
             dbc.CardBody(
@@ -701,8 +686,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 "href": f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}",
                 "subtitle": f"Periodo {periodo} | {nombre_centro}",
                 "side_component": render_priority_table(
-                    prioridad_table,
-                    title=f"Prioridad {roman} por tópico"
+                    prioridad_table
                 )           
             })
 
@@ -725,10 +709,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 "border_color": ACCENT,
                 "subtitle": "Observación prolongada",
             },
-
-
-
-
         ])
 
         summary_sections = []

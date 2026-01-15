@@ -207,9 +207,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             dbc.Table(
                 [table_body],
                 bordered=False,
-                hover=True,
+                hover=False,
                 responsive=True,
-                striped=True,
+                striped=False,
                 className="mb-0",
                 style={'fontSize': '13px'}
             )
