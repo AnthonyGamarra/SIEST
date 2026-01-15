@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 import pandas as pd
 from backend.models import User
+from flask import session
 
 df=pd.DataFrame()
 
@@ -41,14 +42,16 @@ def get_centro_asistencial_by_code_red(code_red):
     df=pd.read_sql_query(query,create_connection(),params={"code_red": str(code_red)})
     return df
 
-
-
-
 def getNombreCentroAsistencial(request):
-    cod_cas = request.form.get('cod_cas', '')
-    df = get_centro_asistencial()
-    nombre_cas = df.loc[df['cenasicod'] == int(cod_cas), 'cenasidescor'].values
-    if len(nombre_cas) > 0:
-        return nombre_cas[0]
-    else:
-        return None
+    codcas = request.form.get('codcas', '') or request.args.get('codcas', '')
+
+    if not codcas:
+        return ''
+
+    df=get_centro_asistencial()
+    
+    name_centro=df[df['cenasicod']==codcas]['cenasidescor'].values[0]
+
+    return name_centro
+
+

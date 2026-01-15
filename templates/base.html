@@ -89,9 +89,13 @@
     {% if current_user.is_authenticated %} {% if show_modules|default(True) %}
 
     <div class="main">
-      {%  if current_user.role != 'user' %}
+      {% if current_user.role != 'user' %}
       <div class="modules-section">
-        <form class="codcas-selector">
+        <form
+          class="codcas-selector"
+          method="post"
+          action="{{ url_for('main.index') }}"
+        >
           <div class="d-flex align-items-center mb-3">
             <img
               src="{{ url_for('static', filename='SIEST.png') }}"
@@ -100,7 +104,7 @@
             />
             <div>
               <h2>Seleccione un centro</h2>
-              {% if  current_user.code_red != None %}
+              {% if current_user.code_red != None %}
               <p class="text-muted mb-0 small">
                 Elija el centro para ver los módulos disponibles de su red {{
                 current_user.code_red }}
@@ -116,7 +120,7 @@
             <label for="codcas" class="form-label" style="font-weight: 500"
               >Centro asistencial</label
             >
-            {% if  current_user.code_red != None %}
+            {% if current_user.code_red != None %}
             <select
               id="codcas"
               name="codcas"
@@ -125,8 +129,7 @@
               style="border-radius: 0.7rem; width: 100%"
             >
               <option value="">Seleccionar centro...</option>
-              {% for centro in
-              centros_asistenciales_by_code_red %}
+              {% for centro in centros_asistenciales_by_code_red %}
               <option value="{{ centro.cenasicod }}">
                 {{ centro.cenasidescor }}
               </option>
@@ -161,6 +164,12 @@
 
       <div class="modules-container">
         <div class="modules-header" style="color: #ffffff">
+          {% if getNombreCentroAsistencial() %}
+          <h1 class="modules-titles">
+            El centro elegido es {{ getNombreCentroAsistencial() }}
+          </h1>
+          {% endif %}
+
           <h1 class="modules-title">Módulos disponibles</h1>
           <p class="modules-subtitle">
             Accede a los diferentes servicios de la plataforma
@@ -222,7 +231,8 @@
           </div>
 
           <!-- Módulo 5: reportes gerenciales -->
-          {% if current_user.role == 'admin' or current_user.role == 'admin_red'%}
+          {% if current_user.role == 'admin' or current_user.role ==
+          'admin_red'%}
           <a href="{{ url_for('main.reportes_gerenciales') }}" class="module">
             <img
               src="{{ url_for('static', filename='analytics.png') }}"

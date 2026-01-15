@@ -4,23 +4,29 @@ from extensions import db
 from backend.models import User
 from flask import current_app
 from bi import get_bi_url
+from backend.models import dashboard_code_for_user
 from secure_code import encode_code
 from backend.centro_asistencial import get_centro_asistencial
 from backend.centro_asistencial import get_centro_asistencial_by_code_red
+from backend.centro_asistencial import getNombreCentroAsistencial
+
 
 
 def register_routes(app):
 
-	from backend.models import dashboard_code_for_user
+	
 	bp = Blueprint('main', __name__)
 	@bp.app_context_processor
 	def inject_flags():
 		return {
 			'has_reportes_gerenciales': 'main.reportes_gerenciales' in current_app.view_functions,
-			'dashboard_code_for_user': lambda: dashboard_code_for_user(current_user, request)
+			'dashboard_code_for_user': lambda: dashboard_code_for_user(current_user, request),
+			'getNombreCentroAsistencial': lambda: getNombreCentroAsistencial (request),
 		}
+	
 
-	@bp.route('/')
+
+	@bp.route('/', methods=['GET', 'POST'])
 	@login_required
 	def index():
 		df = get_centro_asistencial()
