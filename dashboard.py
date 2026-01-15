@@ -211,7 +211,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 responsive=True,
                 striped=True,
                 className="mb-0",
-                style={'fontSize': '10px'}
+                style={'fontSize': '13px'}
             )
         )
 
@@ -961,7 +961,22 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                         dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom', style={'zIndex': 9999}),
                                         dbc.Tooltip("Buscar datos", target='search-button', placement='bottom', style={'zIndex': 9999}),
                                         dbc.Tooltip("Descargar Excel", target='download-button', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
+                                        dbc.Row([
+                                            dbc.Col(
+                                                html.Div(
+                                                    dcc.Loading(
+                                                        className='dashboard-loading-inline',
+                                                        parent_className='dashboard-loading-parent',
+                                                        parent_style={'width': '100%'},
+                                                        type='default',
+                                                        style={'width': '100%'},
+                                                        children=html.Div(id='summary-container')
+                                                    ),
+                                                    className='dashboard-loading-shell'
+                                                ),
+                                                width=12
+                                            )
+                                        ]),
                                         html.Br(),
                                         dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
                                         html.Br(),
@@ -1036,7 +1051,22 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                         dbc.Tooltip("Regresar al inicio", target='back-button-complementaria', placement='bottom', style={'zIndex': 9999}),
                                         dbc.Tooltip("Buscar datos", target='search-button-complementaria', placement='bottom', style={'zIndex': 9999}),
                                         dbc.Tooltip("Descargar Excel", target='download-button-complementaria', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Row([dbc.Col(html.Div(id='summary-container-complementaria'), width=12)]),
+                                        dbc.Row([
+                                            dbc.Col(
+                                                html.Div(
+                                                    dcc.Loading(
+                                                        className='dashboard-loading-inline',
+                                                        parent_className='dashboard-loading-parent',
+                                                        parent_style={'width': '100%'},
+                                                        type='default',
+                                                        style={'width': '100%'},
+                                                        children=html.Div(id='summary-container-complementaria')
+                                                    ),
+                                                    className='dashboard-loading-shell'
+                                                ),
+                                                width=12
+                                            )
+                                        ]),
                                         html.Br(),
                                         dbc.Row([dbc.Col(html.Div(id='charts-container-complementaria'), width=12)]),
                                         html.Br(),
@@ -1472,6 +1502,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     )
     def go_root(*_):
         return "/"
+
+    @dash_app.callback(
+        Output('filter-periodo-complementaria', 'value'),
+        Input('filter-periodo', 'value')
+    )
+    def sync_periodo_with_complementaria(periodo_value):
+        return periodo_value
 
     @dash_app.callback(
         Output("download-dataframe-csv", "data"),

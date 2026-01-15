@@ -259,6 +259,23 @@ layout = html.Div([
                             style={"marginTop": "10px", "color": MUTED, "fontFamily": FONT_FAMILY, "fontSize": "12px", "fontWeight": "600"}
                         )
                     ], style={**CARD_STYLE}),
+                    # Tercer bloque: matriz antes de la tabla
+                    html.Div([
+                        html.Div([
+                            html.I(
+                                className="bi bi-grid-3x3",
+                                style={'fontSize': '20px', 'color': BRAND, 'marginRight': '10px'}
+                            ),
+                            html.H5(
+                                "Matriz de horas efectivas por día",
+                                style={"margin": 0, "color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700}
+                            )
+                        ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '16px'}),
+                        dcc.Loading(
+                            html.Div(id="he-matriz-wrapper", style={"marginTop": "12px"}),
+                            type="dot"
+                        )
+                    ], style={**CARD_STYLE, "marginTop": "12px"}),
                     # Tercer bloque: reemplazado por tabla resumen horas
                     html.Div([
                         html.H5("Resumen horas efectivas",
@@ -336,7 +353,6 @@ def build_query(periodo: str, codcas: str) -> str:
             ag.agrupador,
             e.especialidad,
             a.actespnom as subactividad,
-            ce.dni_medico,
             ce.fecha_prog,
             ce.horas_efec_def
         FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo} AS ce
@@ -514,6 +530,90 @@ def update_second_figs(data):
     )
     fig_esp = style_horizontal_bar(fig_esp, "Horas efectivas", "Especialidad")
     return fig_agr, fig_esp
+
+
+@callback(
+    Output("he-matriz-wrapper", "children"),
+    Input("he-store-data", "data")
+)
+def build_matriz_horas(data):
+    error_style = {"color": "#b00", "fontFamily": FONT_FAMILY}
+    if not data:
+        return html.Div("Sin datos de horas efectivas.", style=error_style)
+
+    df = pd.DataFrame(data)
+    if df.empty:
+        return html.Div("Sin datos de horas efectivas.", style=error_style)
+
+    df["horas_efec_def"] = pd.to_numeric(df.get("horas_efec_def", 0), errors="coerce").fillna(0).astype(float)
+    df["dni_medico"] = df.get("dni_medico", "").fillna("Sin DNI").replace("", "Sin DNI")
+    df["fecha_prog"] = pd.to_datetime(df.get("fecha_prog"), errors="coerce").dt.strftime("%Y-%m-%d").fillna("Sin fecha")
+
+    df_valid = df[df["fecha_prog"] != "Sin fecha"].copy()
+    if df_valid.empty:
+        return html.Div("No hay fechas válidas en los datos.", style=error_style)
+
+    pivot_df = (
+        df_valid.groupby(["dni_medico", "fecha_prog"])["horas_efec_def"].sum().unstack(fill_value=0)
+    )
+    pivot_df = pivot_df.reindex(sorted(pivot_df.columns), axis=1)
+    pivot_df["Total"] = pivot_df.sum(axis=1)
+    pivot_df = pivot_df.sort_values("Total", ascending=False).reset_index()
+
+    date_columns = [col for col in pivot_df.columns if col not in ["dni_medico", "Total"]]
+
+    col_defs = [
+        {
+            "headerName": "DNI Médico",
+            "field": "dni_medico",
+            "pinned": "left",
+            "minWidth": 140,
+            "cellStyle": {"fontWeight": "bold", "backgroundColor": "#f8f9fa"}
+        }
+    ]
+
+    for fecha in date_columns:
+        col_defs.append({
+            "headerName": fecha,
+            "field": fecha,
+            "filter": "agNumberColumnFilter",
+            "minWidth": 110,
+            "cellStyle": {
+                "function": "Number(params.value || 0) > 0 ? {backgroundColor: '#ECF5FB', fontWeight: '600'} : {}"
+            }
+        })
+
+    col_defs.append({
+        "headerName": "Total",
+        "field": "Total",
+        "pinned": "right",
+        "filter": "agNumberColumnFilter",
+        "minWidth": 120,
+        "cellStyle": {"fontWeight": "bold", "backgroundColor": "#7FB9DE"}
+    })
+
+    total_row = {"dni_medico": "TOTAL"}
+    for col in date_columns + ["Total"]:
+        total_row[col] = float(pivot_df[col].sum())
+
+    return dag.AgGrid(
+        id="he-matriz-grid",
+        columnDefs=col_defs,
+        rowData=pivot_df.to_dict("records"),
+        defaultColDef={
+            "sortable": True,
+            "resizable": True,
+            "filter": "agTextColumnFilter",
+            "floatingFilter": False,
+            "flex": 0
+        },
+        dashGridOptions={
+            "pinnedBottomRowData": [total_row],
+            "onFirstDataRendered": {"function": "params.api.autoSizeAllColumns();"}
+        },
+        className="ag-theme-alpine",
+        style={"height": "650px", "width": "100%"}
+    )
 
 @callback(
     Output("he-grid", "rowData"),

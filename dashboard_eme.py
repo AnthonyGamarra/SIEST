@@ -61,7 +61,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
 
     # Use a unique name for the Dash instance to avoid conflicts when mounting multiple apps on the same Flask server
     app_name = f"dash_{url_base_pathname.strip('/').replace('/', '_') or 'alt'}"
-    
 
     # asegurar carpeta de assets correcta (assets junto a este archivo) y assets_url_path consistente
     assets_path = os.path.join(os.path.dirname(__file__), "assets")
@@ -77,7 +76,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         external_stylesheets=external_stylesheets,
         suppress_callback_exceptions=True,
     )
+
     dash_app.title = "SIEST"
+
     # Registrar callbacks de páginas de detalle
     from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
     ate_topicos_1.register_callbacks(dash_app)
@@ -179,7 +180,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     responsive=True,
                     striped=True,
                     className="mb-0",
-                    style={'fontSize': '10px'}
+                    style={'fontSize': '13px'}
                 )
             )
 
@@ -222,7 +223,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                     'marginRight': '12px'
                                 }),
                                 html.H2(
-                                    "Emergencias - Atenciones por Tópico y Prioridad",
+                                    "Emergencias - Prioridad por tópico",
                                     style={
                                         'color': BRAND,
                                         'fontFamily': FONT_FAMILY,
@@ -330,9 +331,39 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 }),
 
                 # CONTENEDORES
-                dbc.Row([dbc.Col(html.Div(id='summary-container'), width=12)]),
+                dbc.Row([
+                    dbc.Col(
+                        html.Div(
+                            dcc.Loading(
+                                className='dashboard-loading-inline',
+                                parent_className='dashboard-loading-parent',
+                                parent_style={'width': '100%'},
+                                type='default',
+                                style={'width': '100%'},
+                                children=html.Div(id='summary-container')
+                            ),
+                            className='dashboard-loading-shell'
+                        ),
+                        width=12
+                    )
+                ]),
                 html.Br(),
-                dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
+                dbc.Row([
+                    dbc.Col(
+                        html.Div(
+                            dcc.Loading(
+                                className='dashboard-loading-inline',
+                                parent_className='dashboard-loading-parent',
+                                parent_style={'width': '100%'},
+                                type='default',
+                                style={'width': '100%'},
+                                children=html.Div(id='charts-container')
+                            ),
+                            className='dashboard-loading-shell'
+                        ),
+                        width=12
+                    )
+                ]),
                 ], id='main-eme-content'),
 
                 # Contenedor para páginas de detalle
@@ -585,11 +616,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         prioridades_data = {}
         priority_tables = {}
         prioridad_labels = {
-            '1': 'Total de Atenciones por Prioridad 1',
-            '2': 'Total de Atenciones por Prioridad 2',
-            '3': 'Total de Atenciones por Prioridad 3',
-            '4': 'Total de Atenciones por Prioridad 4',
-            '5': 'Total de Atenciones por Prioridad 5'
+            '1': 'Prioridad I',
+            '2': 'Prioridad II',
+            '3': 'Prioridad III',
+            '4': 'Prioridad IV',
+            '5': 'Prioridad V'
         }
         
         for prioridad in ['1', '2', '3', '4', '5']:
@@ -648,10 +679,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         total_atenciones = sum(prioridades_data.values())
         subtitle = f"Periodo {periodo} | {nombre_centro}"
 
+        ROMAN_PRIORIDADES = {
+                        1: "I",
+                        2: "II",
+                        3: "III",
+                        4: "IV",
+                        5: "V",
+                    }
+
         cards = []
 
         for prioridad, label in prioridad_labels.items():
             prioridad_table = priority_tables.get(prioridad)
+
+            roman = ROMAN_PRIORIDADES.get(prioridad, str(prioridad))
+
             cards.append({
                 "title": label,
                 "value": f"{prioridades_data.get(prioridad, 0):,.0f}",
@@ -660,29 +702,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 "subtitle": f"Periodo {periodo} | {nombre_centro}",
                 "side_component": render_priority_table(
                     prioridad_table,
-                    title=f"Atenciones por tópico prioridad {prioridad}"
-                )
+                    title=f"Prioridad {roman} por tópico"
+                )           
             })
 
         cards.extend([
             {
-                "title": "Defunciones registradas",
+                "title": "Defunciones",
                 "value": f"{defunciones_data:,.0f}",
                 "border_color": "#6c757d",
                 "subtitle": subtitle,
             },
             {
-                "title": "Estancias mayor a 24h",
-                "value": f"{mayor_24h_total:,.0f}",
-                "border_color": ACCENT,
-                "subtitle": "Observación prolongada",
-            },
-            {
-                "title": "Estancias menor o igual a 24h",
+                "title": "Egreso Pac.Sala Obs.<= 24 Horas",
                 "value": f"{menor_24h_total:,.0f}",
                 "border_color": BRAND_SOFT,
                 "subtitle": "Observación corta",
             },
+            {
+                "title": "Egreso Pac.Sala Obs.> 24 Horas",
+                "value": f"{mayor_24h_total:,.0f}",
+                "border_color": ACCENT,
+                "subtitle": "Observación prolongada",
+            },
+
+
+
+
         ])
 
         summary_sections = []

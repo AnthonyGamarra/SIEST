@@ -415,14 +415,15 @@ def register_callbacks(app):
                 .reset_index(name='Atenciones')
                 .sort_values('fecha_aten')
             )
-            timeline_fig = px.line(
+            timeline_fig = px.bar(
                 timeline_df,
                 x='fecha_aten',
                 y='Atenciones',
-                markers=True,
-                line_shape="linear",
+                color='Atenciones',
+                color_continuous_scale=BAR_COLOR_SCALE,
+                text='Atenciones'
             )
-            timeline_fig.update_traces(line_color=BRAND, marker_color=BRAND)
+            timeline_fig.update_traces(marker_line=dict(color='rgba(0,0,0,0.08)', width=1), texttemplate='%{text:,.0f}', textposition='outside')
             timeline_fig.update_layout(
                 xaxis_title="Fecha de Atención",
                 yaxis_title="Atenciones",
@@ -430,6 +431,9 @@ def register_callbacks(app):
                 paper_bgcolor="#F9FBFD",
                 font=dict(family=FONT_FAMILY, color="#1F2937"),
                 margin=dict(l=60, r=32, t=70, b=40),
+                hoverlabel=dict(bgcolor="#FFFFFF", font=dict(family=FONT_FAMILY, color="#0F172A")),
+                bargap=0.2,
+                showlegend=False
             )
         except Exception as e:
             timeline_fig = empty_fig("Atenciones por Fecha")

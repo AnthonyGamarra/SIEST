@@ -257,6 +257,19 @@ layout = html.Div([
                 selected_style=TAB_SELECTED_STYLE,
                 children=html.Div([
                     html.Div([
+                        html.Div([
+                            html.I(
+                                className="bi bi-calendar-week",
+                                style={'fontSize': '20px', 'color': BRAND, 'marginRight': '10px'}
+                            ),
+                            html.H5(
+                                "Matriz de Atenciones por Día",
+                                style={"margin": 0, "color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700}
+                            )
+                        ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '16px'}),
+                        html.Div(id="tm-matriz-wrapper", style={"marginTop": "12px"})
+                    ], style={**CARD_STYLE}),
+                    html.Div([
                         dcc.Loading(
                             html.Div([
                                 # Gráfico agrupador + especialidad (lado a lado)
@@ -268,9 +281,8 @@ layout = html.Div([
                             style={"marginTop": "6px", "color": MUTED, "fontFamily": FONT_FAMILY, "fontSize": "12px", "fontWeight": "bold"}
                         ),
                         html.Div(id="tm-table-wrapper", style={"marginTop": "12px"})
-                    ], style={**CARD_STYLE}),
-
-                ], style={"padding": "8px"})
+                    ], style={**CARD_STYLE})
+                ], style={"padding": "8px", "display": "flex", "flexDirection": "column", "gap": "12px"})
             )
         ],
         content_style=TABS_CONTAINER_STYLE
@@ -391,6 +403,126 @@ def tm_actualizar_total_grid(filter_model, row_data):
             ]
         }
     }
+
+
+@callback(
+    Output("tm-matriz-wrapper", "children"),
+    Input("tm-location", "pathname"),
+    Input("tm-location", "search"),
+    State("filter-periodo", "value")
+)
+def update_matriz_medicos(pathname, search, periodo_dropdown):
+    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
+    if not codcas:
+        return html.Div("Sin ruta.", style={"color": "#b00"})
+    if not periodo:
+        return html.Div("Falta periodo.", style={"color": "#b00"})
+    engine = create_connection()
+    if engine is None:
+        return html.Div("Error de conexión a la base de datos.", style={"color": "#b00"})
+    
+    query = f"""
+         SELECT ce.dni_medico,
+             ce.fecha_atencion
+        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        WHERE ce.cod_centro = '{codcas}'
+          AND ce.cod_actividad = '91'
+          AND ce.clasificacion in (2,4,6)
+          AND ce.cod_variable = '001'
+    """
+    try:
+        df = pd.read_sql(query, engine)
+    except Exception as e:
+        return html.Div(f"Error consulta: {e}", style={"color": "#b00"})
+    
+    if df.empty:
+        return html.Div("Sin datos de atenciones.", style={"color": "#b00"})
+    
+    # Formatear fechas y limpiar datos
+    fechas = _tm_format_fecha_atencion(df["fecha_atencion"])
+    df = df.assign(
+        dni_medico=df["dni_medico"].fillna("Sin DNI"),
+        fecha_atencion=fechas
+    )
+    
+    # Filtrar fechas válidas (excluir "Sin fecha")
+    df_valid = df[df["fecha_atencion"] != "Sin fecha"].copy()
+    
+    if df_valid.empty:
+        return html.Div("No hay fechas válidas en los datos.", style={"color": "#b00"})
+    
+    # Crear tabla pivotada: DNI en filas, fechas en columnas, conteo de atenciones
+    pivot_df = df_valid.groupby(["dni_medico", "fecha_atencion"]).size().unstack(fill_value=0)
+    
+    # Ordenar columnas por fecha
+    pivot_df = pivot_df.reindex(sorted(pivot_df.columns), axis=1)
+    
+    # Agregar columna de total por médico
+    pivot_df["Total"] = pivot_df.sum(axis=1)
+    
+    # Ordenar filas por total descendente
+    pivot_df = pivot_df.sort_values("Total", ascending=False)
+    
+    # Resetear índice para tener dni_medico como columna
+    pivot_df = pivot_df.reset_index()
+    
+    # Preparar columnas para AG Grid
+    col_defs = [
+        {
+            "headerName": "DNI Médico", 
+            "field": "dni_medico", 
+            "pinned": "left",
+            "minWidth": 120,
+            "cellStyle": {"fontWeight": "bold", "backgroundColor": "#f8f9fa"}
+        }
+    ]
+    
+    # Agregar columnas para cada fecha
+    for fecha in sorted([col for col in pivot_df.columns if col not in ["dni_medico", "Total"]]):
+        col_defs.append({
+            "headerName": fecha,
+            "field": fecha,
+            "filter": "agNumberColumnFilter",
+            "minWidth": 100,
+            "cellStyle": {
+                "function": "params.value > 0 ? {'backgroundColor': '#ECF5FB', 'fontWeight': '600'} : {}"
+            }
+        })
+    
+    # Agregar columna Total
+    col_defs.append({
+        "headerName": "Total",
+        "field": "Total",
+        "pinned": "right",
+        "filter": "agNumberColumnFilter",
+        "minWidth": 100,
+        "cellStyle": {"fontWeight": "bold", "backgroundColor": "#7FB9DE"}
+    })
+    
+    # Calcular fila de totales por columna
+    total_row = {"dni_medico": "TOTAL"}
+    for col in pivot_df.columns:
+        if col != "dni_medico":
+            total_row[col] = int(pivot_df[col].sum())
+    
+    return dag.AgGrid(
+        id="tm-matriz-grid",
+        columnDefs=col_defs,
+        rowData=pivot_df.to_dict("records"),
+        defaultColDef={
+            "sortable": True,
+            "resizable": True,
+            "filter": True,
+            "floatingFilter": False,
+            "flex": 0
+        },
+        dashGridOptions={
+            "pinnedBottomRowData": [total_row],
+            "onFirstDataRendered": {"function": "params.api.autoSizeAllColumns();"}
+        },
+        className="ag-theme-alpine",
+        style={"height": "700px", "width": "100%"}
+    )
 
 
 @callback(
