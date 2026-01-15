@@ -287,6 +287,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     e.especialidad,
                     a.actespnom,
                     am.actdes,
+                    ag.agrupador,
                     ca.cenasides
                 FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -301,6 +302,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.sgss_cmcas10 AS ca
                     ON ce.cod_oricentro = ca.oricenasicod
                     AND ce.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                 WHERE ce.cod_centro = :codcas
                 AND ce.cod_actividad = '91'
                 AND ce.cod_variable = '001'
@@ -345,6 +347,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     e.especialidad,
                     a.actespnom,
                     am.actdes,
+                    ag.agrupador,
                     ca.cenasides 
                 FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -359,6 +362,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.sgss_cmcas10 AS ca
                     ON p.cod_oricentro = ca.oricenasicod
                     AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE p.cod_centro = :codcas
                 AND p.cod_actividad = '91'
                 AND p.cod_variable = '001'
@@ -371,6 +375,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     e.especialidad,
                     a.actespnom,
                     am.actdes,
+                    ag.agrupador,
                     ca.cenasides
                 FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -385,6 +390,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.sgss_cmcas10 AS ca
                     ON ce.cod_oricentro = ca.oricenasicod
                     AND ce.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                 WHERE ce.cod_centro = :codcas
                 AND ce.cod_actividad = '91'
                 AND ce.clasificacion IN (1,3,0)
@@ -397,6 +403,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     e.especialidad,
                     a.actespnom,
                     am.actdes,
+                    ag.agrupador,
                     ca.cenasides 
                 FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -411,6 +418,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.sgss_cmcas10 AS ca
                     ON p.cod_oricentro = ca.oricenasicod
                     AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE p.cod_centro = :codcas
                 AND p.cod_actividad = '91'
                 AND p.cod_variable = '001'
@@ -531,6 +539,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     e.especialidad,
                     a.actespnom,
                     am.actdes,
+                    ag.agrupador,
                     ca.cenasides
                 FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -545,6 +554,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.sgss_cmcas10 AS ca
                     ON ce.cod_oricentro = ca.oricenasicod
                     AND ce.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                 WHERE ce.cod_centro = :codcas
                 AND cod_servicio= 'A91'
             """),
@@ -672,13 +682,41 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
         atenciones_df = results.get("atenciones", pd.DataFrame())
         horas_efectivas_df = results.get("horas_efectivas", pd.DataFrame())
+        if not horas_efectivas_df.empty and 'horas_efec_def' in horas_efectivas_df:
+            horas_efectivas_df['horas_efec_def'] = pd.to_numeric(
+                horas_efectivas_df['horas_efec_def'], errors='coerce'
+            ).fillna(0)
+        horas_efectivas_df_agru = (
+            horas_efectivas_df.groupby('agrupador', dropna=False)['horas_efec_def']
+            .sum()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+            if (
+                not horas_efectivas_df.empty
+                and 'agrupador' in horas_efectivas_df
+                and 'horas_efec_def' in horas_efectivas_df
+            )
+            else pd.DataFrame(columns=['agrupador', 'counts'])
+        )
         horas_programadas_df = results.get("horas_programadas", pd.DataFrame())
         citados_df = results.get("citados", pd.DataFrame())
+        citados_df_agru = (
+            citados_df.groupby(["agrupador"])
+            .size()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+            if not citados_df.empty else pd.DataFrame(columns=['agrupador', 'counts'])
+        )
         desercion_df = results.get("desercion", pd.DataFrame())
+        desercion_agru = (
+            desercion_df.groupby(["agrupador"])
+            .size()
+            .reset_index(name='counts')
+            .sort_values('counts', ascending=False)
+            if not desercion_df.empty else pd.DataFrame(columns=['agrupador', 'counts'])
+        ) 
         medicos_agr = results.get("medicos_agrup", pd.DataFrame())
 
-        if not horas_efectivas_df.empty and 'horas_efec_def' in horas_efectivas_df:
-            horas_efectivas_df['horas_efec_def'] = pd.to_numeric(horas_efectivas_df['horas_efec_def'], errors='coerce').fillna(0)
         if not horas_programadas_df.empty and 'total_horas' in horas_programadas_df:
             horas_programadas_df['total_horas'] = pd.to_numeric(horas_programadas_df['total_horas'], errors='coerce').fillna(0)
 
@@ -705,7 +743,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             .nunique()
             .reset_index(name='counts')
             .sort_values('counts', ascending=False)
-            if not atenciones_df.empty else pd.DataFrame(columns=['agrupador', 'counts'])
+            if not medicos_agr.empty else pd.DataFrame(columns=['agrupador', 'counts'])
         )
 
         total_horas_efectivas = float(horas_efectivas_df['horas_efec_def'].sum()) if 'horas_efec_def' in horas_efectivas_df else 0
@@ -736,7 +774,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             'atenciones_por_agrupador': total_atenciones_agru,
             'consultantes_por_servicio': total_consultantes_por_servicio,
             'medicos_por_agrupador': medicos_por_agrupador,
-            'horas_programadas_por_agrupador': horas_programadas_por_agrupador
+            'horas_programadas_por_agrupador': horas_programadas_por_agrupador,
+            'horas_efectivas_por_agrupador': horas_efectivas_df_agru,
+            'desercion_por_agrupador': desercion_agru,
+            'citados_por_agrupador': citados_df_agru
         }
 
         return {
@@ -1079,6 +1120,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
         medicos_por_agrupador_table = tables['medicos_por_agrupador']
         horas_programadas_table = tables['horas_programadas_por_agrupador']
+
+        desercion_por_agrupador_table = tables.get('desercion_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
+        citados_por_agrupador_table = tables.get('citados_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
+        horas_efectivas_por_agrupador_table = tables.get('horas_efectivas_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
         base = url_base_pathname.rstrip('/') + '/'
         subtitle = f"Periodo {periodo} | {nombre_centro}"
         total_consultantes_servicio = (
@@ -1097,8 +1142,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "value": f"{total_consultantes_servicio:,.0f}",
                 "border_color": ACCENT,
                 "side_component": render_agrupador_table(
-                    total_consultantes_por_servicio_table,
-                    title="Consultantes al servicio"
+                    total_consultantes_por_servicio_table
                 ),
             },
             {
@@ -1109,23 +1153,29 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "side_component": render_agrupador_table(total_atenciones_agru),
             },
             {
-                "title": "Total de Médicos",
+                "title": "Número de Médicos",
                 "value": f"{total_medicos:,.0f}",
                 "border_color": BRAND_SOFT,
                 "href": f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
                 "side_component": render_agrupador_table(medicos_por_agrupador_table),
             },
             {
-                "title": "Total deserción citas",
+                "title": "Número de deserciones",
                 "value": f"{total_desercion_citas:,.0f}",
                 "border_color": BRAND_SOFT,
                 "href": f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}",
+                "side_component": render_agrupador_table(
+                    desercion_por_agrupador_table
+                ),
             },
             {
-                "title": "Total Citas",
+                "title": "Número de citas otorgadas",
                 "value": f"{total_citados:,.0f}",
                 "border_color": ACCENT,
                 "href": f"{base}dash/total_citados/{codcas_url}?periodo={periodo}",
+                "side_component": render_agrupador_table(
+                    citados_por_agrupador_table
+                ),
             },
             {
                 "title": "Total horas programadas",
@@ -1135,10 +1185,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
             },
             {
-                "title": "Total de Horas Efectivas",
+                "title": "Total de horas Efectivas (Ejecutada)",
                 "value": f"{total_horas_efectivas:,.0f}",
                 "border_color": ACCENT,
                 "href": f"{base}dash/horas_efectivas/{codcas_url}?periodo={periodo}",
+                "side_component": render_agrupador_table(
+                    horas_efectivas_por_agrupador_table,
+                    value_format="{:,.2f}"
+                ),
             }
         ]
         summary_sections = []
@@ -1261,6 +1315,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
         medicos_por_agrupador_table = tables['medicos_por_agrupador']
         horas_programadas_table = tables['horas_programadas_por_agrupador']
+        horas_efectivas_por_agrupador_table = tables.get(
+            'horas_efectivas_por_agrupador',
+            pd.DataFrame(columns=['agrupador', 'counts'])
+        )
 
         subtitle = f"Periodo {periodo} | {nombre_centro}"
         total_consultantes_servicio = (
@@ -1309,6 +1367,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "value": f"{total_horas_efectivas:,.0f}",
                 "border_color": ACCENT,
                 "href": None,
+                "side_component": render_agrupador_table(
+                    horas_efectivas_por_agrupador_table,
+                    value_format="{:,.2f}"
+                ),
             }
         ]
 
