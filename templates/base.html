@@ -212,15 +212,6 @@
           </div>
           {% endif %}
 
-          <!-- Módulo 3: Hospitalización (desactivado) -->
-          <div class="module inactive">
-            <img
-              src="{{ url_for('static', filename='hospitalizacion.png') }}"
-              alt="Hospitalización"
-            />
-            <span>Hospitalización</span>
-          </div>
-
           <!-- Módulo 4: Laboratorio (desactivado) -->
           <div class="module inactive">
             <img
@@ -229,6 +220,16 @@
             />
             <span>Centro quirúrgico</span>
           </div>
+
+          <!-- Módulo 3: Hospitalización (desactivado) -->
+          <div class="module inactive">
+            <img
+              src="{{ url_for('static', filename='hospitalizacion.png') }}"
+              alt="Hospitalización"
+            />
+            <span>Procedimientos</span>
+          </div>
+
 
           <!-- Módulo 5: reportes gerenciales -->
           {% if current_user.role == 'admin' or current_user.role ==
