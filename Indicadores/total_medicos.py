@@ -52,6 +52,20 @@ TAB_SELECTED_STYLE = {
     "fontWeight": "700"
 }
 
+DEFAULT_TIPO_ASEGURADO = "Todos"
+TIPO_ASEGURADO_CLAUSES = {
+    "asegurado": "('1')",
+    "1": "('1')",
+    "no asegurado": "('2')",
+    "2": "('2')",
+    "todos": "('1','2')"
+}
+
+
+def resolve_tipo_asegurado_clause(value: str | None) -> str:
+    key = str(value).strip().lower() if value else ""
+    return TIPO_ASEGURADO_CLAUSES.get(key, TIPO_ASEGURADO_CLAUSES["todos"])
+
 # Helpers reutilizables
 def empty_fig(title: str | None = None) -> go.Figure:
     fig = go.Figure()
@@ -99,15 +113,26 @@ def _parse_anio(search: str) -> str | None:
     return _parse_query_param(search, "anio")
 
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_dropdown: str):
+def _parse_codasegu(search: str) -> str | None:
+    return _parse_query_param(search, "codasegu")
+
+
+def get_codcas_periodo(
+    pathname: str,
+    search: str,
+    periodo_dropdown: str,
+    anio_dropdown: str,
+    tipo_asegurado_dropdown: str | None = None,
+):
     if not pathname:
-        return None, None, None
+        return None, None, None, DEFAULT_TIPO_ASEGURADO
     import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
     anio = _parse_anio(search) or anio_dropdown
-    return codcas, periodo, anio
+    codasegu = _parse_codasegu(search) or tipo_asegurado_dropdown or DEFAULT_TIPO_ASEGURADO
+    return codcas, periodo, anio, codasegu
 
 # Conexión DB
 def create_connection():
@@ -320,10 +345,18 @@ register_page(
     Input("tm-location", "pathname"),
     Input("tm-location", "search"),
     State("filter-periodo", "value"),
-    State("filter-anio", "value")
+    State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
 )
-def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown):
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(
+        pathname,
+        search,
+        periodo_dropdown,
+        anio_dropdown,
+        tipo_dropdown,
+    )
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas:
         return html.Div("Sin ruta.", style={"color": "#b00"})
     if not periodo or not anio:
@@ -341,6 +374,12 @@ def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown):
           AND ce.cod_actividad = '91'
           AND ce.clasificacion in (2,4,6)
           AND ce.cod_variable = '001'
+          AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu_clause}
     """
     try:
         df = pd.read_sql(query, engine)
@@ -420,10 +459,18 @@ def tm_actualizar_total_grid(filter_model, row_data):
     Input("tm-location", "pathname"),
     Input("tm-location", "search"),
     State("filter-periodo", "value"),
-    State("filter-anio", "value")
+    State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
 )
-def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown):
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(
+        pathname,
+        search,
+        periodo_dropdown,
+        anio_dropdown,
+        tipo_dropdown,
+    )
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas:
         return html.Div("Sin ruta.", style={"color": "#b00"})
     if not periodo or not anio:
@@ -440,6 +487,12 @@ def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown):
           AND ce.cod_actividad = '91'
           AND ce.clasificacion in (2,4,6)
           AND ce.cod_variable = '001'
+          AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu_clause}
     """
     try:
         df = pd.read_sql(query, engine)
@@ -543,12 +596,20 @@ def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown):
     State("tm-location", "search"),
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
     prevent_initial_call=True
 )
-def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
+def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
     if not n_clicks:
         return None
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(
+        pathname,
+        search,
+        periodo_dropdown,
+        anio_dropdown,
+        tipo_dropdown,
+    )
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
@@ -587,6 +648,12 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown
           AND ce.cod_actividad = '91'
           AND ce.clasificacion in (2,4,6)
           AND ce.cod_variable = '001'
+          AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu_clause}
     """
     try:
         df = pd.read_sql(query, engine)

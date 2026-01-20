@@ -55,6 +55,19 @@ TAB_SELECTED_STYLE = {
     "fontWeight": "700"
 }
 
+DEFAULT_TIPO_ASEGURADO = "Todos"
+TIPO_ASEGURADO_CLAUSES = {
+    "asegurado": "('1')",
+    "1": "('1')",
+    "no asegurado": "('2')",
+    "2": "('2')",
+    "todos": "('1','2')"
+}
+
+def resolve_tipo_asegurado_clause(value: str | None) -> str:
+    key = str(value).strip().lower() if value else ""
+    return TIPO_ASEGURADO_CLAUSES.get(key, TIPO_ASEGURADO_CLAUSES["todos"])
+
 # Helpers reutilizables
 def empty_fig(title: str | None = None) -> go.Figure:
     fig = go.Figure()
@@ -322,18 +335,23 @@ def _parse_anio(search: str) -> str | None:
     return _parse_query_param(search, "anio")
 
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_dropdown: str):
+def _parse_codasegu(search: str) -> str | None:
+    return _parse_query_param(search, "codasegu")
+
+
+def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_dropdown: str, tipo_asegurado_dropdown: str | None = None):
     if not pathname:
-        return None, None, None
+        return None, None, None, DEFAULT_TIPO_ASEGURADO
     import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
     anio = _parse_anio(search) or anio_dropdown
-    return codcas, periodo, anio
+    codasegu = _parse_codasegu(search) or tipo_asegurado_dropdown or DEFAULT_TIPO_ASEGURADO
+    return codcas, periodo, anio, codasegu
 
 # REEMPLAZO: función para construir query dinámicamente
-def build_query(periodo: str, anio: str, codcas: str) -> str:
+def build_query(periodo: str, anio: str, codcas: str, codasegu_clause: str) -> str:
     return f"""
     SELECT
         ce.cod_servicio,
@@ -361,6 +379,12 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
       AND ce.cod_actividad = '91'
       AND ce.cod_variable = '001'
       AND ce.cod_estado <>'0'
+      AND (
+                    CASE 
+                        WHEN ce.cod_paciente = '4' THEN '2'
+                        ELSE '1'
+                    END
+                    ) IN {codasegu_clause}
     """
 
 # Callback nuevo para los dos gráficos top10
@@ -376,9 +400,17 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
     Input("page-url", "search"),
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
 )
-def update_top_bars(pathname, search, periodo_dropdown, anio_dropdown):
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+def update_top_bars(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(
+        pathname,
+        search,
+        periodo_dropdown,
+        anio_dropdown,
+        tipo_dropdown,
+    )
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas:
         return (
             empty_fig("Top 10 servicios"),
@@ -405,7 +437,7 @@ def update_top_bars(pathname, search, periodo_dropdown, anio_dropdown):
             empty_fig("Total citas por servicio"),
             empty_fig("Total citas por subactividad"),
         )
-    query = build_query(periodo, anio, codcas)
+    query = build_query(periodo, anio, codcas, codasegu_clause)
     try:
         df = pd.read_sql(query, engine)
     except Exception as e:
@@ -586,9 +618,17 @@ def update_top_bars(pathname, search, periodo_dropdown, anio_dropdown):
     Input("page-url", "search"),
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
 )
-def render_tabla_prod_servicio(pathname, search, periodo_dropdown, anio_dropdown):
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+def render_tabla_prod_servicio(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(
+        pathname,
+        search,
+        periodo_dropdown,
+        anio_dropdown,
+        tipo_dropdown,
+    )
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas:
         return html.Div("Sin ruta.", style={"color": "#b00"})
     if not periodo or not anio:
@@ -599,7 +639,7 @@ def render_tabla_prod_servicio(pathname, search, periodo_dropdown, anio_dropdown
         return html.Div("Error de conexión a la base de datos.", style={"color": "#b00"})
 
     try:
-        df = pd.read_sql(build_query(periodo, anio, codcas), engine)
+        df = pd.read_sql(build_query(periodo, anio, codcas, codasegu_clause), engine)
     except Exception as e:
         return html.Div(f"Error ejecutando consulta: {e}", style={"color": "#b00"})
 
@@ -659,18 +699,26 @@ def render_tabla_prod_servicio(pathname, search, periodo_dropdown, anio_dropdown
     State("page-url", "search"),     # corrected id
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
     prevent_initial_call=True
 )
-def tc_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
+def tc_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
     if not n_clicks:
         return None
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(
+        pathname,
+        search,
+        periodo_dropdown,
+        anio_dropdown,
+        tipo_dropdown,
+    )
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
     if engine is None:
         return None
-    query = build_query(periodo, anio, codcas)
+    query = build_query(periodo, anio, codcas, codasegu_clause)
     try:
         df = pd.read_sql(query, engine)
     except Exception:
