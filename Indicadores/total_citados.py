@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
+from urllib.parse import parse_qs
 
 # Paleta similar a dashboard.py
 BRAND = "#0064AF"
@@ -123,16 +124,6 @@ def style_horizontal_bar(fig: go.Figure, x_title: str, y_title: str) -> go.Figur
     fig.update_yaxes(categoryorder="total ascending")
     fig.update_coloraxes(showscale=False)
     return fig
-
-# Helpers reutilizables
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
-    if not pathname:
-        return None, None
-    import secure_code as sc
-    codcas_url = pathname.rstrip("/").split("/")[-1]
-    codcas = sc.decode_code(codcas_url)
-    periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
 
 # Layout sin verificador de query
 layout = html.Div([
@@ -315,26 +306,34 @@ def create_connection():
         print(f"Failed to connect to the database: {e}")
         return None
 
-def _parse_periodo(search: str) -> str | None:
+def _parse_query_param(search: str, key: str) -> str | None:
     if not search:
         return None
-    # search llega como "?periodo=03&otra=x"
-    params = dict(
-        part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
-    )
-    return params.get("periodo")
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
+
+
+def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_dropdown: str):
     if not pathname:
-        return None, None
+        return None, None, None
     import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
+    anio = _parse_anio(search) or anio_dropdown
+    return codcas, periodo, anio
 
 # REEMPLAZO: función para construir query dinámicamente
-def build_query(periodo: str, codcas: str) -> str:
+def build_query(periodo: str, anio: str, codcas: str) -> str:
     return f"""
     SELECT
         ce.cod_servicio,
@@ -349,7 +348,7 @@ def build_query(periodo: str, codcas: str) -> str:
         ct.tipopacinom AS tipo_paciente,
         ce.cod_paciente,
         ce.acto_med
-    FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} AS ce
+    FROM dwsge.dwe_consulta_externa_citados_homologacion_{anio}_{periodo} AS ce
     LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
     LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
     LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
@@ -375,11 +374,12 @@ def build_query(periodo: str, codcas: str) -> str:
     Output("graph-total-subactividad", "figure"),
     Input("page-url", "pathname"),
     Input("page-url", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
 )
-def update_top_bars(pathname, search):
-    # Resolver periodo (default '01' si no viene) y codcas
-    periodo = _parse_periodo(search) or "01"
-    if not pathname:
+def update_top_bars(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas:
         return (
             empty_fig("Top 10 servicios"),
             empty_fig("Top 10 subactividades"),
@@ -387,9 +387,14 @@ def update_top_bars(pathname, search):
             empty_fig("Total citas por servicio"),
             empty_fig("Total citas por subactividad"),
         )
-    import secure_code as sc
-    codcas = pathname.rstrip("/").split("/")[-1]
-    codcas = sc.decode_code(codcas)
+    if not periodo or not anio:
+        return (
+            empty_fig("Top 10 servicios"),
+            empty_fig("Top 10 subactividades"),
+            empty_fig("Tipo de paciente"),
+            empty_fig("Total citas por servicio"),
+            empty_fig("Total citas por subactividad"),
+        )
 
     engine = create_connection()
     if engine is None:
@@ -400,7 +405,7 @@ def update_top_bars(pathname, search):
             empty_fig("Total citas por servicio"),
             empty_fig("Total citas por subactividad"),
         )
-    query = build_query(periodo, codcas)
+    query = build_query(periodo, anio, codcas)
     try:
         df = pd.read_sql(query, engine)
     except Exception as e:
@@ -579,22 +584,22 @@ def update_top_bars(pathname, search):
     Output("tabla-prod-servicio-wrapper", "children"),
     Input("page-url", "pathname"),
     Input("page-url", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
 )
-def render_tabla_prod_servicio(pathname, search):
-    # Resolver periodo (default '01') y codcas
-    periodo = _parse_periodo(search) or "01"
-    if not pathname:
+def render_tabla_prod_servicio(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas:
         return html.Div("Sin ruta.", style={"color": "#b00"})
-    import secure_code as sc
-    codcas = pathname.rstrip("/").split("/")[-1]
-    codcas = sc.decode_code(codcas)
+    if not periodo or not anio:
+        return html.Div("Faltan filtros de periodo/año.", style={"color": "#b00"})
 
     engine = create_connection()
     if engine is None:
         return html.Div("Error de conexión a la base de datos.", style={"color": "#b00"})
 
     try:
-        df = pd.read_sql(build_query(periodo, codcas), engine)
+        df = pd.read_sql(build_query(periodo, anio, codcas), engine)
     except Exception as e:
         return html.Div(f"Error ejecutando consulta: {e}", style={"color": "#b00"})
 
@@ -653,23 +658,24 @@ def render_tabla_prod_servicio(pathname, search):
     State("page-url", "pathname"),   # corrected id
     State("page-url", "search"),     # corrected id
     State("filter-periodo", "value"),
+    State("filter-anio", "value"),
     prevent_initial_call=True
 )
-def tc_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
+def tc_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
     if not n_clicks:
         return None
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas or not periodo:
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
     if engine is None:
         return None
-    query = build_query(periodo, codcas)
+    query = build_query(periodo, anio, codcas)
     try:
         df = pd.read_sql(query, engine)
     except Exception:
         return None
     if df.empty:
         return None
-    filename = f"citas_{codcas}_{periodo}.csv"
+    filename = f"citas_{codcas}_{anio}_{periodo}.csv"
     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")

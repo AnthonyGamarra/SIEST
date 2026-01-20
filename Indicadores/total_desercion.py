@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
+from urllib.parse import parse_qs
 
 # Paleta y estilos compartidos
 BRAND = "#0064AF"
@@ -331,11 +332,13 @@ def create_connection():
     Output("hp-deserciones-especialidad", "figure"),
     Input("hp-page-url", "pathname"),
     Input("hp-page-url", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
 )
-def actualizar_deserciones(pathname, search):
+def actualizar_deserciones(pathname, search, periodo_dropdown, anio_dropdown):
     """Genera dos gráficos: servicio vs total y subactividad vs total deserciones."""
-    codcas, periodo = get_codcas_periodo(pathname, search, None)
-    if not codcas or not periodo:
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return (
             empty_fig("Deserciones por servicio"),
             empty_fig("Deserciones por subactividad"),
@@ -373,7 +376,7 @@ def actualizar_deserciones(pathname, search):
                 am.actdes,
                 ca.cenasides,
                 ce.acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} ce
+            FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} ce
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -402,7 +405,7 @@ def actualizar_deserciones(pathname, search):
                 am.actdes,
                 ca.cenasides,
                 p.acto_med
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
+            FROM dwsge.dwe_consulta_externa_citados_homologacion_{anio}_{periodo} p
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON p.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -551,10 +554,12 @@ def actualizar_deserciones(pathname, search):
     Output("hp-tabla-desercion", "pinnedBottomRowData"),
     Input("hp-page-url", "pathname"),
     Input("hp-page-url", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
 )
-def cargar_tabla_deserciones(pathname, search):
-    codcas, periodo = get_codcas_periodo(pathname, search, None)
-    if not codcas or not periodo:
+def cargar_tabla_deserciones(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return [], []
     if not re.fullmatch(r"\d{2}", periodo):
         return [], []
@@ -572,7 +577,7 @@ def cargar_tabla_deserciones(pathname, search):
                 am.actdes,
                 ca.cenasides,
                 ce.acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} ce
+            FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} ce
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -599,7 +604,7 @@ def cargar_tabla_deserciones(pathname, search):
                 am.actdes,
                 ca.cenasides,
                 p.acto_med
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
+            FROM dwsge.dwe_consulta_externa_citados_homologacion_{anio}_{periodo} p
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON p.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -645,13 +650,14 @@ def cargar_tabla_deserciones(pathname, search):
     State("hp-page-url", "pathname"),
     State("hp-page-url", "search"),
     State("filter-periodo", "value"),
+    State("filter-anio", "value"),
     prevent_initial_call=True
 )
-def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
+def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
     if not n_clicks:
         return None
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas or not periodo:
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
     if engine is None:
@@ -665,7 +671,7 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
                 am.actdes,
                 ca.cenasides,
                 ce.acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} ce
+            FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} ce
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -694,7 +700,7 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
                 am.actdes,
                 ca.cenasides,
                 p.acto_med
-            FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo} p
+            FROM dwsge.dwe_consulta_externa_citados_homologacion_{anio}_{periodo} p
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON p.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -717,22 +723,31 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
         df = pd.read_sql(query, engine)
     except Exception:
         return None
-    filename = f"total_desercion_{codcas}_{periodo}.csv"
+    filename = f"total_desercion_{codcas}_{anio}_{periodo}.csv"
     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")
 
-def _parse_periodo(search: str) -> str | None:
+def _parse_query_param(search: str, key: str) -> str | None:
     if not search:
         return None
-    params = dict(
-        part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
-    )
-    return params.get("periodo")
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
+
+
+def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str | None, anio_dropdown: str | None):
     if not pathname:
-        return None, None
+        return None, None, None
     import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
+    anio = _parse_anio(search) or anio_dropdown
+    return codcas, periodo, anio

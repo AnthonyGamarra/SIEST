@@ -1,4 +1,5 @@
-from dash import html, dcc, Input, Output, callback
+from dash import html, dcc, Input, Output
+from urllib.parse import parse_qs
 import dash_bootstrap_components as dbc
 from sqlalchemy import create_engine
 import pandas as pd
@@ -110,6 +111,22 @@ def style_horizontal_bar(fig: go.Figure, x_title: str, y_title: str, height: int
     fig.update_coloraxes(showscale=False)
     return fig
 
+
+def _parse_query_param(search: str, key: str) -> str | None:
+    if not search:
+        return None
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
+
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
+
 header = html.Div([
     html.Div([
         html.Div([
@@ -213,6 +230,10 @@ def layout(codcas=None, **kwargs):
         html.Div([
             html.H5("Top 10 Diagnósticos", style={"color": BRAND, "marginTop": "24px"}),
             dcc.Loading(dcc.Graph(id="diag-bar-chart-3")),
+            html.Div(
+                id="ate-topicos-msg-3",
+                style={"marginTop": "8px", "color": "#0064AF", "fontSize": "16px"}
+            ),
             ], style={
             "backgroundColor": CARD_BG,
             "borderRadius": "14px",
@@ -268,19 +289,32 @@ def update_page_content(codcas, search):
     import secure_code as sc
     codcas = sc.decode_code(codcas) if codcas else None
 
-    periodo = None
-    if search:
-        parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
-        periodo = parts.get("periodo")
+    periodo = _parse_periodo(search)
+    anio_str = _parse_anio(search)
 
-    if not periodo:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), "Seleccione un periodo en el dashboard principal."
+    if not periodo or not anio_str:
+        return (
+            empty_fig("Top 10 Diagnósticos (Prioridad 3)"),
+            "Seleccione un año y periodo en el dashboard principal.",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
     if not codcas:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), "No se ha especificado un centro (codcas)."
+        return (
+            empty_fig("Top 10 Diagnósticos (Prioridad 3)"),
+            "No se ha especificado un centro (codcas).",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
 
     engine = create_connection()
     if engine is None:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), "Error de conexión a la base de datos."
+        return (
+            empty_fig("Top 10 Diagnósticos (Prioridad 3)"),
+            "Error de conexión a la base de datos.",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
 
     query = f"""
         SELECT
@@ -312,7 +346,7 @@ def update_page_content(codcas, search):
                                 else (a.cod_prioridad) 
                                 end) 
                     end )as cod_prioridad_n
-                    FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                    FROM dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
                     LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
                     LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
@@ -328,41 +362,69 @@ def update_page_content(codcas, search):
     """
     try:
         df = pd.read_sql(query, engine)
-        print("Query executed successfully")
-    except Exception as e:
-        return empty_fig("Top 10 Diagnósticos (Prioridad 3)"), f"Error al ejecutar la consulta: {e}"
+    except Exception:
+        return (
+            empty_fig("Top 10 Diagnósticos (Prioridad 3)"),
+            "Error al ejecutar la consulta.",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
 
     if df.empty:
-        return empty_fig(f"Top 10 Diagnósticos - Sin datos para {codcas} en periodo {periodo}"), "No se encontraron registros."
+        return (
+            empty_fig(f"Top 10 Diagnósticos - Sin datos para {codcas} en periodo {periodo}"),
+            "No se encontraron registros.",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
 
     total_atenciones = df.shape[0]
-    diag_df = (
-        df.groupby(['cod_diagnostico', 'diagdes'], dropna=False)
-        .size()
-        .reset_index(name='Atenciones')
-        .sort_values('Atenciones', ascending=False)
-        .head(10)
-    )
-    diag_df['diagdes'] = diag_df['diagdes'].fillna('SIN DIAGNÓSTICO')
+    try:
+        diag_df = (
+            df.groupby(['cod_diagnostico', 'diagdes'], dropna=False)
+            .size()
+            .reset_index(name='Atenciones')
+            .sort_values('Atenciones', ascending=False)
+            .head(10)
+        )
+        diag_df['diagdes'] = diag_df['diagdes'].fillna('SIN DIAGNÓSTICO')
+    except Exception:
+        return (
+            empty_fig("Top 10 Diagnósticos (Prioridad 3)"),
+            "Error al agrupar los datos.",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
+
+    if diag_df.empty:
+        return (
+            empty_fig(f"Top 10 Diagnósticos - Sin datos para {codcas} en periodo {periodo}"),
+            "No se encontraron diagnósticos para mostrar.",
+            empty_fig("Atenciones por Fecha"),
+            empty_fig("Distribución por Tipo de Paciente")
+        )
+
     diag_df['label'] = diag_df['Atenciones'].apply(
         lambda v: f"{v:,.0f} ({(v/total_atenciones):.1%})" if total_atenciones else f"{v:,.0f}"
     )
 
-    fig = px.bar(
-        diag_df,
-        y='diagdes',
-        x='Atenciones',
-        orientation='h',
-        text='label',
-        color='Atenciones',
-        color_continuous_scale=BAR_COLOR_SCALE,
-    )
-    fig = style_horizontal_bar(fig, x_title="Atenciones", y_title="Diagnóstico")
+    try:
+        fig = px.bar(
+            diag_df,
+            y='diagdes',
+            x='Atenciones',
+            orientation='h',
+            text='label',
+            color='Atenciones',
+            color_continuous_scale=BAR_COLOR_SCALE,
+        )
+        fig = style_horizontal_bar(fig, x_title="Atenciones", y_title="Diagnóstico")
+    except Exception:
+        fig = empty_fig("Top 10 Diagnósticos (Prioridad 3)")
 
-    # Gráfico de línea de tiempo por fecha_aten
     try:
         df_fecha = df.copy()
-        df_fecha['fecha_aten'] = pd.to_datetime(df_fecha['fecha_aten'],format='%d-%m-%Y', errors='coerce')
+        df_fecha['fecha_aten'] = pd.to_datetime(df_fecha['fecha_aten'], format='%d-%m-%Y', errors='coerce')
         timeline_df = (
             df_fecha.groupby('fecha_aten', dropna=True)
             .size()
@@ -393,12 +455,11 @@ def update_page_content(codcas, search):
             bargap=0.2,
             showlegend=False
         )
-    except Exception as e:
+    except Exception:
         timeline_fig = empty_fig("Atenciones por Fecha")
 
-    # Gráfico circular por tipo de paciente
     PIE_COLOR_SCALE = [
-            "#D7E9FF", "#92C4F9", "#2E78C7", "#A7D8DE", "#6EC6CA", "#4BA3C3", "#B2B1FF", "#7C83FD", "#5A5AFF", "#A0C4FF"
+        "#D7E9FF", "#92C4F9", "#2E78C7", "#A7D8DE", "#6EC6CA", "#4BA3C3", "#B2B1FF", "#7C83FD", "#5A5AFF", "#A0C4FF"
     ]
     try:
         pie_df = (
@@ -413,25 +474,28 @@ def update_page_content(codcas, search):
             values='Atenciones',
             color_discrete_sequence=PIE_COLOR_SCALE
         )
-        pie_fig.update_traces(textinfo='label+percent', pull=[0.05]*len(pie_df))
+        pie_fig.update_traces(textinfo='label+percent', pull=[0.05]*len(pie_df), marker=dict(line=dict(color='#fff', width=2)))
         pie_fig.update_layout(
             font=dict(family=FONT_FAMILY, color="#1F2937"),
             margin=dict(l=40, r=40, t=60, b=40),
             legend_title_text="Tipo de Paciente",
             legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
         )
-    except Exception as e:
+    except Exception:
         pie_fig = empty_fig("Distribución por Tipo de Paciente")
 
-    return fig, timeline_fig, pie_fig
+    resumen = f"Centro: {codcas} | Año: {anio_str} | Periodo: {periodo} | Total atenciones: {total_atenciones:,.0f}"
+    return fig, resumen, timeline_fig, pie_fig
 
 def register_callbacks(app):
     app.callback(
         [Output("diag-bar-chart-3", "figure"),
+         Output("ate-topicos-msg-3", "children"),
          Output("timeline-atenciones-3", "figure"),
          Output("pie-tipo-paciente-3", "figure")],
         [Input("ate-topicos-codcas-store-3", "data"),
          Input("ate-topicos-url-3", "search")],
+        prevent_initial_call=True
     )(update_page_content)
 
 
@@ -453,11 +517,9 @@ def download_csv(n_clicks, codcas, search):
     codcas = sc.decode_code(codcas) if codcas else None
     if not n_clicks:
         return no_update
-    periodo = None
-    if search:
-        parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
-        periodo = parts.get("periodo")
-    if not periodo or not codcas:
+    periodo = _parse_periodo(search)
+    anio_str = _parse_anio(search)
+    if not periodo or not anio_str or not codcas:
         return no_update
     engine = create_connection()
     if engine is None:
@@ -492,7 +554,7 @@ def download_csv(n_clicks, codcas, search):
                                 else (a.cod_prioridad) 
                                 end) 
                     end )as cod_prioridad_n
-                    FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                    FROM dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
                     LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
                     LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
@@ -512,5 +574,9 @@ def download_csv(n_clicks, codcas, search):
         return no_update
     if df.empty:
         return no_update
-    return dcc.send_data_frame(df.to_csv, filename=f"atenciones_{codcas}_{periodo}_prioridad_3.csv", index=False)
+    return dcc.send_data_frame(
+        df.to_csv,
+        filename=f"atenciones_{codcas}_{anio_str}_{periodo}_prioridad_3.csv",
+        index=False
+    )
 

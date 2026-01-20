@@ -3,7 +3,6 @@ import importlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from functools import lru_cache
-
 import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -118,8 +117,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     ]
+    anio = ['2025', '2026']
     valores = [f"{i:02d}" for i in range(1, 13)]
     df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
+    anio_options = [{'label': year, 'value': year} for year in anio]
 
     def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
         link_content = html.H5(
@@ -234,7 +235,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             print(f"Failed to connect to the database: {exc}")
             return None
 
-    def build_queries_consulta(periodo_str, params):
+    def build_queries_consulta(anio_str, periodo_str, params):
         queries = [
             ("atenciones", text(f"""
                 SELECT 
@@ -256,7 +257,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     sexo,
                     fecha_atencion,
                     acto_med
-                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
+                FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -289,7 +290,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     am.actdes,
                     ag.agrupador,
                     ca.cenasides
-                FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -317,7 +318,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -349,7 +350,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     am.actdes,
                     ag.agrupador,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_citados_homologacion_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -377,7 +378,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     am.actdes,
                     ag.agrupador,
                     ca.cenasides
-                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} ce
+                FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -405,7 +406,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     am.actdes,
                     ag.agrupador,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_citados_homologacion_2025_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_citados_homologacion_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -443,7 +444,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     ag.agrupador,
                                     a.periodo,
                                     count(*) AS cantidad_medicos
-                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
+                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                 LEFT JOIN dwsge.dim_agrupador ag 
                                 ON a.cod_agrupador = ag.cod_agrupador
                                 WHERE a.cod_centro=:codcas
@@ -456,11 +457,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             """),
             params.copy()),
         ]
-        primera_vez = text("""
+        primera_vez = text(f"""
             WITH fecha_min_paciente AS (
                 SELECT cod_oricentro,cod_centro,doc_paciente,
                        to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
                 WHERE cod_variable='001' AND cod_actividad='91'
                 AND clasificacion IN (2,4,6) AND cod_centro=:codcas
                 GROUP BY cod_oricentro,cod_centro,doc_paciente
@@ -468,11 +469,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             SELECT COUNT(DISTINCT doc_paciente) AS cantidad
             FROM fecha_min_paciente WHERE periodo=:periodo_sql
         """)
-        primera_vez_agr = text("""
+        primera_vez_agr = text(f"""
             WITH fecha_min_paciente AS (
                 SELECT p.doc_paciente,ag.agrupador,
                        to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
                 LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE p.cod_variable='001' AND p.cod_actividad='91'
                 AND p.clasificacion IN (2,4,6) AND p.cod_centro=:codcas
@@ -487,7 +488,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             "primeras_consultas_agrupador_query": primera_vez_agr,
         }
 
-    def build_queries_complementaria(periodo_str, params):
+    def build_queries_complementaria(anio_str, periodo_str, params):
         queries = [
             ("atenciones", text(f"""
                 SELECT 
@@ -509,7 +510,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     sexo,
                     fecha_atencion,
                     acto_med
-                FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
+                FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -541,7 +542,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     am.actdes,
                     ag.agrupador,
                     ca.cenasides
-                FROM dwsge.dwe_consulta_externa_horas_efectivas_2025_{periodo_str} AS ce
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -568,7 +569,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -608,7 +609,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     ag.agrupador,
                                     a.periodo,
                                     count(*) AS cantidad_medicos
-                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
+                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                 LEFT JOIN dwsge.dim_agrupador ag 
                                 ON a.cod_agrupador = ag.cod_agrupador
                                 WHERE a.cod_centro=:codcas
@@ -620,11 +621,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             """),
             params.copy()),
         ]
-        primera_vez = text("""
+        primera_vez = text(f"""
             WITH fecha_min_paciente AS (
                 SELECT cod_oricentro,cod_centro,doc_paciente,
                        to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
                 WHERE cod_servicio='A91'
                 AND clasificacion IN (2,4,6) AND cod_centro=:codcas
                 GROUP BY cod_oricentro,cod_centro,doc_paciente
@@ -632,11 +633,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             SELECT COUNT(DISTINCT doc_paciente) AS cantidad
             FROM fecha_min_paciente WHERE periodo=:periodo_sql
         """)
-        primera_vez_agr = text("""
+        primera_vez_agr = text(f"""
             WITH fecha_min_paciente AS (
                 SELECT p.doc_paciente,ag.agrupador,
                        to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
-                FROM dwsge.dwe_consulta_externa_homologacion_2025 p
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
                 LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE p.cod_servicio='A91'
                 AND p.clasificacion IN (2,4,6) AND p.cod_centro=:codcas
@@ -651,13 +652,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             "primeras_consultas_agrupador_query": primera_vez_agr,
         }
  
-    def _load_dashboard_data(periodo, codcas, engine, query_builder):
-        if not periodo or not codcas:
+    def _load_dashboard_data(periodo, anio, codcas, engine, query_builder):
+        if not periodo or not codcas or not anio:
             return None
         periodo_str = f"{int(periodo):02d}" if str(periodo).isdigit() else str(periodo)
-        periodo_sql = f"2025{periodo_str}"
+        anio_str = str(anio)
+        periodo_sql = f"{anio_str}{periodo_str}"
         params = {"codcas": codcas}
-        builder_payload = query_builder(periodo_str, params)
+        builder_payload = query_builder(anio_str, periodo_str, params)
         queries = builder_payload.get("queries", [])
         results = {}
 
@@ -786,14 +788,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             'tables': tables
         }
 
-    def load_dashboard_data(periodo, codcas, engine):
-        return _load_dashboard_data(periodo, codcas, engine, build_queries_consulta)
+    def load_dashboard_data(periodo, anio, codcas, engine):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_consulta)
 
-    def load_dashboard_data_complementaria(periodo, codcas, engine):
-        return _load_dashboard_data(periodo, codcas, engine, build_queries_complementaria)
+    def load_dashboard_data_complementaria(periodo, anio, codcas, engine):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_complementaria)
 
-    def build_download_response(periodo, pathname, data_loader, include_citas=True, include_desercion=True):
-        if not periodo or not pathname:
+    def build_download_response(periodo, anio, pathname, data_loader, include_citas=True, include_desercion=True):
+        if not periodo or not pathname or not anio:
             return None
         import secure_code as sc
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
@@ -803,7 +805,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         engine = create_connection()
         if engine is None:
             return None
-        data = data_loader(periodo, codcas, engine)
+        data = data_loader(periodo, anio, codcas, engine)
         if not data:
             return None
         stats = data['stats']
@@ -828,7 +830,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             tables['medicos_por_agrupador'].to_excel(writer, sheet_name="Medicos_por_Servicio", index=False)
             tables['horas_programadas_por_agrupador'].to_excel(writer, sheet_name="Horas_Programadas_por_Servicio", index=False)
         output.seek(0)
-        return dcc.send_bytes(output.getvalue(), f"reporte_{codcas}_{periodo}.xlsx")
+        return dcc.send_bytes(output.getvalue(), f"reporte_{codcas}_{anio}_{periodo}.xlsx")
 
     def serve_layout():
         if not has_request_context():
@@ -902,6 +904,19 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     html.Div([
                                         html.Div([
                                             html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
+                                            dcc.Dropdown(
+                                                id='filter-anio',
+                                                className='anio-dropdown',
+                                                options=anio_options,
+                                                placeholder='Seleccione un año',
+                                                clearable=True,
+                                                style={
+                                                    'width': '160px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
                                             dcc.Dropdown(
                                                 id='filter-periodo',
                                                 className='periodo-dropdown',
@@ -992,6 +1007,19 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     html.Div([
                                         html.Div([
                                             html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
+                                            dcc.Dropdown(
+                                                id='filter-anio-complementaria',
+                                                className='anio-dropdown',
+                                                options=anio_options,
+                                                placeholder='Seleccione un año',
+                                                clearable=True,
+                                                style={
+                                                    'width': '160px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
                                             dcc.Dropdown(
                                                 id='filter-periodo-complementaria',
                                                 className='periodo-dropdown',
@@ -1112,9 +1140,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
          Output('charts-container', 'children')],
         Input('search-button', 'n_clicks'),
         State('filter-periodo', 'value'),
+        State('filter-anio', 'value'),
         State('url', 'pathname')
     )
-    def on_search(n_clicks, periodo, pathname):
+    def on_search(n_clicks, periodo, anio_value, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
 
@@ -1123,14 +1152,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_url) if codcas_url else None
 
-        if not periodo or not codcas:
-            return html.Div("Seleccione un periodo y asegurese de tener un centro valido."), html.Div()
+        if not periodo or not anio_value or not codcas:
+            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
 
         engine = create_connection()
         if engine is None:
             return html.Div("Error de conexion a la base de datos."), html.Div()
 
-        data = load_dashboard_data(periodo, codcas, engine)
+        data = load_dashboard_data(periodo, anio_value, codcas, engine)
         if not data:
             return html.Div("Sin datos para mostrar."), html.Div()
 
@@ -1155,7 +1184,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         citados_por_agrupador_table = tables.get('citados_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
         horas_efectivas_por_agrupador_table = tables.get('horas_efectivas_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
         base = url_base_pathname.rstrip('/') + '/'
-        subtitle = f"Periodo {periodo} | {nombre_centro}"
+        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
         total_consultantes_servicio = (
             int(total_consultantes_por_servicio_table['counts'].sum())
             if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
@@ -1179,21 +1208,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "title": "Total de Consultas",
                 "value": f"{total_atenciones:,.0f}",
                 "border_color": BRAND,
-                "href": f"{base}dash/total_atenciones/{codcas_url}?periodo={periodo}",
+                "href": f"{base}dash/total_atenciones/{codcas_url}?periodo={periodo}&anio={anio_value}",
                 "side_component": render_agrupador_table(total_atenciones_agru),
             },
             {
                 "title": "Número de Médicos",
                 "value": f"{total_medicos:,.0f}",
                 "border_color": BRAND_SOFT,
-                "href": f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}",
+                "href": f"{base}dash/total_medicos/{codcas_url}?periodo={periodo}&anio={anio_value}",
                 "side_component": render_agrupador_table(medicos_por_agrupador_table),
             },
             {
                 "title": "Número de deserciones",
                 "value": f"{total_desercion_citas:,.0f}",
                 "border_color": BRAND_SOFT,
-                "href": f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}",
+                "href": f"{base}dash/desercion_citas/{codcas_url}?periodo={periodo}&anio={anio_value}",
                 "side_component": render_agrupador_table(
                     desercion_por_agrupador_table
                 ),
@@ -1202,7 +1231,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "title": "Número de citas otorgadas",
                 "value": f"{total_citados:,.0f}",
                 "border_color": ACCENT,
-                "href": f"{base}dash/total_citados/{codcas_url}?periodo={periodo}",
+                "href": f"{base}dash/total_citados/{codcas_url}?periodo={periodo}&anio={anio_value}",
                 "side_component": render_agrupador_table(
                     citados_por_agrupador_table
                 ),
@@ -1211,14 +1240,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 "title": "Total horas programadas",
                 "value": f"{total_horas_programadas:,.0f}",
                 "border_color": BRAND,
-                "href": f"{base}dash/horas_programadas/{codcas_url}?periodo={periodo}",
+                "href": f"{base}dash/horas_programadas/{codcas_url}?periodo={periodo}&anio={anio_value}",
                 "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
             },
             {
                 "title": "Total de horas Efectivas (Ejecutada)",
                 "value": f"{total_horas_efectivas:,.0f}",
                 "border_color": ACCENT,
-                "href": f"{base}dash/horas_efectivas/{codcas_url}?periodo={periodo}",
+                "href": f"{base}dash/horas_efectivas/{codcas_url}?periodo={periodo}&anio={anio_value}",
                 "side_component": render_agrupador_table(
                     horas_efectivas_por_agrupador_table,
                     value_format="{:,.2f}"
@@ -1309,9 +1338,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
          Output('charts-container-complementaria', 'children')],
         Input('search-button-complementaria', 'n_clicks'),
         State('filter-periodo-complementaria', 'value'),
+        State('filter-anio-complementaria', 'value'),
         State('url', 'pathname')
     )
-    def on_search_complementaria(n_clicks, periodo, pathname):
+    def on_search_complementaria(n_clicks, periodo, anio_value, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
 
@@ -1320,14 +1350,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_url) if codcas_url else None
 
-        if not periodo or not codcas:
-            return html.Div("Seleccione un periodo y asegurese de tener un centro valido."), html.Div()
+        if not periodo or not anio_value or not codcas:
+            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
 
         engine = create_connection()
         if engine is None:
             return html.Div("Error de conexion a la base de datos."), html.Div()
 
-        data = load_dashboard_data_complementaria(periodo, codcas, engine)
+        data = load_dashboard_data_complementaria(periodo, anio_value, codcas, engine)
         if not data:
             return html.Div("Sin datos para mostrar."), html.Div()
 
@@ -1350,7 +1380,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             pd.DataFrame(columns=['agrupador', 'counts'])
         )
 
-        subtitle = f"Periodo {periodo} | {nombre_centro}"
+        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
         total_consultantes_servicio = (
             int(total_consultantes_por_servicio_table['counts'].sum())
             if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
@@ -1505,23 +1535,27 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
     @dash_app.callback(
         Output('filter-periodo-complementaria', 'value'),
-        Input('filter-periodo', 'value')
+        Output('filter-anio-complementaria', 'value'),
+        Input('filter-periodo', 'value'),
+        Input('filter-anio', 'value')
     )
-    def sync_periodo_with_complementaria(periodo_value):
-        return periodo_value
+    def sync_filters_with_complementaria(periodo_value, anio_value):
+        return periodo_value, anio_value
 
     @dash_app.callback(
         Output("download-dataframe-csv", "data"),
         Input("download-button", "n_clicks"),
         State('filter-periodo', 'value'),
+        State('filter-anio', 'value'),
         State('url', 'pathname'),
         prevent_initial_call=True
     )
-    def download_csv(n_clicks, periodo, pathname):
+    def download_csv(n_clicks, periodo, anio_value, pathname):
         if not n_clicks:
             return None
         return build_download_response(
             periodo,
+            anio_value,
             pathname,
             load_dashboard_data,
             include_citas=True,
@@ -1532,14 +1566,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         Output("download-dataframe-csv-complementaria", "data"),
         Input("download-button-complementaria", "n_clicks"),
         State('filter-periodo-complementaria', 'value'),
+        State('filter-anio-complementaria', 'value'),
         State('url', 'pathname'),
         prevent_initial_call=True
     )
-    def download_csv_complementaria(n_clicks, periodo, pathname):
+    def download_csv_complementaria(n_clicks, periodo, anio_value, pathname):
         if not n_clicks:
             return None
         return build_download_response(
             periodo,
+            anio_value,
             pathname,
             load_dashboard_data_complementaria,
             include_citas=False,

@@ -5,6 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
+from urllib.parse import parse_qs
+import secure_code as sc
 
 # Paleta similar a dashboard.py
 BRAND = "#0064AF"
@@ -126,24 +128,30 @@ def style_horizontal_bar(fig: go.Figure, height: int = 360, color: str | None = 
     return fig
 
 # Helpers reutilizables
-def _parse_periodo(search: str) -> str | None:
+def _parse_query_param(search: str, key: str) -> str | None:
     if not search:
         return None
-    # search llega como "?periodo=03&otra=x"
-    params = dict(
-        part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
-    )
-    return params.get("periodo")
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
+
+
+def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str | None, anio_dropdown: str | None):
     if not pathname:
-        return None, None
-    import secure_code as sc
+        return None, None, None
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
-    print(f"Decoded codcas: {codcas}")
     periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
+    anio = _parse_anio(search) or anio_dropdown
+    return codcas, periodo, anio
 
 # Layout sin verificador de query
 layout = html.Div([
@@ -320,26 +328,8 @@ def create_connection():
         print(f"Failed to connect to the database: {e}")
         return None
 
-def _parse_periodo(search: str) -> str | None:
-    if not search:
-        return None
-    # search llega como "?periodo=03&otra=x"
-    params = dict(
-        part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
-    )
-    return params.get("periodo")
-
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
-    if not pathname:
-        return None, None
-    import secure_code as sc
-    codcas = pathname.rstrip("/").split("/")[-1]
-    codcas = sc.decode_code(codcas)
-    periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
-
 # REEMPLAZO: función para construir query dinámicamente
-def build_query(periodo: str, codcas: str) -> str:
+def build_query(periodo: str, anio: str, codcas: str) -> str:
     return f"""
     SELECT 
 	    ce.cod_servicio,
@@ -354,7 +344,7 @@ def build_query(periodo: str, codcas: str) -> str:
         e.especialidad AS descripcion_especialidad,
 		ce.total_horas,
         ce.fecha_prog
-	FROM dwsge.dwe_consulta_externa_programacion_2025_{periodo} ce
+    FROM dwsge.dwe_consulta_externa_programacion_{anio}_{periodo} ce
     LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
     LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
     LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
@@ -383,19 +373,21 @@ register_page(
     Output("hp-store-data", "data"),
     Input("hp-page-url", "pathname"),
     Input("hp-page-url", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
     prevent_initial_call=False,
 )
-def load_data_to_store(pathname, search):
+def load_data_to_store(pathname, search, periodo_dropdown, anio_dropdown):
     # Obtener codcas y periodo desde URL
-    codcas, periodo = get_codcas_periodo(pathname or "", search or "", None)
-    if not codcas or not periodo:
+    codcas, periodo, anio = get_codcas_periodo(pathname or "", search or "", periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return None
 
     engine = create_connection()
     if engine is None:
         return None
 
-    query = build_query(periodo, codcas)
+    query = build_query(periodo, anio, codcas)
     try:
         with engine.connect() as conn:
             df = pd.read_sql_query(query, con=conn)
@@ -753,23 +745,24 @@ def actualizar_total_horas(filter_model, row_data):
     State("hp-page-url", "pathname"),   # <-- corregido id
     State("hp-page-url", "search"),     # <-- corregido id
     State("filter-periodo", "value"),
+    State("filter-anio", "value"),
     prevent_initial_call=True
 )
-def hp_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
+def hp_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
     if not n_clicks:
         return None
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas or not periodo:
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
     if engine is None:
         return None
-    query = build_query(periodo, codcas)  # <-- reutiliza build_query
+    query = build_query(periodo, anio, codcas)  # <-- reutiliza build_query
     try:
         df = pd.read_sql(query, engine)
     except Exception:
         return None
     if df.empty:
         return None
-    filename = f"horas_programadas_{codcas}_{periodo}.csv"  # <-- nombre ajustado
+    filename = f"horas_programadas_{codcas}_{anio}_{periodo}.csv"  # <-- nombre ajustado
     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")

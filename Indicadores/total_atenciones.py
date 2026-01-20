@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
+from urllib.parse import parse_qs
 
 BRAND = "#0064AF"
 BRAND_SOFT = "#D7E9FF"
@@ -14,7 +15,7 @@ MUTED = "#6B7280"
 BORDER = "#E5E7EB"
 FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
 BAR_COLOR_SCALE = ["#D7E9FF", "#92C4F9", "#2E78C7"]
-# COLORES DE GRÁFICOS (NO MODIFICAR)
+# COLORES DE GR??FICOS (NO MODIFICAR)
 GRID = "#e9ecef"
 MALE = "#4C78A8"
 FEMALE = "#B82753"
@@ -129,7 +130,7 @@ def style_horizontal_bar(fig: go.Figure, height: int = 320) -> go.Figure:
     fig.update_coloraxes(showscale=False)
     return fig
 
-# Helpers específicos para esta página
+# Helpers espec??ficos para esta p??gina
 def empty_table(title: str) -> html.Div:
     return html.Div(
         [
@@ -164,14 +165,15 @@ def empty_table(title: str) -> html.Div:
         ]
     )
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
+def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_dropdown: str):
     if not pathname:
-        return None, None
+        return None, None, None
     import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
+    anio = _parse_anio(search) or anio_dropdown
+    return codcas, periodo, anio
 
 # Layout sin verificador de query
 layout = html.Div([
@@ -184,12 +186,12 @@ layout = html.Div([
                 html.Div([
                     html.H4("Detalle de Atenciones Médicas",
                             style={"margin": 0, "color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700, "letterSpacing": "-0.3px"}),
-                    html.P("📊 Análisis completo de la producción del periodo seleccionado",
+                    html.P("Análisis completo de la producción del periodo seleccionado",
                            style={"color": MUTED, "fontSize": "13px", "marginTop": "6px", "fontFamily": FONT_FAMILY})
                 ])
             ], style={'display': 'flex', 'alignItems': 'center', 'flex': 1})
         ], style={'flex': 1}),
-        # Lado derecho: botón descargar
+        # Lado derecho: bot??n descargar
         html.Div([
             html.Button(
                 [html.I(className="bi bi-download me-2"), "Descargar CSV"],
@@ -226,7 +228,7 @@ layout = html.Div([
         "alignItems": "center",
         "gap": "16px"
     }),
-    # PESTAÑAS
+    # PESTA??AS
     dcc.Tabs(
         id="main-tabs",
         value="tab-graficos",
@@ -254,7 +256,7 @@ layout = html.Div([
                     ], style={**CARD_STYLE}),
                     html.Br(),
                     html.Br(),
-                    # Segundo bloque: gráfico agrupador + especialidad (lado a lado)
+                    # Segundo bloque: gr??fico agrupador + especialidad (lado a lado)
                     html.Div([
                         dcc.Loading(
                             html.Div([
@@ -294,26 +296,26 @@ layout = html.Div([
                     ], style={**CARD_STYLE})
                 ], style={"padding": "8px"})
             ),
-            # NUEVA TAB Producción x médico
+            # NUEVA TAB Producci??n x m??dico
             # dcc.Tab(
-            #     label="Producción x médico",
+            #     label="Producci??n x m??dico",
             #     value="tab-vacia",
             #     style=TAB_STYLE,
             #     selected_style=TAB_SELECTED_STYLE,
             #     children=html.Div([
             #         html.Div([
             #             html.H5(
-            #                 "Producción por médico",
+            #                 "Producci??n por m??dico",
             #                 style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 600, "marginBottom": "8px"}
             #             ),
-            #             # Filtro + gráfico de tendencia (NUEVO, va antes de la tabla)
+            #             # Filtro + gr??fico de tendencia (NUEVO, va antes de la tabla)
             #             html.Div([
             #                 html.Div([
-            #                     html.Label("Filtrar por DNI del médico", style={"fontSize": "12px", "color": MUTED}),
+            #                     html.Label("Filtrar por DNI del m??dico", style={"fontSize": "12px", "color": MUTED}),
             #                     dcc.Input(
             #                         id="dni-filter",
             #                         type="text",
-            #                         placeholder="Ingrese DNI médico y presione Enter",
+            #                         placeholder="Ingrese DNI m??dico y presione Enter",
             #                         debounce=True,
             #                         style={
             #                             "width": "240px", "padding": "6px 10px", "borderRadius": "8px",
@@ -327,7 +329,7 @@ layout = html.Div([
             #                 dcc.Graph(id="line-atenciones-medico", style={"height": "320px", "width": "100%"}),
             #                 type="dot"
             #             ),
-            #             # Tabla (ya existente) debajo del gráfico
+            #             # Tabla (ya existente) debajo del gr??fico
             #             html.Div(id="tabla-prod-medico-wrapper")
             #         ], style={**CARD_STYLE}),
             #     ], style={"padding": "4px"})
@@ -404,14 +406,20 @@ def create_connection():
         print(f"Failed to connect to the database: {e}")
         return None
 
-def _parse_periodo(search: str) -> str | None:
+def _parse_query_param(search: str, key: str) -> str | None:
     if not search:
         return None
-    # search llega como "?periodo=03&otra=x"
-    params = dict(
-        part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
-    )
-    return params.get("periodo")
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
+
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
 
 # Callback nuevas barras (inicio)
 @callback(
@@ -419,11 +427,12 @@ def _parse_periodo(search: str) -> str | None:
     Output("bar-especialidad-graph", "figure"),
     Input("page-url", "pathname"),
     Input("page-url", "search"),
-    State("filter-periodo", "value")
+    State("filter-periodo", "value"),
+    State("filter-anio", "value")
 )
-def update_barras_inicio(pathname, search, periodo_dropdown):
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas or not periodo:
+def update_barras_inicio(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return empty_fig("Atenciones por servicio"), empty_fig("Atenciones por subactividad")
     engine = create_connection()
     if engine is None:
@@ -433,7 +442,7 @@ def update_barras_inicio(pathname, search, periodo_dropdown):
         SELECT 
             c.servhosdes AS descripcion_servicio,
             a.actespnom AS descripcion_subactividad
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
         WHERE ce.cod_centro = '{codcas}'
@@ -545,18 +554,27 @@ def update_barras_inicio(pathname, search, periodo_dropdown):
     Output("bar-topdiag-graph", "figure"),
     Input("page-url", "pathname"),
     Input("page-url", "search"),
-    State("filter-periodo", "value")
+    State("filter-periodo", "value"),
+    State("filter-anio", "value")
 )
-def update_total_atenciones(pathname, search, periodo_dropdown):
+def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown):
     empty_div = html.Div()
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
     if not codcas:
-        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), "Sin ruta.", empty_div, None, empty_div, empty_fig("Top 10 diagnósticos por atenciones")
-    if not periodo:
-        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), "Falta periodo (URL sin ?periodo=MM y dropdown vacío).", empty_div, None, empty_div, empty_fig("Top 10 diagnósticos por atenciones")
+        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), "Sin ruta.", empty_div, None, empty_div, empty_fig("Top 10 diagn??sticos por atenciones")
+    if not periodo or not anio:
+        return (
+            empty_fig("Atenciones por agrupador"),
+            empty_fig("Atenciones por especialidad"),
+            "Faltan filtros requeridos (aseg??rate de tener ?periodo=MM&anio=YYYY o dropdowns con datos).",
+            empty_div,
+            None,
+            empty_div,
+            empty_fig("Top 10 diagn??sticos por atenciones"),
+        )
     engine = create_connection()
     if engine is None:
-        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), "Error de conexión a la base de datos.", empty_div, None, empty_div, empty_fig("Top 10 diagnósticos por atenciones")
+        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), "Error de conexión a la base de datos.", empty_div, None, empty_div, empty_fig("Top 10 diagn??sticos por atenciones")
 
     query = f"""
         SELECT 
@@ -578,7 +596,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -605,7 +623,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
             sexo as sexo2,
             fecha_atencion as fecha_atencion2,
             cl.desc_cl AS desc_cl2
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -624,7 +642,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
         df = pd.read_sql(query, engine)
         df2 = pd.read_sql(query2, engine)
     except Exception as e:
-        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), f"Error ejecutando consulta: {e}", empty_div, None, empty_div, empty_fig("Top 10 diagnósticos por atenciones")
+        return empty_fig("Atenciones por agrupador"), empty_fig("Atenciones por especialidad"), f"Error ejecutando consulta: {e}", empty_div, None, empty_div, empty_fig("Top 10 diagn??sticos por atenciones")
     if df.empty:
         return (
             empty_fig(f"Atenciones por agrupador - Periodo {periodo}"),
@@ -633,10 +651,10 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
             empty_div,
             None,
             html.Div("Sin datos resumen.", style={"color": "#b00"}),
-            empty_fig(f"Top 10 diagnósticos por atenciones - Periodo {periodo}"),
+            empty_fig(f"Top 10 diagn??sticos por atenciones - Periodo {periodo}"),
         )
 
-    # Gráfico agrupador
+    # Gr??fico agrupador
     bar_df = (
         df.assign(agrupador=df["agrupador"].fillna("Sin agrupador"))
           .groupby("agrupador").size().reset_index(name="Atenciones")
@@ -678,7 +696,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
         bargap=0.24, bargroupgap=0.12
     )
 
-    # Gráfico especialidad (nuevo fig2 junto al de agrupador)
+    # Gr??fico especialidad (nuevo fig2 junto al de agrupador)
     bar_df2 = (
         df.assign(descripcion_especialidad=df["descripcion_especialidad"].fillna("Sin especialidad"))
           .groupby("descripcion_especialidad").size().reset_index(name="Atenciones")
@@ -753,7 +771,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
             subactividad=df["subactividad"].fillna("Sin subactividad"),
             sexo=df["sexo"].fillna("Sin sexo"),
             cod_diag=df["cod_diag"].fillna("Sin cod"),
-            descripcion_diagnostico=df["descripcion_diagnostico"].fillna("Sin diagnóstico")
+            descripcion_diagnostico=df["descripcion_diagnostico"].fillna("Sin diagn??stico")
         ).groupby(["descripcion_servicio", "subactividad", "sexo", "cod_diag", "descripcion_diagnostico"])
          .size().reset_index(name="Atenciones").sort_values("Atenciones", ascending=False)
          # .head(300)  # eliminado: ahora se muestran todos los grupos
@@ -763,7 +781,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
         {"headerName": "Subactividad", "field": "subactividad"},
         {"headerName": "Sexo", "field": "sexo", "width": 100},
         {"headerName": "CodDiag", "field": "cod_diag", "width": 100},
-        {"headerName": "Diagnóstico", "field": "descripcion_diagnostico", "width": 550},
+        {"headerName": "Diagn??stico", "field": "descripcion_diagnostico", "width": 550},
         {"headerName": "Atenciones", "field": "Atenciones", "filter": "agNumberColumnFilter"}
     ]
     resumen_comp = dag.AgGrid(
@@ -797,7 +815,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
     top_diag_df = diag_df[diag_df["cod_diag"].isin(top_codes)]
 
     if top_diag_df.empty:
-        fig_topdiag = empty_fig(f"Top 10 diagnósticos por atenciones - Periodo {periodo}")
+        fig_topdiag = empty_fig(f"Top 10 diagn??sticos por atenciones - Periodo {periodo}")
     else:
         desc_map = (
             diag_df[["cod_diag", "descripcion_diagnostico"]]
@@ -827,7 +845,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
             x="Atenciones",
             color="sexo_simple",
             orientation="h",
-            title=f"Top 10 diagnósticos por atenciones - Periodo {periodo}",
+            title=f"Top 10 diagn??sticos por atenciones - Periodo {periodo}",
             hover_data={"descripcion_diagnostico": True, "cod_diag": False, "sexo_simple": False, "Atenciones": True},
             color_discrete_map={"M": "#4C78A8", "F": "#B82753", "Sin dato": "#9aa0a6"},
             text="label"
@@ -873,24 +891,25 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
     Output("tornado-atenciones-msg", "children"),
     Input("page-url", "pathname"),
     Input("page-url", "search"),
-    State("filter-periodo", "value")
+    State("filter-periodo", "value"),
+    State("filter-anio", "value")
 )
-def update_tornado_atenciones(pathname, search, periodo_dropdown):
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
+def update_tornado_atenciones(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
     if not codcas:
         return empty_fig("Sexo y grupo etario vs atenciones"), "Sin ruta."
-    if not periodo:
-        return empty_fig("Sexo y grupo etario vs atenciones"), "Falta periodo (URL sin ?periodo=MM y dropdown vacío)."
+    if not periodo or not anio:
+        return empty_fig("Sexo y grupo etario vs atenciones"), "Faltan filtros requeridos (periodo/anio)."
     engine = create_connection()
     if engine is None:
-        return empty_fig("Sexo y grupo etario vs atenciones"), "Error de conexión a la base de datos."
+        return empty_fig("Sexo y grupo etario vs atenciones"), "Error de conexi??n a la base de datos."
 
     query = f"""
         SELECT 
             ge.grupo_etario,
             ce.sexo,
             COUNT(*) AS atenciones
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.dim_grupo_etario as ge ON ce.anio_edad = ge.edad
         WHERE ce.cod_centro = '{codcas}'
           AND ce.cod_actividad = '91'
@@ -924,11 +943,11 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
         return int(m.group(1)) if m else 999
 
     preferred_groups = [
-        ("adulto mayor", "Adulto mayor (60+ años)"),
-        ("adulto", "Adulto (30-59 años)"),
-        ("joven", "Joven (18-29 años)"),
-        ("adolescente", "Adolescente (12-17 años)"),
-        ("niño", "Niño (0-11 años)")
+        ("adulto mayor", "Adulto mayor (60+ a??os)"),
+        ("adulto", "Adulto (30-59 a??os)"),
+        ("joven", "Joven (18-29 a??os)"),
+        ("adolescente", "Adolescente (12-17 a??os)"),
+        ("ni??o", "Ni??o (0-11 a??os)")
     ]
 
     def order_tuple(label):
@@ -1033,7 +1052,7 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown):
 
     return fig, msg
 
-# Función auxiliar para aplicar filtro local
+# Funci??n auxiliar para aplicar filtro local
 def _apply_filter(data_records, filter_model):
     if not filter_model:
         return data_records
@@ -1138,11 +1157,12 @@ def actualizar_total_resumen(filter_model, row_data):
     State("page-url", "pathname"),
     State("page-url", "search"),
     State("filter-periodo", "value"),
+    State("filter-anio", "value"),
     prevent_initial_call=True
 )
-def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown):
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas or not periodo:
+def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
     if engine is None:
@@ -1169,7 +1189,7 @@ def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown):
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -1188,5 +1208,6 @@ def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown):
     except Exception:
         return None
 
-    filename = f"total_atenciones_{codcas}_{periodo}.csv"
+    filename = f"total_atenciones_{codcas}_{anio}_{periodo}.csv"
     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")
+

@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
- 
+from urllib.parse import parse_qs
 from datetime import date
 
 
@@ -111,6 +111,19 @@ def style_horizontal_bar(fig: go.Figure, x_title: str, y_title: str, height: int
     fig.update_yaxes(categoryorder="total ascending")
     fig.update_coloraxes(showscale=False)
     return fig
+
+def _parse_query_param(search: str, key: str) -> str | None:
+    if not search:
+        return None
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
 
 
 header = html.Div([
@@ -267,6 +280,7 @@ def create_connection():
 def register_callbacks(app):
     @app.callback(
         [Output("diag-bar-chart-1", "figure"),
+         Output("ate-topicos-msg-1", "children"),
          Output("timeline-atenciones-1", "figure"),
          Output("pie-tipo-paciente-1", "figure")],
         [Input("ate-topicos-codcas-store-1", "data"),
@@ -277,19 +291,32 @@ def register_callbacks(app):
         import secure_code as sc
         codcas = sc.decode_code(codcas) if codcas else None
 
-        periodo = None
-        if search:
-            parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
-            periodo = parts.get("periodo")
+        periodo = _parse_periodo(search)
+        anio_str = _parse_anio(search)
 
-        if not periodo:
-            return empty_fig("Top 10 Diagnósticos (Prioridad 1)"), "Seleccione un periodo en el dashboard principal.", empty_fig("Atenciones por Fecha"), empty_fig("Distribución por Tipo de Paciente")
+        if not periodo or not anio_str:
+            return (
+                empty_fig("Top 10 Diagnósticos (Prioridad 1)"),
+                "Seleccione un año y periodo en el dashboard principal.",
+                empty_fig("Atenciones por Fecha"),
+                empty_fig("Distribución por Tipo de Paciente")
+            )
         if not codcas:
-            return empty_fig("Top 10 Diagnósticos (Prioridad 1)"), "No se ha especificado un centro (codcas).", empty_fig("Atenciones por Fecha"), empty_fig("Distribución por Tipo de Paciente")
+            return (
+                empty_fig("Top 10 Diagnósticos (Prioridad 1)"),
+                "No se ha especificado un centro (codcas).",
+                empty_fig("Atenciones por Fecha"),
+                empty_fig("Distribución por Tipo de Paciente")
+            )
 
         engine = create_connection()
         if engine is None:
-            return empty_fig("Top 10 Diagnósticos (Prioridad 1)"), "Error de conexión a la base de datos.", empty_fig("Atenciones por Fecha"), empty_fig("Distribución por Tipo de Paciente")
+            return (
+                empty_fig("Top 10 Diagnósticos (Prioridad 1)"),
+                "Error de conexión a la base de datos.",
+                empty_fig("Atenciones por Fecha"),
+                empty_fig("Distribución por Tipo de Paciente")
+            )
 
         query = f"""
             SELECT
@@ -323,7 +350,7 @@ def register_callbacks(app):
                             end) 
                 end )as cod_prioridad_n
                         FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                            dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
                 LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
                 LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
                 LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
@@ -467,7 +494,8 @@ def register_callbacks(app):
         except Exception as e:
             pie_fig = empty_fig("Distribución por Tipo de Paciente")
 
-        return fig, timeline_fig, pie_fig
+        resumen = f"Centro: {codcas} | Año: {anio_str} | Periodo: {periodo} | Total atenciones: {total_atenciones:,.0f}"
+        return fig, resumen, timeline_fig, pie_fig
 
     # Callback solo para descargar CSV, sin recargar la página
     @app.callback(
@@ -483,11 +511,9 @@ def register_callbacks(app):
         
         if not n_clicks:
             return None
-        periodo = None
-        if search:
-            parts = dict(p.split("=", 1) for p in search.lstrip("?").split("&") if "=" in p)
-            periodo = parts.get("periodo")
-        if not periodo or not codcas:
+        periodo = _parse_periodo(search)
+        anio_str = _parse_anio(search)
+        if not periodo or not anio_str or not codcas:
             return None
         engine = create_connection()
         if engine is None:
@@ -524,7 +550,7 @@ def register_callbacks(app):
                             end) 
                 end )as cod_prioridad_n
                         FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                            dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
                 LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
                 LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
                 LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
@@ -545,5 +571,9 @@ def register_callbacks(app):
             return None
         if df.empty:
             return None
-        return dcc.send_data_frame(df.to_csv, filename=f"atenciones_{codcas}_{periodo}_prioridad_1.csv", index=False)
+        return dcc.send_data_frame(
+            df.to_csv,
+            filename=f"atenciones_{codcas}_{anio_str}_{periodo}_prioridad_1.csv",
+            index=False
+        )
         

@@ -90,7 +90,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     ]
 
-
+    anio = ['2025', '2026']
+    anio_options = [{'label': year, 'value': year} for year in anio]
     # Generar periodos "01".."12"
     valores = [f"{i:02d}" for i in range(1, 13)]
     df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
@@ -249,11 +250,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 # FILTROS + BOTONES
                 html.Div([
                     html.Div([
-                        html.I(className="bi bi-calendar3", style={
+                        html.I(className="bi bi-calendar-week", style={
                             'fontSize': '20px',
                             'color': BRAND,
                             'marginRight': '10px'
                         }),
+                        dcc.Dropdown(
+                            id='filter-anio',
+                            options=anio_options,
+                            placeholder='Seleccione un año',
+                            clearable=True,
+                            style={
+                                'width': '160px',
+                                'fontFamily': FONT_FAMILY
+                            }
+                        ),
                         dcc.Dropdown(
                             id='filter-periodo',
                             options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
@@ -264,7 +275,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                 'fontFamily': FONT_FAMILY
                             }
                         ),
-                    ], style={'display': 'flex', 'alignItems': 'center', 'marginRight': '15px'}),
+                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
                     dbc.Button(
                         [html.I(className="bi bi-search me-2"), "Buscar"],
                         id='search-button',
@@ -272,7 +283,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         style={
                             'backgroundColor': BRAND,
                             'borderColor': BRAND,
-                            'marginRight': '10px',
                             'fontFamily': FONT_FAMILY,
                             'fontWeight': '600',
                             'borderRadius': '8px',
@@ -294,20 +304,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     ),
                     dcc.Download(id="download-dataframe-csv"),
                     dbc.Button(
-                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                                id="btn-volver-eme",
-                                color='secondary',
-                                outline=True,
-                                n_clicks=0,
-                                style={
-                                'marginLeft': 'auto',
-                                'padding': '8px 12px'
-                                    }
-                            ),
-                        dbc.Tooltip("Regresar a la página principal", target='btn-volver-eme', placement='bottom')
+                        [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                        id="btn-volver-eme",
+                        color='secondary',
+                        outline=True,
+                        n_clicks=0,
+                        style={
+                            'marginLeft': 'auto',
+                            'padding': '8px 12px'
+                        }
+                    ),
+                    dbc.Tooltip("Regresar a la página principal", target='btn-volver-eme', placement='bottom')
                 ], style={
                     'display': 'flex',
                     'alignItems': 'center',
+                    'gap': '16px',
                     'marginBottom': '30px',
                     'padding': '20px',
                     'backgroundColor': CARD_BG,
@@ -438,16 +449,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
          Output('charts-container', 'children')],
         Input('search-button', 'n_clicks'),
         State('filter-periodo', 'value'),
+        State('filter-anio', 'value'),
         State('url', 'pathname')
     )
-    def on_search(n_clicks, periodo, pathname):
+    def on_search(n_clicks, periodo, anio, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
         
         import secure_code as sc
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_url)
-        if not periodo or not codcas:
+        if not periodo or not anio or not codcas:
             return html.Div([
                 html.I(className="bi bi-exclamation-circle", style={
                     'fontSize': '64px',
@@ -459,7 +471,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     'fontFamily': FONT_FAMILY,
                     'marginBottom': '10px'
                 }),
-                html.P("Por favor, seleccione un periodo y asegúrese de tener un centro válido.", style={
+                html.P("Por favor, seleccione un año y un periodo y asegúrese de tener un centro válido.", style={
                     'color': MUTED,
                     'fontFamily': FONT_FAMILY
                 })
@@ -470,6 +482,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 'borderRadius': '16px',
                 'boxShadow': '0 10px 30px rgba(0,0,0,0.08)'
             }), html.Div()
+
+        anio_str = str(anio)
 
         engine = create_connection()
         if engine is None:
@@ -491,7 +505,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 es.des_estandar AS desc_estandar,         -- aliasado como desc_estandar para coincidir con el código
                 t.tipopacinom AS desc_tipo_paciente,
                 ce.acto_med
-            FROM dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} AS ce
+            FROM dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} AS ce
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON ce.cod_oricentro = ca.oricenasicod
                 AND ce.cod_centro = ca.cenasicod
@@ -505,7 +519,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         """
 
         query_defunciones= f"""
-        SELECT * FROM dwsge.dwe_emergencia_defunciones_homologacion_2025_{periodo}
+        SELECT * FROM dwsge.dwe_emergencia_defunciones_homologacion_{anio_str}_{periodo}
         WHERE cod_centro='{codcas}'
             """
         df_defunciones = pd.read_sql(query_defunciones, engine)
@@ -528,11 +542,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     'fontFamily': FONT_FAMILY,
                     'marginBottom': '10px'
                 }),
-                html.P("No hay registros de atenciones para el periodo seleccionado.", style={
+                html.P("No hay registros de atenciones para el año y periodo seleccionados.", style={
                     'color': MUTED,
                     'fontFamily': FONT_FAMILY
                 }),
-                html.P(f"Centro: {codcas} | Periodo: {periodo}", style={
+                html.P(f"Centro: {codcas} | Año: {anio_str} | Periodo: {periodo}", style={
                     'color': MUTED,
                     'fontFamily': FONT_FAMILY,
                     'fontSize': '12px'
@@ -583,7 +597,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                             end) 
                 end )as cod_prioridad_n
                         FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                            dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
                 LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
                 LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
                 LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
@@ -630,7 +644,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
 
         query_mayor_24h = f"""
             SELECT des_estancia, COUNT(*) AS total
-            FROM dwsge.dwe_emergencia_estancia_homologacion_2025_{periodo} estancias
+            FROM dwsge.dwe_emergencia_estancia_homologacion_{anio_str}_{periodo} estancias
             LEFT JOIN dwsge.dim_estancia est ON est.id_estancia = estancias.rango_estancia
             WHERE estancias.cod_centro = '{codcas}'
               AND des_estancia = 'Mayor 24h'
@@ -640,7 +654,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         
         query_menor_24h = f"""
             SELECT des_estancia, COUNT(*) AS total
-            FROM dwsge.dwe_emergencia_estancia_homologacion_2025_{periodo} estancias
+            FROM dwsge.dwe_emergencia_estancia_homologacion_{anio_str}_{periodo} estancias
             LEFT JOIN dwsge.dim_estancia est ON est.id_estancia = estancias.rango_estancia
             WHERE estancias.cod_centro = '{codcas}'
               AND des_estancia = 'Menor 24h'
@@ -662,7 +676,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         menor_24h_total = obtener_total_estancia(query_menor_24h, 'menor_24h')
         
         total_atenciones = sum(prioridades_data.values())
-        subtitle = f"Periodo {periodo} | {nombre_centro}"
+        subtitle = f"Año {anio_str} | Periodo {periodo} | {nombre_centro}"
 
         ROMAN_PRIORIDADES = {
                         1: "I",
@@ -683,8 +697,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 "title": label,
                 "value": f"{prioridades_data.get(prioridad, 0):,.0f}",
                 "border_color": PRIORIDAD_COLORS.get(prioridad, BRAND),
-                "href": f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}",
-                "subtitle": f"Periodo {periodo} | {nombre_centro}",
+                "href": f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}&anio={anio_str}",
+                "subtitle": f"Año {anio_str} | Periodo {periodo} | {nombre_centro}",
                 "side_component": render_priority_table(
                     prioridad_table
                 )           
@@ -793,16 +807,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         Output("download-dataframe-csv", "data"),
         Input("download-button", "n_clicks"),
         State('filter-periodo', 'value'),
+        State('filter-anio', 'value'),
         State('url', 'pathname'),
         prevent_initial_call=True
     )
-    def download_csv(n_clicks, periodo, pathname):
-        if not n_clicks or not periodo or not pathname:
+    def download_csv(n_clicks, periodo, anio, pathname):
+        if not n_clicks or not periodo or not anio or not pathname:
             return None
 
-        codcas = pathname.rstrip('/').split('/')[-1] if pathname else None
+        import secure_code as sc
+        codcas_encoded = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_encoded) if codcas_encoded else None
         if not codcas:
             return None
+
+        anio_str = str(anio)
 
         engine = create_connection()
         if engine is None:
@@ -840,7 +859,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                             end) 
                 end )as cod_prioridad_n
                         FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_2025_{periodo} a
+                            dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
                 LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
                 LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
                 LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
@@ -859,7 +878,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         if df.empty:
             return None
 
-        filename = f"atenciones_por_prioridad_{codcas}_{periodo}.csv"
+        filename = f"atenciones_por_prioridad_{codcas}_{anio_str}_{periodo}.csv"
         return dcc.send_data_frame(df.to_csv, filename, index=False)
 
     @dash_app.callback(
@@ -871,8 +890,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         if n_clicks:
             return "/"
         return ""
-
-
 
     dash_app.layout = serve_layout
     return dash_app

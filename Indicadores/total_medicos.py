@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 import dash_ag_grid as dag
+from urllib.parse import parse_qs
 
 # Paleta similar a dashboard.py
 BRAND = "#0064AF"
@@ -82,14 +83,31 @@ def empty_fig(title: str | None = None) -> go.Figure:
     )
     return fig
 
-def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str):
+def _parse_query_param(search: str, key: str) -> str | None:
+    if not search:
+        return None
+    params = parse_qs(search.lstrip("?"))
+    values = params.get(key)
+    return values[0] if values else None
+
+
+def _parse_periodo(search: str) -> str | None:
+    return _parse_query_param(search, "periodo")
+
+
+def _parse_anio(search: str) -> str | None:
+    return _parse_query_param(search, "anio")
+
+
+def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_dropdown: str):
     if not pathname:
-        return None, None
+        return None, None, None
     import secure_code as sc
     codcas = pathname.rstrip("/").split("/")[-1]
     codcas = sc.decode_code(codcas)
     periodo = _parse_periodo(search) or periodo_dropdown
-    return codcas, periodo
+    anio = _parse_anio(search) or anio_dropdown
+    return codcas, periodo, anio
 
 # Conexión DB
 def create_connection():
@@ -101,15 +119,6 @@ def create_connection():
     except Exception as e:
         print(f"Failed to connect to the database: {e}")
         return None
-
-def _parse_periodo(search: str) -> str | None:
-    if not search:
-        return None
-    # search llega como "?periodo=03&otra=x"
-    params = dict(
-        part.split("=", 1) for part in search.lstrip("?").split("&") if "=" in part
-    )
-    return params.get("periodo")
 
 # --- NUEVO: helper para aplicar filtros del grid a los datos de la tabla ---
 def _tm_apply_filter(data_records, filter_model):
@@ -310,14 +319,15 @@ register_page(
     Output("tm-table-wrapper", "children"),
     Input("tm-location", "pathname"),
     Input("tm-location", "search"),
-    State("filter-periodo", "value")
+    State("filter-periodo", "value"),
+    State("filter-anio", "value")
 )
-def update_tabla_medicos(pathname, search, periodo_dropdown):
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
+def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
     if not codcas:
         return html.Div("Sin ruta.", style={"color": "#b00"})
-    if not periodo:
-        return html.Div("Falta periodo.", style={"color": "#b00"})
+    if not periodo or not anio:
+        return html.Div("Faltan filtros (periodo/año).", style={"color": "#b00"})
     engine = create_connection()
     if engine is None:
         return html.Div("Error de conexión a la base de datos.", style={"color": "#b00"})
@@ -325,7 +335,7 @@ def update_tabla_medicos(pathname, search, periodo_dropdown):
          SELECT c.servhosdes AS descripcion_servicio,
              ce.dni_medico,
              ce.fecha_atencion
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         WHERE ce.cod_centro = '{codcas}'
           AND ce.cod_actividad = '91'
@@ -409,14 +419,15 @@ def tm_actualizar_total_grid(filter_model, row_data):
     Output("tm-matriz-wrapper", "children"),
     Input("tm-location", "pathname"),
     Input("tm-location", "search"),
-    State("filter-periodo", "value")
+    State("filter-periodo", "value"),
+    State("filter-anio", "value")
 )
-def update_matriz_medicos(pathname, search, periodo_dropdown):
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
+def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
     if not codcas:
         return html.Div("Sin ruta.", style={"color": "#b00"})
-    if not periodo:
-        return html.Div("Falta periodo.", style={"color": "#b00"})
+    if not periodo or not anio:
+        return html.Div("Faltan filtros (periodo/año).", style={"color": "#b00"})
     engine = create_connection()
     if engine is None:
         return html.Div("Error de conexión a la base de datos.", style={"color": "#b00"})
@@ -424,7 +435,7 @@ def update_matriz_medicos(pathname, search, periodo_dropdown):
     query = f"""
          SELECT ce.dni_medico,
              ce.fecha_atencion
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         WHERE ce.cod_centro = '{codcas}'
           AND ce.cod_actividad = '91'
           AND ce.clasificacion in (2,4,6)
@@ -531,13 +542,14 @@ def update_matriz_medicos(pathname, search, periodo_dropdown):
     State("tm-location", "pathname"),
     State("tm-location", "search"),
     State("filter-periodo", "value"),
+    State("filter-anio", "value"),
     prevent_initial_call=True
 )
-def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
+def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
     if not n_clicks:
         return None
-    codcas, periodo = get_codcas_periodo(pathname, search, periodo_dropdown)
-    if not codcas or not periodo:
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
     if engine is None:
@@ -562,7 +574,7 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -580,5 +592,5 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown):
         df = pd.read_sql(query, engine)
     except Exception:
         return None
-    filename = f"total_atenciones_{codcas}_{periodo}.csv"
+    filename = f"total_atenciones_{codcas}_{anio}_{periodo}.csv"
     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")
