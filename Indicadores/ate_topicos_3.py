@@ -40,6 +40,20 @@ TAB_SELECTED_STYLE = {
     "fontWeight": "700"
 }
 
+DEFAULT_TIPO_ASEGURADO = "Todos"
+TIPO_ASEGURADO_CLAUSES = {
+    "asegurado": "('1')",
+    "1": "('1')",
+    "no asegurado": "('2')",
+    "2": "('2')",
+    "todos": "('1','2')"
+}
+
+
+def resolve_tipo_asegurado_clause(value: str | None) -> str:
+    key = str(value).strip().lower() if value else ""
+    return TIPO_ASEGURADO_CLAUSES.get(key, TIPO_ASEGURADO_CLAUSES["todos"])
+
 # Helpers de gráficos
 def empty_fig(title: str | None = None) -> go.Figure:
     fig = go.Figure()
@@ -126,6 +140,10 @@ def _parse_periodo(search: str) -> str | None:
 
 def _parse_anio(search: str) -> str | None:
     return _parse_query_param(search, "anio")
+
+
+def _parse_codasegu(search: str) -> str | None:
+    return _parse_query_param(search, "codasegu")
 
 header = html.Div([
     html.Div([
@@ -291,6 +309,8 @@ def update_page_content(codcas, search):
 
     periodo = _parse_periodo(search)
     anio_str = _parse_anio(search)
+    tipo_asegurado = _parse_codasegu(search) or DEFAULT_TIPO_ASEGURADO
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
 
     if not periodo or not anio_str:
         return (
@@ -353,6 +373,12 @@ def update_page_content(codcas, search):
                     LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
                     where (a.cod_diagnostico IS not NULL )
                     and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                    and (
+                            CASE 
+                                WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu_clause}
                 ) c    
         ) d
         WHERE
@@ -519,6 +545,8 @@ def download_csv(n_clicks, codcas, search):
         return no_update
     periodo = _parse_periodo(search)
     anio_str = _parse_anio(search)
+    tipo_asegurado = _parse_codasegu(search) or DEFAULT_TIPO_ASEGURADO
+    codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not periodo or not anio_str or not codcas:
         return no_update
     engine = create_connection()
@@ -561,6 +589,12 @@ def download_csv(n_clicks, codcas, search):
                     LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
                     where (a.cod_diagnostico IS not NULL )
                     and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                    and (
+                            CASE 
+                                WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu_clause}
                 ) c    
         ) d
         WHERE

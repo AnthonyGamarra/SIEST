@@ -947,7 +947,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     html.Div([
                         html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
                         html.H2(
-                            "Consulta externa 2025 - Atenciones medicas",
+                            "Consulta externa",
                             style={
                                 'color': BRAND,
                                 'fontFamily': FONT_FAMILY,

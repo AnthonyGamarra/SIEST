@@ -9,6 +9,7 @@ from datetime import date
 import dash_ag_grid as dag
 import os  # agregado
 import dash
+from urllib.parse import quote_plus
 
 # Importar páginas de detalle
 from Indicadores import ate_topicos_1
@@ -91,10 +92,22 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
     ]
 
     anio = ['2025', '2026']
+    tipo_asegurado = ['Asegurado', 'No Asegurado', 'Todos']
     anio_options = [{'label': year, 'value': year} for year in anio]
-    # Generar periodos "01".."12"
     valores = [f"{i:02d}" for i in range(1, 13)]
     df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
+    tipo_asegurado_options = [{'label': tipo, 'value': tipo} for tipo in tipo_asegurado]
+
+    DEFAULT_TIPO_ASEGURADO = 'Todos'
+    TIPO_ASEGURADO_SQL = {
+        'Asegurado': "('1')",
+        'No Asegurado': "('2')",
+        'Todos': "('1','2')"
+    }
+
+    def resolve_tipo_asegurado_clause(selection: str | None) -> str:
+        normalized = selection if selection in TIPO_ASEGURADO_SQL else DEFAULT_TIPO_ASEGURADO
+        return TIPO_ASEGURADO_SQL[normalized]
 
     def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
         link_content = html.H5(
@@ -275,6 +288,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                 'fontFamily': FONT_FAMILY
                             }
                         ),
+                        dcc.Dropdown(
+                            id='filter-tipo-asegurado',
+                            options=tipo_asegurado_options,
+                            value=DEFAULT_TIPO_ASEGURADO,
+                            clearable=False,
+                            style={
+                                'width': '200px',
+                                'fontFamily': FONT_FAMILY
+                            }
+                        ),
                     ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
                     dbc.Button(
                         [html.I(className="bi bi-search me-2"), "Buscar"],
@@ -450,9 +473,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         Input('search-button', 'n_clicks'),
         State('filter-periodo', 'value'),
         State('filter-anio', 'value'),
+        State('filter-tipo-asegurado', 'value'),
         State('url', 'pathname')
     )
-    def on_search(n_clicks, periodo, anio, pathname):
+    def on_search(n_clicks, periodo, anio, tipo_asegurado, pathname):
         if not n_clicks:
             return html.Div(), html.Div()
         
@@ -484,6 +508,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             }), html.Div()
 
         anio_str = str(anio)
+        tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
+        codasegu_clause = resolve_tipo_asegurado_clause(tipo_filter)
 
         engine = create_connection()
         if engine is None:
@@ -516,11 +542,23 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             WHERE ce.cod_centro = '{codcas}'
             and ce.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
             and ce.cod_prioridad <> '0'
+            and (
+                    CASE 
+                        WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                        ELSE '1'
+                    END
+                    ) IN {codasegu_clause}
         """
 
         query_defunciones= f"""
         SELECT * FROM dwsge.dwe_emergencia_defunciones_homologacion_{anio_str}_{periodo}
         WHERE cod_centro='{codcas}'
+        and (
+                    CASE 
+                        WHEN cod_tipo_paciente = '4' THEN '2'
+                        ELSE '1'
+                    END
+                    ) IN {codasegu_clause}
             """
         df_defunciones = pd.read_sql(query_defunciones, engine)
         defunciones_data = len(df_defunciones)
@@ -562,6 +600,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         # === NOMBRE DEL CENTRO ===
         nombre_centro = df['cenasides'].dropna().unique()
         nombre_centro = nombre_centro[0] if len(nombre_centro) > 0 else codcas
+        detail_query = f"?periodo={periodo}&anio={anio_str}&codasegu={quote_plus(tipo_filter)}"
 
         # === TARJETAS RESUMEN POR PRIORIDAD ===
         # Query base para obtener datos con cod_prioridad_n
@@ -604,6 +643,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
                 where (a.cod_diagnostico IS not NULL )
                 and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                and (
+                        CASE 
+                            WHEN a.cod_tipo_paciente = '4' THEN '2'
+                            ELSE '1'
+                        END
+                        ) IN {codasegu_clause}
                 ) c	
             ) d
             WHERE
@@ -649,6 +694,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             WHERE estancias.cod_centro = '{codcas}'
               AND des_estancia = 'Mayor 24h'
               AND estancia_horas IS NOT NULL
+              AND (
+                        CASE 
+                            WHEN estancias.cod_tipo_paciente = '4' THEN '2'
+                            ELSE '1'
+                        END
+                        ) IN {codasegu_clause}
             GROUP BY des_estancia
         """
         
@@ -659,6 +710,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             WHERE estancias.cod_centro = '{codcas}'
               AND des_estancia = 'Menor 24h'
               AND estancia_horas IS NOT NULL
+              AND (
+                        CASE 
+                            WHEN estancias.cod_tipo_paciente = '4' THEN '2'
+                            ELSE '1'
+                        END
+                        ) IN {codasegu_clause}
             GROUP BY des_estancia
         """
 
@@ -697,7 +754,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 "title": label,
                 "value": f"{prioridades_data.get(prioridad, 0):,.0f}",
                 "border_color": PRIORIDAD_COLORS.get(prioridad, BRAND),
-                "href": f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}?periodo={periodo}&anio={anio_str}",
+                "href": f"{url_base_pathname}prioridad_{prioridad}/{codcas_url}{detail_query}",
                 "subtitle": f"Año {anio_str} | Periodo {periodo} | {nombre_centro}",
                 "side_component": render_priority_table(
                     prioridad_table
@@ -808,10 +865,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         Input("download-button", "n_clicks"),
         State('filter-periodo', 'value'),
         State('filter-anio', 'value'),
+        State('filter-tipo-asegurado', 'value'),
         State('url', 'pathname'),
         prevent_initial_call=True
     )
-    def download_csv(n_clicks, periodo, anio, pathname):
+    def download_csv(n_clicks, periodo, anio, tipo_asegurado, pathname):
         if not n_clicks or not periodo or not anio or not pathname:
             return None
 
@@ -866,6 +924,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
                 where (a.cod_diagnostico IS not NULL )
                 and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
+                and (
+                        CASE 
+                            WHEN a.cod_tipo_paciente = '4' THEN '2'
+                            ELSE '1'
+                        END
+                        ) IN {codasegu_clause}
                 ) c	
             ) d
 
