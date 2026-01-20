@@ -881,6 +881,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
 
         anio_str = str(anio)
 
+        tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
+        codasegu_clause = resolve_tipo_asegurado_clause(tipo_filter)
+
         engine = create_connection()
         if engine is None:
             return None
