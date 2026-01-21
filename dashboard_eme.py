@@ -271,7 +271,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         dcc.Dropdown(
                             id='filter-anio',
                             options=anio_options,
-                            placeholder='Seleccione un año',
+                            placeholder='Año',
                             clearable=True,
                             style={
                                 'width': '160px',
@@ -281,7 +281,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         dcc.Dropdown(
                             id='filter-periodo',
                             options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                            placeholder='Seleccione un periodo',
+                            placeholder='Periodo',
                             clearable=True,
                             style={
                                 'width': '240px',

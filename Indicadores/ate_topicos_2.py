@@ -557,7 +557,7 @@ def download_csv(n_clicks, codcas, search):
             SELECT
             d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
             d.cod_prioridad,d.cod_emergencia,
-            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
+            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.doc_paciente,d.anio_edad,d.cod_prioridad_n
             FROM (
                 SELECT 
                     ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
@@ -579,6 +579,8 @@ def download_csv(n_clicks, codcas, search):
                         es.des_estandar,
                         a.cod_diagnostico,
                         dg.diagdes,
+                        a.doc_paciente,
+                        a.anio_edad,
                 (case when a.cod_estandar = '04' then '1'
                 else (case when a.cod_prioridad='1' then '2'
                             else (a.cod_prioridad) 
