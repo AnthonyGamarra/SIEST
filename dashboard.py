@@ -245,7 +245,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 id=tab_config.filter_ids.anio,
                 className='anio-dropdown',
                 options=anio_options,
-                placeholder='Seleccione un año',
+                placeholder='Año',
                 clearable=True,
                 style={
                     'width': '160px',
@@ -258,7 +258,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 id=tab_config.filter_ids.periodo,
                 className='periodo-dropdown',
                 options=periodo_options,
-                placeholder='Seleccione un periodo',
+                placeholder='Periodo',
                 clearable=True,
                 style={
                     'width': '240px',
