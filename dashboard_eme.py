@@ -892,7 +892,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             SELECT
             d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
             d.cod_prioridad,d.cod_emergencia,
-            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
+            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.doc_paciente,d.anio_edad,d.cod_prioridad_n
             FROM (
                 SELECT 
                     ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
@@ -914,6 +914,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         es.des_estandar,
                         a.cod_diagnostico,
                         dg.diagdes,
+                        a.doc_paciente,
+                        a.anio_edad,
                 (case when a.cod_estandar = '04' then '1'
                 else (case when a.cod_prioridad='1' then '2'
                             else (a.cod_prioridad) 
@@ -944,7 +946,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         df = pd.read_sql(query, engine)
         if df.empty:
             return None
-
+        df = df.astype(str)
         filename = f"atenciones_por_prioridad_{codcas}_{anio_str}_{periodo}.csv"
         return dcc.send_data_frame(df.to_csv, filename, index=False)
 

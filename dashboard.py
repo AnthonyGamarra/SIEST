@@ -744,6 +744,400 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             "primeras_consultas_query": primera_vez,
             "primeras_consultas_agrupador_query": primera_vez_agr,
         }
+
+    def build_queries_atencion_inmediata(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+                    ("atenciones", text(f"""
+                        SELECT 
+                            ce.cod_servicio,
+                            ce.cod_especialidad,
+                            ca.cenasides,
+                            ag.agrupador AS agrupador,
+                            am.actdes AS actividad,
+                            a.actespnom AS subactividad,
+                            ce.cod_tipo_consulta,
+                            ce.cod_diag,
+                            c.servhosdes AS descripcion_servicio,
+                            e.especialidad AS descripcion_especialidad,
+                            t.tipcondes AS descripcion_tipo_consulta,
+                            d.diagdes AS descripcion_diagnostico,
+                            dni_medico,
+                            doc_paciente,
+                            cod_tipdoc_paciente,
+                            sexo,
+                            fecha_atencion,
+                            acto_med,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
+                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmtco10 AS t
+                            ON ce.cod_tipo_consulta = t.tipconcod
+                        LEFT JOIN dwsge.sgss_cmdia10 AS d
+                            ON ce.cod_diag = d.diagcod
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND a.actespcod = '002'
+                        AND ce.clasificacion in (2,4,6)
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                    """),
+                    params.copy()),
+                ("horas_programadas", text(f"""
+                SELECT 
+                    p.*,
+                    c.servhosdes,
+                    e.especialidad,
+                    ag.agrupador,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND a.actespcod = '002'
+            """),
+            params.copy()),
+                    ("horas_efectivas", text(f"""
+                        SELECT 
+                            ce.*,
+                            c.servhosdes,
+                            e.especialidad,
+                            a.actespnom,
+                            am.actdes,
+                            ag.agrupador,
+                            ca.cenasides
+                        FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND a.actespcod = '002'
+                    """),
+                    params.copy()),
+                    ("medicos_agrup", text(f"""
+                        SELECT c.cod_centro,
+                            c.dni_medico,
+                            c.agrupador,
+                            c.periodo,
+                            c.cantidad_medicos,
+                            c.medico
+                        FROM ( SELECT b.cod_centro,
+                                    b.dni_medico,
+                                    b.agrupador,
+                                    b.periodo,
+                                    b.cantidad_medicos,
+                                    row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                                FROM ( SELECT a.cod_centro,
+                                            a.dni_medico,
+                                            ag.agrupador,
+                                            a.periodo,
+                                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
+                                            count(*) AS cantidad_medicos
+                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        LEFT JOIN dwsge.dim_agrupador ag 
+                                        ON a.cod_agrupador = ag.cod_agrupador
+                                        WHERE a.cod_centro=:codcas
+                                        AND cod_subactividad = '002'
+                                        AND a.clasificacion in (2,4,6)
+                                        AND (
+                                                CASE 
+                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                                    ELSE '1'
+                                                END
+                                                ) IN {codasegu}
+                                        GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                                        ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                        WHERE c.medico = '1'::bigint
+                    """),
+                    params.copy()),
+                ]
+        primera_vez = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT cod_oricentro,cod_centro,doc_paciente,
+        CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
+                        WHERE cod_subactividad = '002'
+                        AND (
+                                CASE 
+                                    WHEN cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        AND clasificacion IN (2,4,6) AND cod_centro=:codcas
+                        GROUP BY cod_oricentro,cod_centro,doc_paciente, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql
+                """)
+        primera_vez_agr = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT p.doc_paciente,ag.agrupador,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
+                        LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
+                        WHERE p.clasificacion IN (2,4,6) 
+                        AND p.cod_centro=:codcas
+                        AND p.cod_subactividad = '002'
+                        AND (
+                                CASE 
+                                    WHEN p.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        GROUP BY p.doc_paciente,ag.agrupador, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT agrupador,COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql GROUP BY agrupador
+                """)
+        return {
+                    "queries": queries,
+                    "primeras_consultas_query": primera_vez,
+                    "primeras_consultas_agrupador_query": primera_vez_agr,
+                }
+
+    def build_queries_consulta_apoyo_desc(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+                    ("atenciones", text(f"""
+                        SELECT 
+                            ce.cod_servicio,
+                            ce.cod_especialidad,
+                            ca.cenasides,
+                            ag.agrupador AS agrupador,
+                            am.actdes AS actividad,
+                            a.actespnom AS subactividad,
+                            ce.cod_tipo_consulta,
+                            ce.cod_diag,
+                            c.servhosdes AS descripcion_servicio,
+                            e.especialidad AS descripcion_especialidad,
+                            t.tipcondes AS descripcion_tipo_consulta,
+                            d.diagdes AS descripcion_diagnostico,
+                            dni_medico,
+                            doc_paciente,
+                            cod_tipdoc_paciente,
+                            sexo,
+                            fecha_atencion,
+                            acto_med,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
+                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmtco10 AS t
+                            ON ce.cod_tipo_consulta = t.tipconcod
+                        LEFT JOIN dwsge.sgss_cmdia10 AS d
+                            ON ce.cod_diag = d.diagcod
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND ce.cod_actividad = '91'
+                        AND ce.cod_subactividad = '003'
+                        AND ce.clasificacion in (2,4,6)
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                    """),
+                    params.copy()),
+                ("horas_programadas", text(f"""
+                SELECT 
+                    p.*, 
+                    c.servhosdes,
+                    e.especialidad,
+                    ag.agrupador,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND p.cod_actividad = '91'
+                AND p.cod_subactividad = '003'
+            """),
+            params.copy()),
+                    ("horas_efectivas", text(f"""
+                        SELECT 
+                            ce.*, 
+                            c.servhosdes,
+                            e.especialidad,
+                            a.actespnom,
+                            am.actdes,
+                            ag.agrupador,
+                            ca.cenasides
+                        FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND ce.cod_actividad = '91'
+                        AND ce.cod_subactividad = '003'
+                    """),
+                    params.copy()),
+                    ("medicos_agrup", text(f"""
+                        SELECT c.cod_centro,
+                            c.dni_medico,
+                            c.agrupador,
+                            c.periodo,
+                            c.cantidad_medicos,
+                            c.medico
+                        FROM ( SELECT b.cod_centro,
+                                    b.dni_medico,
+                                    b.agrupador,
+                                    b.periodo,
+                                    b.cantidad_medicos,
+                                    row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                                FROM ( SELECT a.cod_centro,
+                                            a.dni_medico,
+                                            ag.agrupador,
+                                            a.periodo,
+                                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
+                                            count(*) AS cantidad_medicos
+                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        LEFT JOIN dwsge.dim_agrupador ag 
+                                        ON a.cod_agrupador = ag.cod_agrupador
+                                        WHERE a.cod_centro=:codcas
+                                        AND a.cod_actividad = '91'
+                                        AND a.cod_subactividad = '003'
+                                        AND a.clasificacion in (2,4,6)
+                                        AND (
+                                                CASE 
+                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                                    ELSE '1'
+                                                END
+                                                ) IN {codasegu}
+                                        GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                                        ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                        WHERE c.medico = '1'::bigint
+                    """),
+                    params.copy()),
+                ]
+        primera_vez = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT cod_oricentro,cod_centro,doc_paciente,
+        CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
+                        WHERE cod_actividad = '91'
+                        AND cod_subactividad = '003'
+                        AND (
+                                CASE 
+                                    WHEN cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        AND clasificacion IN (2,4,6) AND cod_centro=:codcas
+                        GROUP BY cod_oricentro,cod_centro,doc_paciente, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql
+                """)
+        primera_vez_agr = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT p.doc_paciente,ag.agrupador,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
+                        LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
+                        WHERE p.clasificacion IN (2,4,6) 
+                        AND p.cod_centro=:codcas
+                        AND p.cod_actividad = '91'
+                        AND p.cod_subactividad = '003'
+                        AND (
+                                CASE 
+                                    WHEN p.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        GROUP BY p.doc_paciente,ag.agrupador, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT agrupador,COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql GROUP BY agrupador
+                """)
+        return {
+                    "queries": queries,
+                    "primeras_consultas_query": primera_vez,
+                    "primeras_consultas_agrupador_query": primera_vez_agr,
+                }
  
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
         if not periodo or not codcas or not anio:
@@ -889,6 +1283,12 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
 
     def load_dashboard_data_complementaria(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_complementaria, tipo_asegurado_value)
+
+    def load_dashboard_data_inmediata(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_atencion_inmediata, tipo_asegurado_value)
+
+    def load_dashboard_data_apoyo_desc(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_consulta_apoyo_desc, tipo_asegurado_value)
 
     def build_download_response(periodo, anio, pathname, tipo_asegurado_value, data_loader, include_citas=True, include_desercion=True):
         if not periodo or not pathname or not anio:
@@ -1223,6 +1623,240 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         dbc.Row([dbc.Col(html.Div(id='charts-container-complementaria'), width=12)]),
                                         html.Br(),
                                     ], id='tab-complementaria-content')
+                                ]
+                            ),
+                            dcc.Tab(
+                                label="Consulta de Atención Inmediata",
+                                value='tab-inmediata',
+                                style=TAB_STYLE,
+                                selected_style=TAB_SELECTED_STYLE,
+                                children=[
+                                    html.Div([
+                                        html.Div([
+                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
+                                            dcc.Dropdown(
+                                                id='filter-anio-inmediata',
+                                                className='anio-dropdown',
+                                                options=anio_options,
+                                                placeholder='Seleccione un año',
+                                                clearable=True,
+                                                style={
+                                                    'width': '160px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dcc.Dropdown(
+                                                id='filter-periodo-inmediata',
+                                                className='periodo-dropdown',
+                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
+                                                placeholder='Seleccione un periodo',
+                                                clearable=True,
+                                                style={
+                                                    'width': '240px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dcc.Dropdown(
+                                                id='filter-tipo-asegurado-inmediata',
+                                                className='tipo-dropdown',
+                                                options=tipo_asegurado_options,
+                                                value=DEFAULT_TIPO_ASEGURADO,
+                                                clearable=False,
+                                                placeholder='Tipo asegurado',
+                                                style={
+                                                    'width': '200px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-search me-2"), "Buscar"],
+                                                id='search-button-inmediata',
+                                                color='primary',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': BRAND,
+                                                    'borderColor': BRAND,
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
+                                                id='download-button-inmediata',
+                                                color='success',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': '#28a745',
+                                                    'borderColor': '#28a745',
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dcc.Download(id="download-dataframe-csv-inmediata"),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                                                id='back-button-inmediata',
+                                                color='secondary',
+                                                outline=True,
+                                                n_clicks=0,
+                                                style={
+                                                    'marginLeft': 'auto',
+                                                    'padding': '8px 12px'
+                                                }
+                                            ),
+                                        ], style={**CONTROL_BAR_STYLE}),
+                                        dbc.Tooltip("Regresar al inicio", target='back-button-inmediata', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Buscar datos", target='search-button-inmediata', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Descargar Excel", target='download-button-inmediata', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Row([
+                                            dbc.Col(
+                                                html.Div(
+                                                    dcc.Loading(
+                                                        className='dashboard-loading-inline',
+                                                        parent_className='dashboard-loading-parent',
+                                                        parent_style={'width': '100%'},
+                                                        type='default',
+                                                        style={'width': '100%'},
+                                                        children=html.Div(id='summary-container-inmediata')
+                                                    ),
+                                                    className='dashboard-loading-shell'
+                                                ),
+                                                width=12
+                                            )
+                                        ]),
+                                        html.Br(),
+                                        dbc.Row([dbc.Col(html.Div(id='charts-container-inmediata'), width=12)]),
+                                        html.Br(),
+                                    ], id='tab-inmediata-content')
+                                ]
+                            ),
+                            dcc.Tab(
+                                label="Cons. Apoyo Desc.",
+                                value='tab-apoyo-desc',
+                                style=TAB_STYLE,
+                                selected_style=TAB_SELECTED_STYLE,
+                                children=[
+                                    html.Div([
+                                        html.Div([
+                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
+                                            dcc.Dropdown(
+                                                id='filter-anio-apoyo-desc',
+                                                className='anio-dropdown',
+                                                options=anio_options,
+                                                placeholder='Seleccione un año',
+                                                clearable=True,
+                                                style={
+                                                    'width': '160px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dcc.Dropdown(
+                                                id='filter-periodo-apoyo-desc',
+                                                className='periodo-dropdown',
+                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
+                                                placeholder='Seleccione un periodo',
+                                                clearable=True,
+                                                style={
+                                                    'width': '240px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dcc.Dropdown(
+                                                id='filter-tipo-asegurado-apoyo-desc',
+                                                className='tipo-dropdown',
+                                                options=tipo_asegurado_options,
+                                                value=DEFAULT_TIPO_ASEGURADO,
+                                                clearable=False,
+                                                placeholder='Tipo asegurado',
+                                                style={
+                                                    'width': '200px',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'position': 'relative',
+                                                    'zIndex': 1200
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-search me-2"), "Buscar"],
+                                                id='search-button-apoyo-desc',
+                                                color='primary',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': BRAND,
+                                                    'borderColor': BRAND,
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
+                                                id='download-button-apoyo-desc',
+                                                color='success',
+                                                size='md',
+                                                style={
+                                                    'backgroundColor': '#28a745',
+                                                    'borderColor': '#28a745',
+                                                    'padding': '8px 12px',
+                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
+                                                    'fontFamily': FONT_FAMILY,
+                                                    'fontWeight': '600',
+                                                    'borderRadius': '8px'
+                                                }
+                                            ),
+                                            dcc.Download(id="download-dataframe-csv-apoyo-desc"),
+                                            dbc.Button(
+                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                                                id='back-button-apoyo-desc',
+                                                color='secondary',
+                                                outline=True,
+                                                n_clicks=0,
+                                                style={
+                                                    'marginLeft': 'auto',
+                                                    'padding': '8px 12px'
+                                                }
+                                            ),
+                                        ], style={**CONTROL_BAR_STYLE}),
+                                        dbc.Tooltip("Regresar al inicio", target='back-button-apoyo-desc', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Buscar datos", target='search-button-apoyo-desc', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Tooltip("Descargar Excel", target='download-button-apoyo-desc', placement='bottom', style={'zIndex': 9999}),
+                                        dbc.Row([
+                                            dbc.Col(
+                                                html.Div(
+                                                    dcc.Loading(
+                                                        className='dashboard-loading-inline',
+                                                        parent_className='dashboard-loading-parent',
+                                                        parent_style={'width': '100%'},
+                                                        type='default',
+                                                        style={'width': '100%'},
+                                                        children=html.Div(id='summary-container-apoyo-desc')
+                                                    ),
+                                                    className='dashboard-loading-shell'
+                                                ),
+                                                width=12
+                                            )
+                                        ]),
+                                        html.Br(),
+                                        dbc.Row([dbc.Col(html.Div(id='charts-container-apoyo-desc'), width=12)]),
+                                        html.Br(),
+                                    ], id='tab-apoyo-desc-content')
                                 ]
                             )
                         ],
@@ -1643,6 +2277,368 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
         return summary_row, charts_container
 
     @dash_app.callback(
+        [Output('summary-container-inmediata', 'children'),
+         Output('charts-container-inmediata', 'children')],
+        Input('search-button-inmediata', 'n_clicks'),
+        State('filter-periodo-inmediata', 'value'),
+        State('filter-anio-inmediata', 'value'),
+        State('filter-tipo-asegurado-inmediata', 'value'),
+        State('url', 'pathname')
+    )
+    def on_search_inmediata(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
+        if not n_clicks:
+            return html.Div(), html.Div()
+
+        import secure_code as sc
+
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+
+        if not periodo or not anio_value or not codcas:
+            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
+
+        engine = create_connection()
+        if engine is None:
+            return html.Div("Error de conexion a la base de datos."), html.Div()
+
+        data = load_dashboard_data_inmediata(periodo, anio_value, codcas, engine, tipo_asegurado_value)
+        if not data:
+            return html.Div("Sin datos para mostrar."), html.Div()
+
+        stats = data['stats']
+        tables = data['tables']
+        nombre_centro = data['nombre_centro']
+
+        total_atenciones = stats['total_atenciones']
+        total_consultantes = stats['total_consultantes']
+        total_medicos = stats['total_medicos']
+        total_horas_programadas = stats['total_horas_programadas']
+        total_horas_efectivas = stats['total_horas_efectivas']
+
+        total_atenciones_agru = tables['atenciones_por_agrupador']
+        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
+        medicos_por_agrupador_table = tables['medicos_por_agrupador']
+        horas_programadas_table = tables['horas_programadas_por_agrupador']
+        horas_efectivas_por_agrupador_table = tables.get(
+            'horas_efectivas_por_agrupador',
+            pd.DataFrame(columns=['agrupador', 'counts'])
+        )
+
+        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
+        total_consultantes_servicio = (
+            int(total_consultantes_por_servicio_table['counts'].sum())
+            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
+            else 0
+        )
+        cards = [
+            {
+                "title": "Total de consultantes a atención inmediata",
+                "value": f"{total_consultantes:,.0f}",
+                "border_color": ACCENT,
+            },
+            {
+                "title": "Total de consultantes al servicio",
+                "value": f"{total_consultantes_servicio:,.0f}",
+                "border_color": ACCENT,
+                "side_component": render_agrupador_table(
+                    total_consultantes_por_servicio_table,
+                    title="Consultantes por servicio"
+                ),
+            },
+            {
+                "title": "Total de Consultas",
+                "value": f"{total_atenciones:,.0f}",
+                "border_color": BRAND,
+                "href": None,
+                "side_component": render_agrupador_table(total_atenciones_agru),
+            },
+            {
+                "title": "Total de Médicos",
+                "value": f"{total_medicos:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": None,
+                "side_component": render_agrupador_table(medicos_por_agrupador_table),
+            },
+            {
+                "title": "Total horas programadas",
+                "value": f"{total_horas_programadas:,.0f}",
+                "border_color": BRAND,
+                "href": None,
+                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
+            },
+            {
+                "title": "Total de Horas Efectivas",
+                "value": f"{total_horas_efectivas:,.0f}",
+                "border_color": ACCENT,
+                "href": None,
+                "side_component": render_agrupador_table(
+                    horas_efectivas_por_agrupador_table,
+                    value_format="{:,.2f}"
+                ),
+            }
+        ]
+
+        summary_sections = []
+        for card in cards:
+            card_component = html.Div(
+                render_card(
+                    title=card["title"],
+                    value=card["value"],
+                    border_color=card["border_color"],
+                    subtitle_text=card.get("subtitle", subtitle),
+                    href=card.get("href"),
+                    extra_style=card.get("extra_style")
+                ),
+                style={'width': '100%'}
+            )
+
+            if card.get("side_component") and card.get("stacked_side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(card["side_component"], style={'width': '100%'}),
+                            width=12,
+                            lg=12,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '20px'}
+                    )
+                )
+            elif card.get("side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                card_component,
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            ),
+                            dbc.Col(
+                                html.Div(card["side_component"], style={'width': '100%'}),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            )
+                        ],
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+            else:
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+
+        summary_row = dbc.Container(summary_sections, fluid=True)
+
+        charts_container = html.Div()
+        return summary_row, charts_container
+
+    @dash_app.callback(
+        [Output('summary-container-apoyo-desc', 'children'),
+         Output('charts-container-apoyo-desc', 'children')],
+        Input('search-button-apoyo-desc', 'n_clicks'),
+        State('filter-periodo-apoyo-desc', 'value'),
+        State('filter-anio-apoyo-desc', 'value'),
+        State('filter-tipo-asegurado-apoyo-desc', 'value'),
+        State('url', 'pathname')
+    )
+    def on_search_apoyo_desc(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
+        if not n_clicks:
+            return html.Div(), html.Div()
+
+        import secure_code as sc
+
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+
+        if not periodo or not anio_value or not codcas:
+            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
+
+        engine = create_connection()
+        if engine is None:
+            return html.Div("Error de conexion a la base de datos."), html.Div()
+
+        data = load_dashboard_data_apoyo_desc(periodo, anio_value, codcas, engine, tipo_asegurado_value)
+        if not data:
+            return html.Div("Sin datos para mostrar."), html.Div()
+
+        stats = data['stats']
+        tables = data['tables']
+        nombre_centro = data['nombre_centro']
+
+        total_atenciones = stats['total_atenciones']
+        total_consultantes = stats['total_consultantes']
+        total_medicos = stats['total_medicos']
+        total_horas_programadas = stats['total_horas_programadas']
+        total_horas_efectivas = stats['total_horas_efectivas']
+
+        total_atenciones_agru = tables['atenciones_por_agrupador']
+        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
+        medicos_por_agrupador_table = tables['medicos_por_agrupador']
+        horas_programadas_table = tables['horas_programadas_por_agrupador']
+        horas_efectivas_por_agrupador_table = tables.get(
+            'horas_efectivas_por_agrupador',
+            pd.DataFrame(columns=['agrupador', 'counts'])
+        )
+
+        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
+        total_consultantes_servicio = (
+            int(total_consultantes_por_servicio_table['counts'].sum())
+            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
+            else 0
+        )
+        cards = [
+            {
+                "title": "Total de consultantes a cons. apoyo desc.",
+                "value": f"{total_consultantes:,.0f}",
+                "border_color": ACCENT,
+            },
+            {
+                "title": "Total de consultantes al servicio",
+                "value": f"{total_consultantes_servicio:,.0f}",
+                "border_color": ACCENT,
+                "side_component": render_agrupador_table(
+                    total_consultantes_por_servicio_table,
+                    title="Consultantes por servicio"
+                ),
+            },
+            {
+                "title": "Total de Consultas",
+                "value": f"{total_atenciones:,.0f}",
+                "border_color": BRAND,
+                "href": None,
+                "side_component": render_agrupador_table(total_atenciones_agru),
+            },
+            {
+                "title": "Total de Médicos",
+                "value": f"{total_medicos:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": None,
+                "side_component": render_agrupador_table(medicos_por_agrupador_table),
+            },
+            {
+                "title": "Total horas programadas",
+                "value": f"{total_horas_programadas:,.0f}",
+                "border_color": BRAND,
+                "href": None,
+                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
+            },
+            {
+                "title": "Total de Horas Efectivas",
+                "value": f"{total_horas_efectivas:,.0f}",
+                "border_color": ACCENT,
+                "href": None,
+                "side_component": render_agrupador_table(
+                    horas_efectivas_por_agrupador_table,
+                    value_format="{:,.2f}"
+                ),
+            }
+        ]
+
+        summary_sections = []
+        for card in cards:
+            card_component = html.Div(
+                render_card(
+                    title=card["title"],
+                    value=card["value"],
+                    border_color=card["border_color"],
+                    subtitle_text=card.get("subtitle", subtitle),
+                    href=card.get("href"),
+                    extra_style=card.get("extra_style")
+                ),
+                style={'width': '100%'}
+            )
+
+            if card.get("side_component") and card.get("stacked_side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(card["side_component"], style={'width': '100%'}),
+                            width=12,
+                            lg=12,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '20px'}
+                    )
+                )
+            elif card.get("side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                card_component,
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            ),
+                            dbc.Col(
+                                html.Div(card["side_component"], style={'width': '100%'}),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            )
+                        ],
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+            else:
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+
+        summary_row = dbc.Container(summary_sections, fluid=True)
+
+        charts_container = html.Div()
+        return summary_row, charts_container
+
+    @dash_app.callback(
         Output('main-dashboard-content', 'style'),
         Output('page-container-wrapper', 'style'),
         Input('url', 'pathname')
@@ -1657,6 +2653,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
         Output('url', 'pathname'),
         Input('back-button', 'n_clicks'),
         Input('back-button-complementaria', 'n_clicks'),
+        Input('back-button-inmediata', 'n_clicks'),
+        Input('back-button-apoyo-desc', 'n_clicks'),
         prevent_initial_call=True
     )
     def go_root(*_):
@@ -1671,6 +2669,28 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
         Input('filter-tipo-asegurado', 'value')
     )
     def sync_filters_with_complementaria(periodo_value, anio_value, tipo_asegurado_value):
+        return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
+
+    @dash_app.callback(
+        Output('filter-periodo-inmediata', 'value'),
+        Output('filter-anio-inmediata', 'value'),
+        Output('filter-tipo-asegurado-inmediata', 'value'),
+        Input('filter-periodo', 'value'),
+        Input('filter-anio', 'value'),
+        Input('filter-tipo-asegurado', 'value')
+    )
+    def sync_filters_with_inmediata(periodo_value, anio_value, tipo_asegurado_value):
+        return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
+
+    @dash_app.callback(
+        Output('filter-periodo-apoyo-desc', 'value'),
+        Output('filter-anio-apoyo-desc', 'value'),
+        Output('filter-tipo-asegurado-apoyo-desc', 'value'),
+        Input('filter-periodo', 'value'),
+        Input('filter-anio', 'value'),
+        Input('filter-tipo-asegurado', 'value')
+    )
+    def sync_filters_with_apoyo_desc(periodo_value, anio_value, tipo_asegurado_value):
         return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
 
     @dash_app.callback(
@@ -1713,6 +2733,50 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             pathname,
             tipo_asegurado_value,
             load_dashboard_data_complementaria,
+            include_citas=False,
+            include_desercion=False
+        )
+
+    @dash_app.callback(
+        Output("download-dataframe-csv-inmediata", "data"),
+        Input("download-button-inmediata", "n_clicks"),
+        State('filter-periodo-inmediata', 'value'),
+        State('filter-anio-inmediata', 'value'),
+        State('filter-tipo-asegurado-inmediata', 'value'),
+        State('url', 'pathname'),
+        prevent_initial_call=True
+    )
+    def download_csv_inmediata(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
+        if not n_clicks:
+            return None
+        return build_download_response(
+            periodo,
+            anio_value,
+            pathname,
+            tipo_asegurado_value,
+            load_dashboard_data_inmediata,
+            include_citas=False,
+            include_desercion=False
+        )
+
+    @dash_app.callback(
+        Output("download-dataframe-csv-apoyo-desc", "data"),
+        Input("download-button-apoyo-desc", "n_clicks"),
+        State('filter-periodo-apoyo-desc', 'value'),
+        State('filter-anio-apoyo-desc', 'value'),
+        State('filter-tipo-asegurado-apoyo-desc', 'value'),
+        State('url', 'pathname'),
+        prevent_initial_call=True
+    )
+    def download_csv_apoyo_desc(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
+        if not n_clicks:
+            return None
+        return build_download_response(
+            periodo,
+            anio_value,
+            pathname,
+            tipo_asegurado_value,
+            load_dashboard_data_apoyo_desc,
             include_citas=False,
             include_desercion=False
         )
