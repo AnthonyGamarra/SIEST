@@ -22,6 +22,7 @@ def get_centro_asistencial():
     query="""
         SELECT cenasicod, cenasidescor 
         FROM dwsge.sgss_cmcas10
+        WHERE estregcod= '1'
         ORDER BY id ASC 
     """
 
@@ -38,6 +39,7 @@ def get_centro_asistencial_by_code_red(code_red):
         LEFT JOIN dwsge.sgss_cmras10 r
             ON c.redasiscod = r.redasiscod
         WHERE c.redasiscod = %(code_red)s
+        AND c.estregcod= '1'
     """
     df=pd.read_sql_query(query,create_connection(),params={"code_red": str(code_red)})
     return df
