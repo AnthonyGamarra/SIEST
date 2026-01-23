@@ -408,28 +408,28 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": ACCENT,
         },
         {
-            "title": "Controles prenatales",
+            "title": "Atenciones prenatales",
             "stat_key": "total_atenciones_prenatal",
             "border_color": BRAND,
             "table_key": "atenciones_prenatal_por_sub_act",
             "table_title": "Subactividades prenatales",
         },
         {
-            "title": "Planificación familiar",
+            "title": "Atención de planificación familiar",
             "stat_key": "total_atenciones_familiar",
             "border_color": BRAND_SOFT,
             "table_key": "atenciones_familiar_por_sub_act",
             "table_title": "Subactividades familiares",
         },
         {
-            "title": "Terapias complementarias",
+            "title": "Actividades complementarias",
             "stat_key": "total_atenciones_complementarias",
             "border_color": ACCENT,
             "table_key": "atenciones_complementarias_por_sub_act",
             "table_title": "Subactividades complementarias",
         },
         {
-            "title": "Consejería preconcepcional",
+            "title": "Atención preconcepcional",
             "stat_key": "total_atenciones_preconcepcional",
             "border_color": BRAND,
             "table_key": "atenciones_preconcepcional_por_sub_act",
@@ -439,7 +439,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
     PROGRAMAS_CARD_TEMPLATE = [
         {
-            "title": "Total de atenciones del programa",
+            "title": "Total de atenciones preventivo promocional",
             "stat_key": "total_atenciones_p",
             "border_color": BRAND,
         },
@@ -451,7 +451,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "table_title": "Detalle domicilio",
         },
         {
-            "title": "Sesiones grupales",
+            "title": "Educación grupal",
             "stat_key": "total_atenciones_grupal",
             "border_color": BRAND_SOFT,
             "table_key": "atenciones_grupal_por_sub_act",
