@@ -20,7 +20,7 @@ def create_connection():
 def get_centro_asistencial():
 
     query="""
-        SELECT cenasicod, cenasidescor 
+        SELECT cenasicod, cenasides 
         FROM dwsge.sgss_cmcas10
         ORDER BY id ASC 
     """
@@ -33,7 +33,7 @@ def get_centro_asistencial_by_code_red(code_red):
             r.redasiscod,
             r.redasisdes,
             c.cenasicod,
-            c.cenasidescor
+            c.cenasides
         FROM dwsge.sgss_cmcas10 c
         LEFT JOIN dwsge.sgss_cmras10 r
             ON c.redasiscod = r.redasiscod
@@ -50,7 +50,7 @@ def getNombreCentroAsistencial(request):
 
     df=get_centro_asistencial()
     
-    name_centro=df[df['cenasicod']==codcas]['cenasidescor'].values[0]
+    name_centro=df[df['cenasicod']==codcas]['cenasides'].values[0]
 
     return name_centro
 

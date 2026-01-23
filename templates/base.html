@@ -131,7 +131,7 @@
               <option value="">Seleccionar centro...</option>
               {% for centro in centros_asistenciales_by_code_red %}
               <option value="{{ centro.cenasicod }}">
-                {{ centro.cenasidescor }}
+                {{ centro.cenasides }}
               </option>
               {% endfor %}
             </select>
@@ -146,7 +146,7 @@
               <option value="">Seleccionar centro...</option>
               {% for centro in centros_asistenciales %}
               <option value="{{ centro.cenasicod }}">
-                {{ centro.cenasidescor }}
+                {{ centro.cenasides }}
               </option>
               {% endfor %}
             </select>
@@ -179,7 +179,7 @@
           <!-- Módulo 1: Dashboard (activo) -->
 
           <a
-            href="{{ '/dashboard/' + dashboard_code_for_user() }}"
+            href="{{ '/ce/' + dashboard_code_for_user() }}"
             class="module"
           >
             <img

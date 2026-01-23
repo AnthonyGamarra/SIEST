@@ -8,6 +8,7 @@ from view_logs import register_logs_blueprint
 from sqlalchemy import text
 from dashboard import create_dash_app as create_dash_main
 from dashboard_eme import create_dash_app as create_dash_eme
+from dashboard_nm import create_dash_app as create_dash_nm
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 import dash_bootstrap_components as dbc
@@ -49,6 +50,9 @@ def create_app():
 
     # Dashboard alternativo (Emergencia) — usa el módulo dashboard_eme
     create_dash_eme(app, url_base_pathname='/dashboard_alt/')
+
+    # Dashboard Consulta Externa No Médicas
+    create_dash_nm(app, url_base_pathname='/dashboard_nm/')
 
     # Helper: verificar contraseña y migrar si estaba en texto plano
     def verify_and_migrate_password(user, plain_password):

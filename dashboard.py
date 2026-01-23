@@ -1,9 +1,12 @@
 import io
 import importlib
+import pkgutil
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from dataclasses import dataclass
 from functools import lru_cache
+from typing import Callable, Optional
 from urllib.parse import quote_plus
+
 import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
@@ -11,6 +14,8 @@ from dash import Dash, html, dcc, Input, Output, State
 from flask import has_request_context
 from flask_login import current_user
 from sqlalchemy import create_engine, text
+
+import secure_code as sc
 
 
 def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
@@ -27,7 +32,27 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     TEXT = "#1C1F26"
     MUTED = "#6B7280"
     BORDER = "#E5E7EB"
-    FONT_FAMILY = "Inter, Segoe UI, Calibri, sans-serif"
+    FONT_FAMILY = "Inter, 'Segoe UI', Calibri, sans-serif"
+
+    TAB_STYLE = {
+        "padding": "10px 18px",
+        "border": f"1px solid {BORDER}",
+        "borderBottom": "none",
+        "borderTopLeftRadius": "10px",
+        "borderTopRightRadius": "10px",
+        "fontFamily": FONT_FAMILY,
+        "fontWeight": "600",
+        "color": MUTED,
+        "backgroundColor": CARD_BG,
+        "marginRight": "0"
+    }
+    TAB_SELECTED_STYLE = {
+        **TAB_STYLE,
+        'color': BRAND,
+        'backgroundColor': CARD_BG,
+        'borderBottom': f'3px solid {BRAND}'
+    }
+
     CARD_STYLE = {
         "cursor": "pointer",
         "border": f"1px solid {BORDER}",
@@ -63,24 +88,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "position": "relative",
         "zIndex": 1100,
     }
-    TAB_STYLE = {
-        "padding": "10px 18px",
-        "border": f"1px solid {BORDER}",
-        "borderBottom": "none",
-        "borderTopLeftRadius": "10px",
-        "borderTopRightRadius": "10px",
-        "fontFamily": FONT_FAMILY,
-        "fontWeight": "600",
-        "color": MUTED,
-        "backgroundColor": CARD_BG,
-        "marginRight": "0"
-    }
-    TAB_SELECTED_STYLE = {
-        **TAB_STYLE,
-        "color": BRAND,
-        "borderBottom": f"3px solid {BRAND}",
-        "boxShadow": "0 6px 12px rgba(0,0,0,0.06)"
-    }
+
+    meses = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    anios = ['2025', '2026']
+    tipo_asegurado = ['Asegurado', 'No Asegurado', 'Todos']
+    anio_options = [{'label': year, 'value': year} for year in anios]
+    valores = [f"{i:02d}" for i in range(1, 13)]
+    df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
+    tipo_asegurado_options = [{'label': tipo, 'value': tipo} for tipo in tipo_asegurado]
 
     def _import_indicator_pages():
         pkg_name = f"{__package__}.Indicadores" if __package__ else "Indicadores"
@@ -89,13 +107,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         except Exception as exc:
             print(f"[Dash Pages] No se pudo importar el paquete '{pkg_name}': {exc}")
             return
-        import pkgutil
 
         for module in pkgutil.iter_modules(pkg.__path__):
             mod_name = f"{pkg_name}.{module.name}"
             try:
                 importlib.import_module(mod_name)
-                print(f"[Dash Pages] Pagina importada: {mod_name}")
+                print(f"[Dash Pages] Página importada: {mod_name}")
             except Exception as exc:
                 print(f"[Dash Pages] Error importando {mod_name}: {exc}")
 
@@ -114,16 +131,395 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
     _import_indicator_pages()
 
-    meses = [
-        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-    ]
-    anio = ['2025', '2026']
-    tipo_asegurado = ['Asegurado', 'No Asegurado', 'Todos']
-    valores = [f"{i:02d}" for i in range(1, 13)]
-    df_period = pd.DataFrame({'mes': meses, 'periodo': valores})
-    anio_options = [{'label': year, 'value': year} for year in anio]
-    tipo_asegurado_options = [{'label': tipo, 'value': tipo} for tipo in tipo_asegurado]
+    @dataclass(frozen=True)
+    class FilterIds:
+        periodo: str
+        anio: str
+        tipo: str
+
+    @dataclass(frozen=True)
+    class TabConfig:
+        key: str
+        label: str
+        value: str
+        filter_ids: FilterIds
+        search_button_id: str
+        download_button_id: str
+        download_component_id: str
+        back_button_id: str
+        summary_container_id: str
+        charts_container_id: str
+        data_loader: Callable
+        include_citas: bool = False
+        include_desercion: bool = False
+        cards_builder: Optional[Callable] = None
+
+    def build_summary_layout(cards, subtitle):
+        summary_sections = []
+        for card in cards:
+            card_component = html.Div(
+                render_card(
+                    title=card["title"],
+                    value=card["value"],
+                    border_color=card["border_color"],
+                    subtitle_text=card.get("subtitle", subtitle),
+                    href=card.get("href"),
+                    extra_style=card.get("extra_style")
+                ),
+                style={'width': '100%'}
+            )
+
+            if card.get("side_component") and card.get("stacked_side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            html.Div(card["side_component"], style={'width': '100%'}),
+                            width=12,
+                            lg=12,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '20px'}
+                    )
+                )
+            elif card.get("side_component"):
+                summary_sections.append(
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                card_component,
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            ),
+                            dbc.Col(
+                                html.Div(card["side_component"], style={'width': '100%'}),
+                                width=12,
+                                lg=4,
+                                style={'display': 'flex'}
+                            )
+                        ],
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+            else:
+                summary_sections.append(
+                    dbc.Row(
+                        dbc.Col(
+                            card_component,
+                            width=12,
+                            lg=8,
+                            style={'display': 'flex'}
+                        ),
+                        justify="center",
+                        style={'marginBottom': '10px'}
+                    )
+                )
+
+        return dbc.Container(summary_sections, fluid=True)
+
+    def build_tab_panel(tab_config):
+        periodo_options = [
+            {'label': row['mes'], 'value': row['periodo']}
+            for _, row in df_period.iterrows()
+        ]
+        controls = html.Div([
+            html.I(
+                className="bi bi-calendar3",
+                style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}
+            ),
+            dcc.Dropdown(
+                id=tab_config.filter_ids.anio,
+                className='anio-dropdown',
+                options=anio_options,
+                placeholder='Año',
+                clearable=True,
+                style={
+                    'width': '160px',
+                    'fontFamily': FONT_FAMILY,
+                    'position': 'relative',
+                    'zIndex': 1200
+                }
+            ),
+            dcc.Dropdown(
+                id=tab_config.filter_ids.periodo,
+                className='periodo-dropdown',
+                options=periodo_options,
+                placeholder='Periodo',
+                clearable=True,
+                style={
+                    'width': '240px',
+                    'fontFamily': FONT_FAMILY,
+                    'position': 'relative',
+                    'zIndex': 1200
+                }
+            ),
+            dcc.Dropdown(
+                id=tab_config.filter_ids.tipo,
+                className='tipo-dropdown',
+                options=tipo_asegurado_options,
+                value=DEFAULT_TIPO_ASEGURADO,
+                clearable=False,
+                placeholder='Tipo asegurado',
+                style={
+                    'width': '200px',
+                    'fontFamily': FONT_FAMILY,
+                    'position': 'relative',
+                    'zIndex': 1200
+                }
+            ),
+            dbc.Button(
+                [html.I(className="bi bi-search me-2"), "Buscar"],
+                id=tab_config.search_button_id,
+                color='primary',
+                size='md',
+                style={
+                    'backgroundColor': BRAND,
+                    'borderColor': BRAND,
+                    'padding': '8px 12px',
+                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
+                    'fontFamily': FONT_FAMILY,
+                    'fontWeight': '600',
+                    'borderRadius': '8px'
+                }
+            ),
+            # dbc.Button(
+            #     [html.I(className="bi bi-download me-2"), "Exportar Excel"],
+            #     id=tab_config.download_button_id,
+            #     color='success',
+            #     size='md',
+            #     style={
+            #         'backgroundColor': '#28a745',
+            #         'borderColor': '#28a745',
+            #         'padding': '8px 12px',
+            #         'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
+            #         'fontFamily': FONT_FAMILY,
+            #         'fontWeight': '600',
+            #         'borderRadius': '8px'
+            #     }
+            # ),
+            dcc.Download(id=tab_config.download_component_id),
+            dbc.Button(
+                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                id=tab_config.back_button_id,
+                color='secondary',
+                outline=True,
+                n_clicks=0,
+                style={'marginLeft': 'auto', 'padding': '8px 12px'}
+            ),
+        ], style={**CONTROL_BAR_STYLE})
+
+        return dcc.Tab(
+            label=tab_config.label,
+            value=tab_config.value,
+            style=TAB_STYLE,
+            selected_style=TAB_SELECTED_STYLE,
+            children=[
+                html.Div([
+                    controls,
+                    dbc.Tooltip("Regresar al inicio", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
+                    dbc.Tooltip("Buscar datos", target=tab_config.search_button_id, placement='bottom', style={'zIndex': 9999}),
+                    dbc.Tooltip("Descargar Excel", target=tab_config.download_button_id, placement='bottom', style={'zIndex': 9999}),
+                    dbc.Row([
+                        dbc.Col(
+                            html.Div(
+                                dcc.Loading(
+                                    className='dashboard-loading-inline',
+                                    parent_className='dashboard-loading-parent',
+                                    parent_style={'width': '100%'},
+                                    type='default',
+                                    style={'width': '100%'},
+                                    children=html.Div(id=tab_config.summary_container_id)
+                                ),
+                                className='dashboard-loading-shell'
+                            ),
+                            width=12
+                        )
+                    ]),
+                    html.Br(),
+                    dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
+                    html.Br(),
+                ], id=f'tab-{tab_config.key}-content')
+            ]
+        )
+
+    def fetch_dashboard_payload(periodo, anio_value, tipo_asegurado_value, pathname, data_loader):
+        if not periodo or not anio_value:
+            return None, html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), None
+
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+
+        if not codcas:
+            return None, html.Div("Seleccione un centro valido."), None
+
+        engine = create_connection()
+        if engine is None:
+            return None, html.Div("Error de conexion a la base de datos."), None
+
+        data = data_loader(periodo, anio_value, codcas, engine, tipo_asegurado_value)
+        if not data:
+            return None, html.Div("Sin datos para mostrar."), None
+
+        return data, None, codcas_url
+
+    def build_atenciones_cards(data, periodo, anio_value, tipo_filter, codcas_url, base_path):
+        stats = data['stats']
+        tables = data['tables']
+        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
+        total_consultantes_servicio = (
+            int(total_consultantes_por_servicio_table['counts'].sum())
+            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
+            else 0
+        )
+        total_atenciones_agru = tables['atenciones_por_agrupador']
+        medicos_por_agrupador_table = tables['medicos_por_agrupador']
+        horas_programadas_table = tables['horas_programadas_por_agrupador']
+        desercion_por_agrupador_table = tables.get('desercion_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
+        citados_por_agrupador_table = tables.get('citados_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
+        horas_efectivas_por_agrupador_table = tables.get('horas_efectivas_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
+
+        detail_query = f"?periodo={periodo}&anio={anio_value}&codasegu={quote_plus(tipo_filter)}"
+        base = base_path
+
+        return [
+            {
+                "title": "Total de consultantes a la atención médica",
+                "value": f"{stats['total_consultantes']:,.0f}",
+                "border_color": ACCENT,
+            },
+            {
+                "title": "Total de consultantes al servicio",
+                "value": f"{total_consultantes_servicio:,.0f}",
+                "border_color": ACCENT,
+                "side_component": render_agrupador_table(total_consultantes_por_servicio_table),
+            },
+            {
+                "title": "Total de Consultas",
+                "value": f"{stats['total_atenciones']:,.0f}",
+                "border_color": BRAND,
+                "href": f"{base}dash/total_atenciones/{codcas_url}{detail_query}",
+                "side_component": render_agrupador_table(total_atenciones_agru),
+            },
+            {
+                "title": "Número de Médicos",
+                "value": f"{stats['total_medicos']:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": f"{base}dash/total_medicos/{codcas_url}{detail_query}",
+                "side_component": render_agrupador_table(medicos_por_agrupador_table),
+            },
+            {
+                "title": "Número de deserciones",
+                "value": f"{stats['total_desercion_citas']:,.0f}",
+                "border_color": BRAND_SOFT,
+                "href": f"{base}dash/desercion_citas/{codcas_url}{detail_query}",
+                "side_component": render_agrupador_table(desercion_por_agrupador_table),
+            },
+            {
+                "title": "Número de citas otorgadas",
+                "value": f"{stats['total_citados']:,.0f}",
+                "border_color": ACCENT,
+                "href": f"{base}dash/total_citados/{codcas_url}{detail_query}",
+                "side_component": render_agrupador_table(citados_por_agrupador_table),
+            },
+            {
+                "title": "Total horas programadas",
+                "value": f"{stats['total_horas_programadas']:,.0f}",
+                "border_color": BRAND,
+                "href": f"{base}dash/horas_programadas/{codcas_url}{detail_query}",
+                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
+            },
+            {
+                "title": "Total de horas Efectivas (Ejecutada)",
+                "value": f"{stats['total_horas_efectivas']:,.0f}",
+                "border_color": ACCENT,
+                "href": f"{base}dash/horas_efectivas/{codcas_url}{detail_query}",
+                "side_component": render_agrupador_table(
+                    horas_efectivas_por_agrupador_table,
+                    value_format="{:,.2f}"
+                ),
+            },
+        ]
+
+    def create_generic_cards_builder(primary_title):
+        def _builder(data, *_):
+            stats = data['stats']
+            tables = data['tables']
+            total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
+            total_consultantes_servicio = (
+                int(total_consultantes_por_servicio_table['counts'].sum())
+                if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
+                else 0
+            )
+            total_atenciones_agru = tables['atenciones_por_agrupador']
+            medicos_por_agrupador_table = tables['medicos_por_agrupador']
+            horas_programadas_table = tables['horas_programadas_por_agrupador']
+            horas_efectivas_por_agrupador_table = tables.get(
+                'horas_efectivas_por_agrupador',
+                pd.DataFrame(columns=['agrupador', 'counts'])
+            )
+
+            return [
+                {
+                    "title": primary_title,
+                    "value": f"{stats['total_consultantes']:,.0f}",
+                    "border_color": ACCENT,
+                },
+                {
+                    "title": "Total de consultantes al servicio",
+                    "value": f"{total_consultantes_servicio:,.0f}",
+                    "border_color": ACCENT,
+                    "side_component": render_agrupador_table(
+                        total_consultantes_por_servicio_table,
+                        title="Consultantes por servicio"
+                    ),
+                },
+                {
+                    "title": "Total de Consultas",
+                    "value": f"{stats['total_atenciones']:,.0f}",
+                    "border_color": BRAND,
+                    "side_component": render_agrupador_table(total_atenciones_agru),
+                },
+                {
+                    "title": "Total de Médicos",
+                    "value": f"{stats['total_medicos']:,.0f}",
+                    "border_color": BRAND_SOFT,
+                    "side_component": render_agrupador_table(medicos_por_agrupador_table),
+                },
+                {
+                    "title": "Total horas programadas",
+                    "value": f"{stats['total_horas_programadas']:,.0f}",
+                    "border_color": BRAND,
+                    "side_component": render_agrupador_table(
+                        horas_programadas_table,
+                        value_format="{:,.2f}"
+                    ),
+                },
+                {
+                    "title": "Total de Horas Efectivas",
+                    "value": f"{stats['total_horas_efectivas']:,.0f}",
+                    "border_color": ACCENT,
+                    "side_component": render_agrupador_table(
+                        horas_efectivas_por_agrupador_table,
+                        value_format="{:,.2f}"
+                    ),
+                },
+            ]
+
+        return _builder
 
     DEFAULT_TIPO_ASEGURADO = 'Todos'
     TIPO_ASEGURADO_SQL = {
@@ -1138,7 +1534,420 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     "primeras_consultas_query": primera_vez,
                     "primeras_consultas_agrupador_query": primera_vez_agr,
                 }
+    
+    def build_queries_consulta_med_ocupacional(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+                    ("atenciones", text(f"""
+                        SELECT 
+                            ce.cod_servicio,
+                            ce.cod_especialidad,
+                            ca.cenasides,
+                            ag.agrupador AS agrupador,
+                            am.actdes AS actividad,
+                            a.actespnom AS subactividad,
+                            ce.cod_tipo_consulta,
+                            ce.cod_diag,
+                            c.servhosdes AS descripcion_servicio,
+                            e.especialidad AS descripcion_especialidad,
+                            t.tipcondes AS descripcion_tipo_consulta,
+                            d.diagdes AS descripcion_diagnostico,
+                            dni_medico,
+                            doc_paciente,
+                            cod_tipdoc_paciente,
+                            sexo,
+                            fecha_atencion,
+                            acto_med,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
+                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmtco10 AS t
+                            ON ce.cod_tipo_consulta = t.tipconcod
+                        LEFT JOIN dwsge.sgss_cmdia10 AS d
+                            ON ce.cod_diag = d.diagcod
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND (ce.cod_actividad = 'B8' OR ce.cod_actividad = '91')
+                        AND ce.cod_subactividad = '070'
+                        AND (ce.cod_servicio = 'AB1' OR ce.cod_servicio = 'AM6')
+                        AND ce.clasificacion in (2,4,6)
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                    """),
+                    params.copy()),
+                ("horas_programadas", text(f"""
+                SELECT 
+                    p.*, 
+                    c.servhosdes,
+                    e.especialidad,
+                    ag.agrupador,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND (p.cod_actividad = 'B8' OR p.cod_actividad = '91')
+                AND p.cod_subactividad = '070'
+                AND (p.cod_servicio = 'AB1' OR p.cod_servicio = 'AM6')
+            """),
+            params.copy()),
+                    ("horas_efectivas", text(f"""
+                        SELECT 
+                            ce.*, 
+                            c.servhosdes,
+                            e.especialidad,
+                            a.actespnom,
+                            am.actdes,
+                            ag.agrupador,
+                            ca.cenasides
+                        FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND (ce.cod_actividad = 'B8' OR ce.cod_actividad = '91')
+                        AND ce.cod_subactividad = '070'
+                        AND (ce.cod_servicio = 'AB1' OR ce.cod_servicio = 'AM6')
+                    """),
+                    params.copy()),
+                    ("medicos_agrup", text(f"""
+                        SELECT c.cod_centro,
+                            c.dni_medico,
+                            c.agrupador,
+                            c.periodo,
+                            c.cantidad_medicos,
+                            c.medico
+                        FROM ( SELECT b.cod_centro,
+                                    b.dni_medico,
+                                    b.agrupador,
+                                    b.periodo,
+                                    b.cantidad_medicos,
+                                    row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                                FROM ( SELECT a.cod_centro,
+                                            a.dni_medico,
+                                            ag.agrupador,
+                                            a.periodo,
+                                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
+                                            count(*) AS cantidad_medicos
+                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        LEFT JOIN dwsge.dim_agrupador ag 
+                                        ON a.cod_agrupador = ag.cod_agrupador
+                                        WHERE a.cod_centro=:codcas
+                                        AND (a.cod_actividad = 'B8' OR a.cod_actividad = '91')
+                                        AND a.cod_subactividad = '070'
+                                        AND (a.cod_servicio = 'AB1' OR a.cod_servicio = 'AM6')
+                                        AND a.clasificacion in (2,4,6)
+                                        AND (
+                                                CASE 
+                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                                    ELSE '1'
+                                                END
+                                                ) IN {codasegu}
+                                        GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                                        ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                        WHERE c.medico = '1'::bigint
+                    """),
+                    params.copy()),
+                ]
+        primera_vez = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT cod_oricentro,cod_centro,doc_paciente,
+        CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
+                        WHERE (cod_actividad = 'B8' OR cod_actividad = '91')
+                        AND cod_subactividad = '070'
+                        AND (cod_servicio = 'AB1' OR cod_servicio = 'AM6')
+                        AND (
+                                CASE 
+                                    WHEN cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        AND clasificacion IN (2,4,6) AND cod_centro=:codcas
+                        GROUP BY cod_oricentro,cod_centro,doc_paciente, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql
+                """)
+        primera_vez_agr = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT p.doc_paciente,ag.agrupador,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
+                        LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
+                        WHERE p.clasificacion IN (2,4,6) 
+                        AND p.cod_centro=:codcas
+                        AND (p.cod_actividad = 'B8' OR p.cod_actividad = '91')
+                        AND p.cod_subactividad = '070'
+                        AND (p.cod_servicio = 'AB1' OR p.cod_servicio = 'AM6')
+                        AND (
+                                CASE 
+                                    WHEN p.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        GROUP BY p.doc_paciente,ag.agrupador, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT agrupador,COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql GROUP BY agrupador
+                """)
+        return {
+                    "queries": queries,
+                    "primeras_consultas_query": primera_vez,
+                    "primeras_consultas_agrupador_query": primera_vez_agr,
+                }
  
+    def build_queries_consulta_med_personal(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+                    ("atenciones", text(f"""
+                        SELECT 
+                            ce.cod_servicio,
+                            ce.cod_especialidad,
+                            ca.cenasides,
+                            ag.agrupador AS agrupador,
+                            am.actdes AS actividad,
+                            a.actespnom AS subactividad,
+                            ce.cod_tipo_consulta,
+                            ce.cod_diag,
+                            c.servhosdes AS descripcion_servicio,
+                            e.especialidad AS descripcion_especialidad,
+                            t.tipcondes AS descripcion_tipo_consulta,
+                            d.diagdes AS descripcion_diagnostico,
+                            dni_medico,
+                            doc_paciente,
+                            cod_tipdoc_paciente,
+                            sexo,
+                            fecha_atencion,
+                            acto_med,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
+                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmtco10 AS t
+                            ON ce.cod_tipo_consulta = t.tipconcod
+                        LEFT JOIN dwsge.sgss_cmdia10 AS d
+                            ON ce.cod_diag = d.diagcod
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND ce.cod_actividad = '91'
+                        AND ce.cod_subactividad = '682'
+                        AND ce.cod_servicio = 'L16'
+                        AND ce.clasificacion in (2,4,6)
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                    """),
+                    params.copy()),
+                ("horas_programadas", text(f"""
+                SELECT 
+                    p.*, 
+                    c.servhosdes,
+                    e.especialidad,
+                    ag.agrupador,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.dim_especialidad AS e
+                    ON p.cod_especialidad = e.cod_especialidad
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_oricentro = ca.oricenasicod
+                    AND p.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
+                WHERE (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND p.cod_actividad = '91'
+                AND p.cod_subactividad = '682'
+                AND p.cod_servicio = 'L16'
+            """),
+            params.copy()),
+                    ("horas_efectivas", text(f"""
+                        SELECT 
+                            ce.*, 
+                            c.servhosdes,
+                            e.especialidad,
+                            a.actespnom,
+                            am.actdes,
+                            ag.agrupador,
+                            ca.cenasides
+                        FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} AS ce
+                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                            ON ce.cod_servicio = c.servhoscod
+                        LEFT JOIN dwsge.dim_especialidad AS e
+                            ON ce.cod_especialidad = e.cod_especialidad
+                        LEFT JOIN dwsge.sgss_cmace10 AS a
+                            ON ce.cod_actividad = a.actcod
+                            AND ce.cod_subactividad = a.actespcod
+                        LEFT JOIN dwsge.sgss_cmact10 AS am
+                            ON ce.cod_actividad = am.actcod
+                        LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+                        WHERE ce.cod_centro = :codcas
+                        AND ce.cod_actividad = '91'
+                        AND ce.cod_subactividad = '682'
+                        AND ce.cod_servicio = 'L16'
+                    """),
+                    params.copy()),
+                    ("medicos_agrup", text(f"""
+                        SELECT c.cod_centro,
+                            c.dni_medico,
+                            c.agrupador,
+                            c.periodo,
+                            c.cantidad_medicos,
+                            c.medico
+                        FROM ( SELECT b.cod_centro,
+                                    b.dni_medico,
+                                    b.agrupador,
+                                    b.periodo,
+                                    b.cantidad_medicos,
+                                    row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                                FROM ( SELECT a.cod_centro,
+                                            a.dni_medico,
+                                            ag.agrupador,
+                                            a.periodo,
+                                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
+                                            count(*) AS cantidad_medicos
+                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        LEFT JOIN dwsge.dim_agrupador ag 
+                                        ON a.cod_agrupador = ag.cod_agrupador
+                                        WHERE a.cod_centro=:codcas
+                                        AND a.cod_actividad = '91'
+                                        AND a.cod_subactividad = '682'
+                                        AND a.cod_servicio = 'L16'
+                                        AND a.clasificacion in (2,4,6)
+                                        AND (
+                                                CASE 
+                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                                    ELSE '1'
+                                                END
+                                                ) IN {codasegu}
+                                        GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                                        ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                        WHERE c.medico = '1'::bigint
+                    """),
+                    params.copy()),
+                ]
+        primera_vez = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT cod_oricentro,cod_centro,doc_paciente,
+        CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
+                        WHERE cod_actividad = '91'
+                        AND cod_subactividad = '682'
+                        AND cod_servicio = 'L16'
+                        AND (
+                                CASE 
+                                    WHEN cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        AND clasificacion IN (2,4,6) AND cod_centro=:codcas
+                        GROUP BY cod_oricentro,cod_centro,doc_paciente, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql
+                """)
+        primera_vez_agr = text(f"""
+                    WITH fecha_min_paciente AS (
+                        SELECT p.doc_paciente,ag.agrupador,
+                            CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                            to_char(MIN(to_date(p.fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
+                        LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
+                        WHERE p.clasificacion IN (2,4,6) 
+                        AND p.cod_centro=:codcas
+                        AND p.cod_actividad = '91'
+                        AND p.cod_subactividad = '682'
+                        AND p.cod_servicio = 'L16'
+                        AND (
+                                CASE 
+                                    WHEN p.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+                        GROUP BY p.doc_paciente,ag.agrupador, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                    )
+                    SELECT agrupador,COUNT(DISTINCT doc_paciente) AS cantidad
+                    FROM fecha_min_paciente WHERE periodo=:periodo_sql GROUP BY agrupador
+                """)
+        return {
+                    "queries": queries,
+                    "primeras_consultas_query": primera_vez,
+                    "primeras_consultas_agrupador_query": primera_vez_agr,
+                }
+
+
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
         if not periodo or not codcas or not anio:
             return None
@@ -1284,16 +2093,134 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
     def load_dashboard_data_complementaria(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_complementaria, tipo_asegurado_value)
 
+    def load_dashboard_data_med_ocup(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_consulta_med_ocupacional, tipo_asegurado_value)
+
+    def load_dashboard_data_med_personal(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_consulta_med_personal, tipo_asegurado_value)
+
     def load_dashboard_data_inmediata(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_atencion_inmediata, tipo_asegurado_value)
 
     def load_dashboard_data_apoyo_desc(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_consulta_apoyo_desc, tipo_asegurado_value)
 
+    DASHBOARD_TABS = [
+        TabConfig(
+            key="atenciones",
+            label="Atenciones médicas",
+            value='tab-atenciones',
+            filter_ids=FilterIds(
+                periodo='filter-periodo',
+                anio='filter-anio',
+                tipo='filter-tipo-asegurado'
+            ),
+            search_button_id='search-button',
+            download_button_id='download-button',
+            download_component_id='download-dataframe-csv',
+            back_button_id='back-button',
+            summary_container_id='summary-container',
+            charts_container_id='charts-container',
+            data_loader=load_dashboard_data,
+            include_citas=True,
+            include_desercion=True,
+            cards_builder=build_atenciones_cards
+        ),
+        TabConfig(
+            key="complementaria",
+            label="Medicina complementaria",
+            value='tab-complementaria',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-complementaria',
+                anio='filter-anio-complementaria',
+                tipo='filter-tipo-asegurado-complementaria'
+            ),
+            search_button_id='search-button-complementaria',
+            download_button_id='download-button-complementaria',
+            download_component_id='download-dataframe-csv-complementaria',
+            back_button_id='back-button-complementaria',
+            summary_container_id='summary-container-complementaria',
+            charts_container_id='charts-container-complementaria',
+            data_loader=load_dashboard_data_complementaria,
+            cards_builder=create_generic_cards_builder("Total de consultantes a medicina complementaria")
+        ),
+        TabConfig(
+            key="med-ocup",
+            label="Medicina ocupacional",
+            value='tab-med-ocup',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-med-ocup',
+                anio='filter-anio-med-ocup',
+                tipo='filter-tipo-asegurado-med-ocup'
+            ),
+            search_button_id='search-button-med-ocup',
+            download_button_id='download-button-med-ocup',
+            download_component_id='download-dataframe-csv-med-ocup',
+            back_button_id='back-button-med-ocup',
+            summary_container_id='summary-container-med-ocup',
+            charts_container_id='charts-container-med-ocup',
+            data_loader=load_dashboard_data_med_ocup,
+            cards_builder=create_generic_cards_builder("Total de consultantes a medicina ocupacional")
+        ),
+        TabConfig(
+            key="med-personal",
+            label="Medico de personal",
+            value='tab-med-personal',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-med-personal',
+                anio='filter-anio-med-personal',
+                tipo='filter-tipo-asegurado-med-personal'
+            ),
+            search_button_id='search-button-med-personal',
+            download_button_id='download-button-med-personal',
+            download_component_id='download-dataframe-csv-med-personal',
+            back_button_id='back-button-med-personal',
+            summary_container_id='summary-container-med-personal',
+            charts_container_id='charts-container-med-personal',
+            data_loader=load_dashboard_data_med_personal,
+            cards_builder=create_generic_cards_builder("Total de consultantes a medico de personal")
+        ),
+        TabConfig(
+            key="inmediata",
+            label="Consulta de Atención Inmediata",
+            value='tab-inmediata',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-inmediata',
+                anio='filter-anio-inmediata',
+                tipo='filter-tipo-asegurado-inmediata'
+            ),
+            search_button_id='search-button-inmediata',
+            download_button_id='download-button-inmediata',
+            download_component_id='download-dataframe-csv-inmediata',
+            back_button_id='back-button-inmediata',
+            summary_container_id='summary-container-inmediata',
+            charts_container_id='charts-container-inmediata',
+            data_loader=load_dashboard_data_inmediata,
+            cards_builder=create_generic_cards_builder("Total de consultantes a atención inmediata")
+        ),
+        TabConfig(
+            key="apoyo-desc",
+            label="Cons. Apoyo Desc.",
+            value='tab-apoyo-desc',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-apoyo-desc',
+                anio='filter-anio-apoyo-desc',
+                tipo='filter-tipo-asegurado-apoyo-desc'
+            ),
+            search_button_id='search-button-apoyo-desc',
+            download_button_id='download-button-apoyo-desc',
+            download_component_id='download-dataframe-csv-apoyo-desc',
+            back_button_id='back-button-apoyo-desc',
+            summary_container_id='summary-container-apoyo-desc',
+            charts_container_id='charts-container-apoyo-desc',
+            data_loader=load_dashboard_data_apoyo_desc,
+            cards_builder=create_generic_cards_builder("Total de consultantes a cons. apoyo desc.")
+        )
+    ]
+
     def build_download_response(periodo, anio, pathname, tipo_asegurado_value, data_loader, include_citas=True, include_desercion=True):
         if not periodo or not pathname or not anio:
             return None
-        import secure_code as sc
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_url) if codcas_url else None
         if not codcas:
@@ -1347,7 +2274,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     html.Div([
                         html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
                         html.H2(
-                            "Consulta externa",
+                            "Consulta externa - Médicas",
                             style={
                                 'color': BRAND,
                                 'fontFamily': FONT_FAMILY,
@@ -1381,490 +2308,23 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                 'gap': '14px'
             })
 
+            tabs_component = dcc.Tabs(
+                id='dashboard-tabs',
+                value=DASHBOARD_TABS[0].value,
+                children=[build_tab_panel(tab) for tab in DASHBOARD_TABS],
+                style={'backgroundColor': 'transparent', 'marginBottom': '0'},
+                content_style={'padding': '0', 'border': 'none', 'marginTop': '-1px'}
+            )
+
+            main_dashboard = html.Div([
+                header,
+                html.Br(),
+                tabs_component
+            ], id='main-dashboard-content')
+
             content = html.Div([
                 dcc.Location(id='url', refresh=True),
-
-                html.Div([
-                    header,
-                    html.Br(),
-                    dcc.Tabs(
-                        id='dashboard-tabs',
-                        value='tab-atenciones',
-                        children=[
-                            dcc.Tab(
-                                label="Atenciones médicas",
-                                value='tab-atenciones',
-                                style=TAB_STYLE,
-                                selected_style=TAB_SELECTED_STYLE,
-                                children=[
-                                    html.Div([
-                                        html.Div([
-                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
-                                            dcc.Dropdown(
-                                                id='filter-anio',
-                                                className='anio-dropdown',
-                                                options=anio_options,
-                                                placeholder='Seleccione un año',
-                                                clearable=True,
-                                                style={
-                                                    'width': '160px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-periodo',
-                                                className='periodo-dropdown',
-                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                                                placeholder='Seleccione un periodo',
-                                                clearable=True,
-                                                style={
-                                                    'width': '240px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-tipo-asegurado',
-                                                className='tipo-dropdown',
-                                                options=tipo_asegurado_options,
-                                                value=DEFAULT_TIPO_ASEGURADO,
-                                                clearable=False,
-                                                placeholder='Tipo asegurado',
-                                                style={
-                                                    'width': '200px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-search me-2"), "Buscar"],
-                                                id='search-button',
-                                                color='primary',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': BRAND,
-                                                    'borderColor': BRAND,
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
-                                                id='download-button',
-                                                color='success',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': '#28a745',
-                                                    'borderColor': '#28a745',
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dcc.Download(id="download-dataframe-csv"),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                                                id='back-button',
-                                                color='secondary',
-                                                outline=True,
-                                                n_clicks=0,
-                                                style={
-                                                    'marginLeft': 'auto',
-                                                    'padding': '8px 12px'
-                                                }
-                                            ),
-                                        ], style={**CONTROL_BAR_STYLE}),
-                                        dbc.Tooltip("Regresar al inicio", target='back-button', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Buscar datos", target='search-button', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Descargar Excel", target='download-button', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Row([
-                                            dbc.Col(
-                                                html.Div(
-                                                    dcc.Loading(
-                                                        className='dashboard-loading-inline',
-                                                        parent_className='dashboard-loading-parent',
-                                                        parent_style={'width': '100%'},
-                                                        type='default',
-                                                        style={'width': '100%'},
-                                                        children=html.Div(id='summary-container')
-                                                    ),
-                                                    className='dashboard-loading-shell'
-                                                ),
-                                                width=12
-                                            )
-                                        ]),
-                                        html.Br(),
-                                        dbc.Row([dbc.Col(html.Div(id='charts-container'), width=12)]),
-                                        html.Br(),
-                                    ], id='tab-atenciones-content')
-                                ]
-                            ),
-                            dcc.Tab(
-                                label="Medicina complementaria",
-                                value='tab-complementaria',
-                                style=TAB_STYLE,
-                                selected_style=TAB_SELECTED_STYLE,
-                                children=[
-                                    html.Div([
-                                        html.Div([
-                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
-                                            dcc.Dropdown(
-                                                id='filter-anio-complementaria',
-                                                className='anio-dropdown',
-                                                options=anio_options,
-                                                placeholder='Seleccione un año',
-                                                clearable=True,
-                                                style={
-                                                    'width': '160px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-periodo-complementaria',
-                                                className='periodo-dropdown',
-                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                                                placeholder='Seleccione un periodo',
-                                                clearable=True,
-                                                style={
-                                                    'width': '240px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-tipo-asegurado-complementaria',
-                                                className='tipo-dropdown',
-                                                options=tipo_asegurado_options,
-                                                value=DEFAULT_TIPO_ASEGURADO,
-                                                clearable=False,
-                                                placeholder='Tipo asegurado',
-                                                style={
-                                                    'width': '200px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-search me-2"), "Buscar"],
-                                                id='search-button-complementaria',
-                                                color='primary',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': BRAND,
-                                                    'borderColor': BRAND,
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
-                                                id='download-button-complementaria',
-                                                color='success',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': '#28a745',
-                                                    'borderColor': '#28a745',
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dcc.Download(id="download-dataframe-csv-complementaria"),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                                                id='back-button-complementaria',
-                                                color='secondary',
-                                                outline=True,
-                                                n_clicks=0,
-                                                style={
-                                                    'marginLeft': 'auto',
-                                                    'padding': '8px 12px'
-                                                }
-                                            ),
-                                        ], style={**CONTROL_BAR_STYLE}),
-                                        dbc.Tooltip("Regresar al inicio", target='back-button-complementaria', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Buscar datos", target='search-button-complementaria', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Descargar Excel", target='download-button-complementaria', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Row([
-                                            dbc.Col(
-                                                html.Div(
-                                                    dcc.Loading(
-                                                        className='dashboard-loading-inline',
-                                                        parent_className='dashboard-loading-parent',
-                                                        parent_style={'width': '100%'},
-                                                        type='default',
-                                                        style={'width': '100%'},
-                                                        children=html.Div(id='summary-container-complementaria')
-                                                    ),
-                                                    className='dashboard-loading-shell'
-                                                ),
-                                                width=12
-                                            )
-                                        ]),
-                                        html.Br(),
-                                        dbc.Row([dbc.Col(html.Div(id='charts-container-complementaria'), width=12)]),
-                                        html.Br(),
-                                    ], id='tab-complementaria-content')
-                                ]
-                            ),
-                            dcc.Tab(
-                                label="Consulta de Atención Inmediata",
-                                value='tab-inmediata',
-                                style=TAB_STYLE,
-                                selected_style=TAB_SELECTED_STYLE,
-                                children=[
-                                    html.Div([
-                                        html.Div([
-                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
-                                            dcc.Dropdown(
-                                                id='filter-anio-inmediata',
-                                                className='anio-dropdown',
-                                                options=anio_options,
-                                                placeholder='Seleccione un año',
-                                                clearable=True,
-                                                style={
-                                                    'width': '160px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-periodo-inmediata',
-                                                className='periodo-dropdown',
-                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                                                placeholder='Seleccione un periodo',
-                                                clearable=True,
-                                                style={
-                                                    'width': '240px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-tipo-asegurado-inmediata',
-                                                className='tipo-dropdown',
-                                                options=tipo_asegurado_options,
-                                                value=DEFAULT_TIPO_ASEGURADO,
-                                                clearable=False,
-                                                placeholder='Tipo asegurado',
-                                                style={
-                                                    'width': '200px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-search me-2"), "Buscar"],
-                                                id='search-button-inmediata',
-                                                color='primary',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': BRAND,
-                                                    'borderColor': BRAND,
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
-                                                id='download-button-inmediata',
-                                                color='success',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': '#28a745',
-                                                    'borderColor': '#28a745',
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dcc.Download(id="download-dataframe-csv-inmediata"),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                                                id='back-button-inmediata',
-                                                color='secondary',
-                                                outline=True,
-                                                n_clicks=0,
-                                                style={
-                                                    'marginLeft': 'auto',
-                                                    'padding': '8px 12px'
-                                                }
-                                            ),
-                                        ], style={**CONTROL_BAR_STYLE}),
-                                        dbc.Tooltip("Regresar al inicio", target='back-button-inmediata', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Buscar datos", target='search-button-inmediata', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Descargar Excel", target='download-button-inmediata', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Row([
-                                            dbc.Col(
-                                                html.Div(
-                                                    dcc.Loading(
-                                                        className='dashboard-loading-inline',
-                                                        parent_className='dashboard-loading-parent',
-                                                        parent_style={'width': '100%'},
-                                                        type='default',
-                                                        style={'width': '100%'},
-                                                        children=html.Div(id='summary-container-inmediata')
-                                                    ),
-                                                    className='dashboard-loading-shell'
-                                                ),
-                                                width=12
-                                            )
-                                        ]),
-                                        html.Br(),
-                                        dbc.Row([dbc.Col(html.Div(id='charts-container-inmediata'), width=12)]),
-                                        html.Br(),
-                                    ], id='tab-inmediata-content')
-                                ]
-                            ),
-                            dcc.Tab(
-                                label="Cons. Apoyo Desc.",
-                                value='tab-apoyo-desc',
-                                style=TAB_STYLE,
-                                selected_style=TAB_SELECTED_STYLE,
-                                children=[
-                                    html.Div([
-                                        html.Div([
-                                            html.I(className="bi bi-calendar3", style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}),
-                                            dcc.Dropdown(
-                                                id='filter-anio-apoyo-desc',
-                                                className='anio-dropdown',
-                                                options=anio_options,
-                                                placeholder='Seleccione un año',
-                                                clearable=True,
-                                                style={
-                                                    'width': '160px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-periodo-apoyo-desc',
-                                                className='periodo-dropdown',
-                                                options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                                                placeholder='Seleccione un periodo',
-                                                clearable=True,
-                                                style={
-                                                    'width': '240px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dcc.Dropdown(
-                                                id='filter-tipo-asegurado-apoyo-desc',
-                                                className='tipo-dropdown',
-                                                options=tipo_asegurado_options,
-                                                value=DEFAULT_TIPO_ASEGURADO,
-                                                clearable=False,
-                                                placeholder='Tipo asegurado',
-                                                style={
-                                                    'width': '200px',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'position': 'relative',
-                                                    'zIndex': 1200
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-search me-2"), "Buscar"],
-                                                id='search-button-apoyo-desc',
-                                                color='primary',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': BRAND,
-                                                    'borderColor': BRAND,
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-download me-2"), "Exportar Excel"],
-                                                id='download-button-apoyo-desc',
-                                                color='success',
-                                                size='md',
-                                                style={
-                                                    'backgroundColor': '#28a745',
-                                                    'borderColor': '#28a745',
-                                                    'padding': '8px 12px',
-                                                    'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
-                                                    'fontFamily': FONT_FAMILY,
-                                                    'fontWeight': '600',
-                                                    'borderRadius': '8px'
-                                                }
-                                            ),
-                                            dcc.Download(id="download-dataframe-csv-apoyo-desc"),
-                                            dbc.Button(
-                                                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
-                                                id='back-button-apoyo-desc',
-                                                color='secondary',
-                                                outline=True,
-                                                n_clicks=0,
-                                                style={
-                                                    'marginLeft': 'auto',
-                                                    'padding': '8px 12px'
-                                                }
-                                            ),
-                                        ], style={**CONTROL_BAR_STYLE}),
-                                        dbc.Tooltip("Regresar al inicio", target='back-button-apoyo-desc', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Buscar datos", target='search-button-apoyo-desc', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Tooltip("Descargar Excel", target='download-button-apoyo-desc', placement='bottom', style={'zIndex': 9999}),
-                                        dbc.Row([
-                                            dbc.Col(
-                                                html.Div(
-                                                    dcc.Loading(
-                                                        className='dashboard-loading-inline',
-                                                        parent_className='dashboard-loading-parent',
-                                                        parent_style={'width': '100%'},
-                                                        type='default',
-                                                        style={'width': '100%'},
-                                                        children=html.Div(id='summary-container-apoyo-desc')
-                                                    ),
-                                                    className='dashboard-loading-shell'
-                                                ),
-                                                width=12
-                                            )
-                                        ]),
-                                        html.Br(),
-                                        dbc.Row([dbc.Col(html.Div(id='charts-container-apoyo-desc'), width=12)]),
-                                        html.Br(),
-                                    ], id='tab-apoyo-desc-content')
-                                ]
-                            )
-                        ],
-                        style={'backgroundColor': 'transparent', 'marginBottom': '0'},
-                        content_style={'padding': '0', 'border': 'none', 'marginTop': '-1px'}
-                    )
-                ], id='main-dashboard-content'),
-
+                main_dashboard,
                 html.Div(
                     children=dash.page_container,
                     id='page-container-wrapper',
@@ -1893,750 +2353,41 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             html.A('Ir a inicio', href='/', target='_top')
         ])
 
-    @dash_app.callback(
-        [Output('summary-container', 'children'),
-         Output('charts-container', 'children')],
-        Input('search-button', 'n_clicks'),
-        State('filter-periodo', 'value'),
-        State('filter-anio', 'value'),
-        State('filter-tipo-asegurado', 'value'),
-        State('url', 'pathname')
-    )
-    def on_search(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return html.Div(), html.Div()
-
-        import secure_code as sc
-
-        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
-        codcas = sc.decode_code(codcas_url) if codcas_url else None
-
-        if not periodo or not anio_value or not codcas:
-            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
-
-        engine = create_connection()
-        if engine is None:
-            return html.Div("Error de conexion a la base de datos."), html.Div()
-
-        data = load_dashboard_data(periodo, anio_value, codcas, engine, tipo_asegurado_value)
-        if not data:
-            return html.Div("Sin datos para mostrar."), html.Div()
-
-        stats = data['stats']
-        tables = data['tables']
-        nombre_centro = data['nombre_centro']
-
-        total_atenciones = stats['total_atenciones']
-        total_consultantes = stats['total_consultantes']
-        total_medicos = stats['total_medicos']
-        total_horas_programadas = stats['total_horas_programadas']
-        total_horas_efectivas = stats['total_horas_efectivas']
-        total_citados = stats['total_citados']
-        total_desercion_citas = stats['total_desercion_citas']
-
-        total_atenciones_agru = tables['atenciones_por_agrupador']
-        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
-        medicos_por_agrupador_table = tables['medicos_por_agrupador']
-        horas_programadas_table = tables['horas_programadas_por_agrupador']
-
-        desercion_por_agrupador_table = tables.get('desercion_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
-        citados_por_agrupador_table = tables.get('citados_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
-        horas_efectivas_por_agrupador_table = tables.get('horas_efectivas_por_agrupador', pd.DataFrame(columns=['agrupador', 'counts']))
-        base = url_base_pathname.rstrip('/') + '/'
-        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
-        tipo_filter = tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
-        codasegu_param = quote_plus(tipo_filter)
-        detail_query = f"?periodo={periodo}&anio={anio_value}&codasegu={codasegu_param}"
-        total_consultantes_servicio = (
-            int(total_consultantes_por_servicio_table['counts'].sum())
-            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
-            else 0
+    def register_summary_callback(tab_config):
+        @dash_app.callback(
+            [Output(tab_config.summary_container_id, 'children'),
+             Output(tab_config.charts_container_id, 'children')],
+            Input(tab_config.search_button_id, 'n_clicks'),
+            State(tab_config.filter_ids.periodo, 'value'),
+            State(tab_config.filter_ids.anio, 'value'),
+            State(tab_config.filter_ids.tipo, 'value'),
+            State('url', 'pathname')
         )
-        cards = [
-            {
-                "title": "Total de consultantes a la atención médica",
-                "value": f"{total_consultantes:,.0f}",
-                "border_color": ACCENT,
-            },
-            {
-                "title": "Total de consultantes al servicio",
-                "value": f"{total_consultantes_servicio:,.0f}",
-                "border_color": ACCENT,
-                "side_component": render_agrupador_table(
-                    total_consultantes_por_servicio_table
-                ),
-            },
-            {
-                "title": "Total de Consultas",
-                "value": f"{total_atenciones:,.0f}",
-                "border_color": BRAND,
-                "href": f"{base}dash/total_atenciones/{codcas_url}{detail_query}",
-                "side_component": render_agrupador_table(total_atenciones_agru),
-            },
-            {
-                "title": "Número de Médicos",
-                "value": f"{total_medicos:,.0f}",
-                "border_color": BRAND_SOFT,
-                "href": f"{base}dash/total_medicos/{codcas_url}{detail_query}",
-                "side_component": render_agrupador_table(medicos_por_agrupador_table),
-            },
-            {
-                "title": "Número de deserciones",
-                "value": f"{total_desercion_citas:,.0f}",
-                "border_color": BRAND_SOFT,
-                "href": f"{base}dash/desercion_citas/{codcas_url}{detail_query}",
-                "side_component": render_agrupador_table(
-                    desercion_por_agrupador_table
-                ),
-            },
-            {
-                "title": "Número de citas otorgadas",
-                "value": f"{total_citados:,.0f}",
-                "border_color": ACCENT,
-                "href": f"{base}dash/total_citados/{codcas_url}{detail_query}",
-                "side_component": render_agrupador_table(
-                    citados_por_agrupador_table
-                ),
-            },
-            {
-                "title": "Total horas programadas",
-                "value": f"{total_horas_programadas:,.0f}",
-                "border_color": BRAND,
-                "href": f"{base}dash/horas_programadas/{codcas_url}{detail_query}",
-                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
-            },
-            {
-                "title": "Total de horas Efectivas (Ejecutada)",
-                "value": f"{total_horas_efectivas:,.0f}",
-                "border_color": ACCENT,
-                "href": f"{base}dash/horas_efectivas/{codcas_url}{detail_query}",
-                "side_component": render_agrupador_table(
-                    horas_efectivas_por_agrupador_table,
-                    value_format="{:,.2f}"
-                ),
-            }
-        ]
-        summary_sections = []
-        for card in cards:
-            card_component = html.Div(
-                render_card(
-                    title=card["title"],
-                    value=card["value"],
-                    border_color=card["border_color"],
-                    subtitle_text=card.get("subtitle", subtitle),
-                    href=card.get("href"),
-                    extra_style=card.get("extra_style")
-                ),
-                style={'width': '100%'}
+        def _handle_summary(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname, tab=tab_config):
+            if not n_clicks:
+                return html.Div(), html.Div()
+
+            data, error_component, codcas_url = fetch_dashboard_payload(
+                periodo,
+                anio_value,
+                tipo_asegurado_value,
+                pathname,
+                tab.data_loader
             )
 
-            if card.get("side_component") and card.get("stacked_side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            html.Div(card["side_component"], style={'width': '100%'}),
-                            width=12,
-                            lg=12,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '20px'}
-                    )
-                )
-            elif card.get("side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                card_component,
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            ),
-                            dbc.Col(
-                                html.Div(card["side_component"], style={'width': '100%'}),
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            )
-                        ],
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-            else:
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
+            if error_component:
+                return error_component, html.Div()
 
-        summary_row = dbc.Container(summary_sections, fluid=True)
+            tipo_filter = tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
+            subtitle = f"Periodo {anio_value}-{periodo} | {data['nombre_centro']}"
+            base_path = url_base_pathname.rstrip('/') + '/'
+            cards_builder = tab.cards_builder or create_generic_cards_builder("Total de consultantes")
+            cards = cards_builder(data, periodo, anio_value, tipo_filter, codcas_url, base_path)
+            summary_row = build_summary_layout(cards, subtitle)
+            return summary_row, html.Div()
 
-        charts_container = html.Div()
-        return summary_row, charts_container
-
-    @dash_app.callback(
-        [Output('summary-container-complementaria', 'children'),
-         Output('charts-container-complementaria', 'children')],
-        Input('search-button-complementaria', 'n_clicks'),
-        State('filter-periodo-complementaria', 'value'),
-        State('filter-anio-complementaria', 'value'),
-        State('filter-tipo-asegurado-complementaria', 'value'),
-        State('url', 'pathname')
-    )
-    def on_search_complementaria(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return html.Div(), html.Div()
-
-        import secure_code as sc
-
-        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
-        codcas = sc.decode_code(codcas_url) if codcas_url else None
-
-        if not periodo or not anio_value or not codcas:
-            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
-
-        engine = create_connection()
-        if engine is None:
-            return html.Div("Error de conexion a la base de datos."), html.Div()
-
-        data = load_dashboard_data_complementaria(periodo, anio_value, codcas, engine, tipo_asegurado_value)
-        if not data:
-            return html.Div("Sin datos para mostrar."), html.Div()
-
-        stats = data['stats']
-        tables = data['tables']
-        nombre_centro = data['nombre_centro']
-
-        total_atenciones = stats['total_atenciones']
-        total_consultantes = stats['total_consultantes']
-        total_medicos = stats['total_medicos']
-        total_horas_programadas = stats['total_horas_programadas']
-        total_horas_efectivas = stats['total_horas_efectivas']
-
-        total_atenciones_agru = tables['atenciones_por_agrupador']
-        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
-        medicos_por_agrupador_table = tables['medicos_por_agrupador']
-        horas_programadas_table = tables['horas_programadas_por_agrupador']
-        horas_efectivas_por_agrupador_table = tables.get(
-            'horas_efectivas_por_agrupador',
-            pd.DataFrame(columns=['agrupador', 'counts'])
-        )
-
-        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
-        total_consultantes_servicio = (
-            int(total_consultantes_por_servicio_table['counts'].sum())
-            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
-            else 0
-        )
-        cards = [
-            {
-                "title": "Total de consultantes a medicina complementaria",
-                "value": f"{total_consultantes:,.0f}",
-                "border_color": ACCENT,
-            },
-            {
-                "title": "Total de consultantes al servicio",
-                "value": f"{total_consultantes_servicio:,.0f}",
-                "border_color": ACCENT,
-                "side_component": render_agrupador_table(
-                    total_consultantes_por_servicio_table,
-                    title="Consultantes por servicio"
-                ),
-            },
-            {
-                "title": "Total de Consultas",
-                "value": f"{total_atenciones:,.0f}",
-                "border_color": BRAND,
-                "href": None,
-                "side_component": render_agrupador_table(total_atenciones_agru),
-            },
-            {
-                "title": "Total de Médicos",
-                "value": f"{total_medicos:,.0f}",
-                "border_color": BRAND_SOFT,
-                "href": None,
-                "side_component": render_agrupador_table(medicos_por_agrupador_table),
-            },
-            {
-                "title": "Total horas programadas",
-                "value": f"{total_horas_programadas:,.0f}",
-                "border_color": BRAND,
-                "href": None,
-                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
-            },
-            {
-                "title": "Total de Horas Efectivas",
-                "value": f"{total_horas_efectivas:,.0f}",
-                "border_color": ACCENT,
-                "href": None,
-                "side_component": render_agrupador_table(
-                    horas_efectivas_por_agrupador_table,
-                    value_format="{:,.2f}"
-                ),
-            }
-        ]
-
-        summary_sections = []
-        for card in cards:
-            card_component = html.Div(
-                render_card(
-                    title=card["title"],
-                    value=card["value"],
-                    border_color=card["border_color"],
-                    subtitle_text=card.get("subtitle", subtitle),
-                    href=card.get("href"),
-                    extra_style=card.get("extra_style")
-                ),
-                style={'width': '100%'}
-            )
-
-            if card.get("side_component") and card.get("stacked_side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            html.Div(card["side_component"], style={'width': '100%'}),
-                            width=12,
-                            lg=12,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '20px'}
-                    )
-                )
-            elif card.get("side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                card_component,
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            ),
-                            dbc.Col(
-                                html.Div(card["side_component"], style={'width': '100%'}),
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            )
-                        ],
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-            else:
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-
-        summary_row = dbc.Container(summary_sections, fluid=True)
-
-        charts_container = html.Div()
-        return summary_row, charts_container
-
-    @dash_app.callback(
-        [Output('summary-container-inmediata', 'children'),
-         Output('charts-container-inmediata', 'children')],
-        Input('search-button-inmediata', 'n_clicks'),
-        State('filter-periodo-inmediata', 'value'),
-        State('filter-anio-inmediata', 'value'),
-        State('filter-tipo-asegurado-inmediata', 'value'),
-        State('url', 'pathname')
-    )
-    def on_search_inmediata(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return html.Div(), html.Div()
-
-        import secure_code as sc
-
-        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
-        codcas = sc.decode_code(codcas_url) if codcas_url else None
-
-        if not periodo or not anio_value or not codcas:
-            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
-
-        engine = create_connection()
-        if engine is None:
-            return html.Div("Error de conexion a la base de datos."), html.Div()
-
-        data = load_dashboard_data_inmediata(periodo, anio_value, codcas, engine, tipo_asegurado_value)
-        if not data:
-            return html.Div("Sin datos para mostrar."), html.Div()
-
-        stats = data['stats']
-        tables = data['tables']
-        nombre_centro = data['nombre_centro']
-
-        total_atenciones = stats['total_atenciones']
-        total_consultantes = stats['total_consultantes']
-        total_medicos = stats['total_medicos']
-        total_horas_programadas = stats['total_horas_programadas']
-        total_horas_efectivas = stats['total_horas_efectivas']
-
-        total_atenciones_agru = tables['atenciones_por_agrupador']
-        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
-        medicos_por_agrupador_table = tables['medicos_por_agrupador']
-        horas_programadas_table = tables['horas_programadas_por_agrupador']
-        horas_efectivas_por_agrupador_table = tables.get(
-            'horas_efectivas_por_agrupador',
-            pd.DataFrame(columns=['agrupador', 'counts'])
-        )
-
-        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
-        total_consultantes_servicio = (
-            int(total_consultantes_por_servicio_table['counts'].sum())
-            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
-            else 0
-        )
-        cards = [
-            {
-                "title": "Total de consultantes a atención inmediata",
-                "value": f"{total_consultantes:,.0f}",
-                "border_color": ACCENT,
-            },
-            {
-                "title": "Total de consultantes al servicio",
-                "value": f"{total_consultantes_servicio:,.0f}",
-                "border_color": ACCENT,
-                "side_component": render_agrupador_table(
-                    total_consultantes_por_servicio_table,
-                    title="Consultantes por servicio"
-                ),
-            },
-            {
-                "title": "Total de Consultas",
-                "value": f"{total_atenciones:,.0f}",
-                "border_color": BRAND,
-                "href": None,
-                "side_component": render_agrupador_table(total_atenciones_agru),
-            },
-            {
-                "title": "Total de Médicos",
-                "value": f"{total_medicos:,.0f}",
-                "border_color": BRAND_SOFT,
-                "href": None,
-                "side_component": render_agrupador_table(medicos_por_agrupador_table),
-            },
-            {
-                "title": "Total horas programadas",
-                "value": f"{total_horas_programadas:,.0f}",
-                "border_color": BRAND,
-                "href": None,
-                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
-            },
-            {
-                "title": "Total de Horas Efectivas",
-                "value": f"{total_horas_efectivas:,.0f}",
-                "border_color": ACCENT,
-                "href": None,
-                "side_component": render_agrupador_table(
-                    horas_efectivas_por_agrupador_table,
-                    value_format="{:,.2f}"
-                ),
-            }
-        ]
-
-        summary_sections = []
-        for card in cards:
-            card_component = html.Div(
-                render_card(
-                    title=card["title"],
-                    value=card["value"],
-                    border_color=card["border_color"],
-                    subtitle_text=card.get("subtitle", subtitle),
-                    href=card.get("href"),
-                    extra_style=card.get("extra_style")
-                ),
-                style={'width': '100%'}
-            )
-
-            if card.get("side_component") and card.get("stacked_side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            html.Div(card["side_component"], style={'width': '100%'}),
-                            width=12,
-                            lg=12,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '20px'}
-                    )
-                )
-            elif card.get("side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                card_component,
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            ),
-                            dbc.Col(
-                                html.Div(card["side_component"], style={'width': '100%'}),
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            )
-                        ],
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-            else:
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-
-        summary_row = dbc.Container(summary_sections, fluid=True)
-
-        charts_container = html.Div()
-        return summary_row, charts_container
-
-    @dash_app.callback(
-        [Output('summary-container-apoyo-desc', 'children'),
-         Output('charts-container-apoyo-desc', 'children')],
-        Input('search-button-apoyo-desc', 'n_clicks'),
-        State('filter-periodo-apoyo-desc', 'value'),
-        State('filter-anio-apoyo-desc', 'value'),
-        State('filter-tipo-asegurado-apoyo-desc', 'value'),
-        State('url', 'pathname')
-    )
-    def on_search_apoyo_desc(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return html.Div(), html.Div()
-
-        import secure_code as sc
-
-        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
-        codcas = sc.decode_code(codcas_url) if codcas_url else None
-
-        if not periodo or not anio_value or not codcas:
-            return html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), html.Div()
-
-        engine = create_connection()
-        if engine is None:
-            return html.Div("Error de conexion a la base de datos."), html.Div()
-
-        data = load_dashboard_data_apoyo_desc(periodo, anio_value, codcas, engine, tipo_asegurado_value)
-        if not data:
-            return html.Div("Sin datos para mostrar."), html.Div()
-
-        stats = data['stats']
-        tables = data['tables']
-        nombre_centro = data['nombre_centro']
-
-        total_atenciones = stats['total_atenciones']
-        total_consultantes = stats['total_consultantes']
-        total_medicos = stats['total_medicos']
-        total_horas_programadas = stats['total_horas_programadas']
-        total_horas_efectivas = stats['total_horas_efectivas']
-
-        total_atenciones_agru = tables['atenciones_por_agrupador']
-        total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
-        medicos_por_agrupador_table = tables['medicos_por_agrupador']
-        horas_programadas_table = tables['horas_programadas_por_agrupador']
-        horas_efectivas_por_agrupador_table = tables.get(
-            'horas_efectivas_por_agrupador',
-            pd.DataFrame(columns=['agrupador', 'counts'])
-        )
-
-        subtitle = f"Periodo {anio_value}-{periodo} | {nombre_centro}"
-        total_consultantes_servicio = (
-            int(total_consultantes_por_servicio_table['counts'].sum())
-            if (not total_consultantes_por_servicio_table.empty and 'counts' in total_consultantes_por_servicio_table)
-            else 0
-        )
-        cards = [
-            {
-                "title": "Total de consultantes a cons. apoyo desc.",
-                "value": f"{total_consultantes:,.0f}",
-                "border_color": ACCENT,
-            },
-            {
-                "title": "Total de consultantes al servicio",
-                "value": f"{total_consultantes_servicio:,.0f}",
-                "border_color": ACCENT,
-                "side_component": render_agrupador_table(
-                    total_consultantes_por_servicio_table,
-                    title="Consultantes por servicio"
-                ),
-            },
-            {
-                "title": "Total de Consultas",
-                "value": f"{total_atenciones:,.0f}",
-                "border_color": BRAND,
-                "href": None,
-                "side_component": render_agrupador_table(total_atenciones_agru),
-            },
-            {
-                "title": "Total de Médicos",
-                "value": f"{total_medicos:,.0f}",
-                "border_color": BRAND_SOFT,
-                "href": None,
-                "side_component": render_agrupador_table(medicos_por_agrupador_table),
-            },
-            {
-                "title": "Total horas programadas",
-                "value": f"{total_horas_programadas:,.0f}",
-                "border_color": BRAND,
-                "href": None,
-                "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
-            },
-            {
-                "title": "Total de Horas Efectivas",
-                "value": f"{total_horas_efectivas:,.0f}",
-                "border_color": ACCENT,
-                "href": None,
-                "side_component": render_agrupador_table(
-                    horas_efectivas_por_agrupador_table,
-                    value_format="{:,.2f}"
-                ),
-            }
-        ]
-
-        summary_sections = []
-        for card in cards:
-            card_component = html.Div(
-                render_card(
-                    title=card["title"],
-                    value=card["value"],
-                    border_color=card["border_color"],
-                    subtitle_text=card.get("subtitle", subtitle),
-                    href=card.get("href"),
-                    extra_style=card.get("extra_style")
-                ),
-                style={'width': '100%'}
-            )
-
-            if card.get("side_component") and card.get("stacked_side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            html.Div(card["side_component"], style={'width': '100%'}),
-                            width=12,
-                            lg=12,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '20px'}
-                    )
-                )
-            elif card.get("side_component"):
-                summary_sections.append(
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                card_component,
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            ),
-                            dbc.Col(
-                                html.Div(card["side_component"], style={'width': '100%'}),
-                                width=12,
-                                lg=4,
-                                style={'display': 'flex'}
-                            )
-                        ],
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-            else:
-                summary_sections.append(
-                    dbc.Row(
-                        dbc.Col(
-                            card_component,
-                            width=12,
-                            lg=8,
-                            style={'display': 'flex'}
-                        ),
-                        justify="center",
-                        style={'marginBottom': '10px'}
-                    )
-                )
-
-        summary_row = dbc.Container(summary_sections, fluid=True)
-
-        charts_container = html.Div()
-        return summary_row, charts_container
+    for tab_config in DASHBOARD_TABS:
+        register_summary_callback(tab_config)
 
     @dash_app.callback(
         Output('main-dashboard-content', 'style'),
@@ -2653,6 +2404,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
         Output('url', 'pathname'),
         Input('back-button', 'n_clicks'),
         Input('back-button-complementaria', 'n_clicks'),
+        Input('back-button-med-ocup', 'n_clicks'),
+        Input('back-button-med-personal', 'n_clicks'),
         Input('back-button-inmediata', 'n_clicks'),
         Input('back-button-apoyo-desc', 'n_clicks'),
         prevent_initial_call=True
@@ -2660,126 +2413,48 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
     def go_root(*_):
         return "/"
 
-    @dash_app.callback(
-        Output('filter-periodo-complementaria', 'value'),
-        Output('filter-anio-complementaria', 'value'),
-        Output('filter-tipo-asegurado-complementaria', 'value'),
-        Input('filter-periodo', 'value'),
-        Input('filter-anio', 'value'),
-        Input('filter-tipo-asegurado', 'value')
-    )
-    def sync_filters_with_complementaria(periodo_value, anio_value, tipo_asegurado_value):
-        return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
+    primary_filters = DASHBOARD_TABS[0].filter_ids
 
-    @dash_app.callback(
-        Output('filter-periodo-inmediata', 'value'),
-        Output('filter-anio-inmediata', 'value'),
-        Output('filter-tipo-asegurado-inmediata', 'value'),
-        Input('filter-periodo', 'value'),
-        Input('filter-anio', 'value'),
-        Input('filter-tipo-asegurado', 'value')
-    )
-    def sync_filters_with_inmediata(periodo_value, anio_value, tipo_asegurado_value):
-        return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
-
-    @dash_app.callback(
-        Output('filter-periodo-apoyo-desc', 'value'),
-        Output('filter-anio-apoyo-desc', 'value'),
-        Output('filter-tipo-asegurado-apoyo-desc', 'value'),
-        Input('filter-periodo', 'value'),
-        Input('filter-anio', 'value'),
-        Input('filter-tipo-asegurado', 'value')
-    )
-    def sync_filters_with_apoyo_desc(periodo_value, anio_value, tipo_asegurado_value):
-        return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
-
-    @dash_app.callback(
-        Output("download-dataframe-csv", "data"),
-        Input("download-button", "n_clicks"),
-        State('filter-periodo', 'value'),
-        State('filter-anio', 'value'),
-        State('filter-tipo-asegurado', 'value'),
-        State('url', 'pathname'),
-        prevent_initial_call=True
-    )
-    def download_csv(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return None
-        return build_download_response(
-            periodo,
-            anio_value,
-            pathname,
-            tipo_asegurado_value,
-            load_dashboard_data,
-            include_citas=True,
-            include_desercion=True
+    def register_filter_sync(target_filters):
+        @dash_app.callback(
+            Output(target_filters.periodo, 'value'),
+            Output(target_filters.anio, 'value'),
+            Output(target_filters.tipo, 'value'),
+            Input(primary_filters.periodo, 'value'),
+            Input(primary_filters.anio, 'value'),
+            Input(primary_filters.tipo, 'value')
         )
- 
-    @dash_app.callback(
-        Output("download-dataframe-csv-complementaria", "data"),
-        Input("download-button-complementaria", "n_clicks"),
-        State('filter-periodo-complementaria', 'value'),
-        State('filter-anio-complementaria', 'value'),
-        State('filter-tipo-asegurado-complementaria', 'value'),
-        State('url', 'pathname'),
-        prevent_initial_call=True
-    )
-    def download_csv_complementaria(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return None
-        return build_download_response(
-            periodo,
-            anio_value,
-            pathname,
-            tipo_asegurado_value,
-            load_dashboard_data_complementaria,
-            include_citas=False,
-            include_desercion=False
-        )
+        def _sync_filters(periodo_value, anio_value, tipo_asegurado_value, _target=target_filters):
+            return periodo_value, anio_value, tipo_asegurado_value or DEFAULT_TIPO_ASEGURADO
 
-    @dash_app.callback(
-        Output("download-dataframe-csv-inmediata", "data"),
-        Input("download-button-inmediata", "n_clicks"),
-        State('filter-periodo-inmediata', 'value'),
-        State('filter-anio-inmediata', 'value'),
-        State('filter-tipo-asegurado-inmediata', 'value'),
-        State('url', 'pathname'),
-        prevent_initial_call=True
-    )
-    def download_csv_inmediata(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return None
-        return build_download_response(
-            periodo,
-            anio_value,
-            pathname,
-            tipo_asegurado_value,
-            load_dashboard_data_inmediata,
-            include_citas=False,
-            include_desercion=False
-        )
+    for tab_config in DASHBOARD_TABS[1:]:
+        register_filter_sync(tab_config.filter_ids)
 
-    @dash_app.callback(
-        Output("download-dataframe-csv-apoyo-desc", "data"),
-        Input("download-button-apoyo-desc", "n_clicks"),
-        State('filter-periodo-apoyo-desc', 'value'),
-        State('filter-anio-apoyo-desc', 'value'),
-        State('filter-tipo-asegurado-apoyo-desc', 'value'),
-        State('url', 'pathname'),
-        prevent_initial_call=True
-    )
-    def download_csv_apoyo_desc(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname):
-        if not n_clicks:
-            return None
-        return build_download_response(
-            periodo,
-            anio_value,
-            pathname,
-            tipo_asegurado_value,
-            load_dashboard_data_apoyo_desc,
-            include_citas=False,
-            include_desercion=False
+    def register_download_callback(tab_config):
+        @dash_app.callback(
+            Output(tab_config.download_component_id, "data"),
+            Input(tab_config.download_button_id, "n_clicks"),
+            State(tab_config.filter_ids.periodo, 'value'),
+            State(tab_config.filter_ids.anio, 'value'),
+            State(tab_config.filter_ids.tipo, 'value'),
+            State('url', 'pathname'),
+            prevent_initial_call=True
         )
+        def _download(n_clicks, periodo, anio_value, tipo_asegurado_value, pathname, tab=tab_config):
+            if not n_clicks:
+                return None
+            return build_download_response(
+                periodo,
+                anio_value,
+                pathname,
+                tipo_asegurado_value,
+                tab.data_loader,
+                include_citas=tab.include_citas,
+                include_desercion=tab.include_desercion
+            )
+
+    for tab_config in DASHBOARD_TABS:
+        register_download_callback(tab_config)
 
     dash_app.layout = serve_layout
     return dash_app

@@ -5,7 +5,7 @@ from backend.models import User
 from flask import current_app
 from bi import get_bi_url
 from backend.models import dashboard_code_for_user
-from secure_code import encode_code
+from secure_code import encode_code, decode_code
 from backend.centro_asistencial import get_centro_asistencial
 from backend.centro_asistencial import get_centro_asistencial_by_code_red
 from backend.centro_asistencial import getNombreCentroAsistencial
@@ -158,6 +158,48 @@ def register_routes(app):
 			return redirect(f'/dashboard/dash{target_path}/?codcas={code}')
 		flash(warning_msg, 'warning')
 		return redirect(url_for('main.index'))
+
+	def get_center_name_by_code(code):
+		if not code:
+			return ''
+		try:
+			df = get_centro_asistencial()
+			matches = df[df['cenasicod'].astype(str) == str(code)]
+			if not matches.empty:
+				return matches.iloc[0]['cenasides']
+		except Exception as exc:
+			current_app.logger.warning('No se pudo obtener el nombre del centro %s: %s', code, exc)
+		return ''
+
+	@bp.route('/ce/', methods=['GET'])
+	@login_required
+	def ce_index():
+		token = dashboard_code_for_user(current_user, request)
+		if token:
+			return redirect(url_for('main.ce_menu', token=token))
+		flash('No hay código asociado al usuario para mostrar el menú de Consulta Externa.', 'warning')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/ce/<token>', methods=['GET'])
+	@bp.route('/ce/<token>/', methods=['GET'])
+	@login_required
+	def ce_menu(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		center_name = get_center_name_by_code(code)
+		medical_url = f'/dashboard/{token}/'
+		non_medical_url = f'/dashboard_nm/{token}/'
+		return render_template(
+			'Ce.html',
+			show_modules=False,
+			dashboard_token=token,
+			codcas=code,
+			center_name=center_name,
+			medical_url=medical_url,
+			non_medical_url=non_medical_url,
+		)
 
 	@bp.route('/dashboard_eme_prioridad_<prioridad>/<codcas>')
 	@login_required
