@@ -532,6 +532,36 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         normalized = selection if selection in TIPO_ASEGURADO_SQL else DEFAULT_TIPO_ASEGURADO
         return TIPO_ASEGURADO_SQL[normalized]
 
+    FICHA_TECNICA_ID = 6
+
+    def _build_safe_pdf_name(raw_name: Optional[str]) -> str:
+        base = (raw_name or "ficha_tecnica").strip()
+        safe_chars = [ch if ch.isalnum() or ch in (" ", "-", "_") else "_" for ch in base]
+        normalized = ''.join(safe_chars).strip().replace(' ', '_').lower()
+        normalized = normalized or "ficha_tecnica"
+        return normalized if normalized.endswith('.pdf') else f"{normalized}.pdf"
+
+    def fetch_ficha_tecnica(engine, ficha_id: int = FICHA_TECNICA_ID):
+        if engine is None:
+            return None
+
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
+                    {"id": ficha_id}
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch ficha tecnica {ficha_id}: {exc}")
+            return None
+
+        if not row or not row.get('archivo_pdf'):
+            return None
+
+        filename = _build_safe_pdf_name(row.get('nombre'))
+        pdf_bytes = bytes(row['archivo_pdf'])
+        return filename, pdf_bytes
+
     def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
         link_content = html.H5(
             title,
@@ -2272,18 +2302,42 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                 ),
                 html.Div([
                     html.Div([
-                        html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
-                        html.H2(
-                            "Consulta externa - Médicas",
+                        html.Div([
+                            html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
+                            html.H2(
+                                "Consulta externa - Médicas",
+                                style={
+                                    'color': BRAND,
+                                    'fontFamily': FONT_FAMILY,
+                                    'fontSize': '26px',
+                                    'fontWeight': 800,
+                                    'margin': '0'
+                                }
+                            ),
+                        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
+                        dbc.Button(
+                            [html.I(className="bi bi-file-earmark-arrow-down me-2"), "Ficha técnica"],
+                            id='download-ficha-tecnica-button',
+                            color='light',
+                            outline=True,
+                            size='sm',
                             style={
+                                'borderColor': BRAND,
                                 'color': BRAND,
                                 'fontFamily': FONT_FAMILY,
-                                'fontSize': '26px',
-                                'fontWeight': 800,
-                                'margin': '0'
+                                'fontWeight': '600',
+                                'borderRadius': '8px',
+                                'padding': '4px 12px'
                             }
                         ),
-                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
+                        dcc.Download(id='download-ficha-tecnica')
+                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '12px', 'flexWrap': 'wrap'}),
+                    dbc.Tooltip(
+                        "Descargar ficha técnica",
+                        target='download-ficha-tecnica-button',
+                        placement='bottom',
+                        style={'zIndex': 9999}
+                    ),
                     html.P(
                         f"Informacion actualizada al 31/12/2025 | Sistema de Gestion Estadística",
                         style={
@@ -2455,6 +2509,23 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
 
     for tab_config in DASHBOARD_TABS:
         register_download_callback(tab_config)
+
+    @dash_app.callback(
+        Output('download-ficha-tecnica', 'data'),
+        Input('download-ficha-tecnica-button', 'n_clicks'),
+        prevent_initial_call=True
+    )
+    def download_ficha_tecnica(n_clicks):
+        if not n_clicks:
+            return dash.no_update
+
+        engine = create_connection()
+        ficha = fetch_ficha_tecnica(engine)
+        if not ficha:
+            return dash.no_update
+
+        filename, pdf_bytes = ficha
+        return dcc.send_bytes(pdf_bytes, filename)
 
     dash_app.layout = serve_layout
     return dash_app

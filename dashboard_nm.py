@@ -532,6 +532,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
     build_enfermeria_cards = create_cards_builder(ENFERMERIA_CARD_TEMPLATE)
 
+
+
+    PSICOLOGIA_CARD_TEMPLATE = [
+        {
+            "title": "Total atenciones de psicología",
+            "stat_key": "total_psicologia_atenciones",
+            "border_color": BRAND,
+        },
+    ]
+    build_psicologia_cards = create_cards_builder(PSICOLOGIA_CARD_TEMPLATE)
+
+    TRASOCIAL_CARD_TEMPLATE = [
+        {
+            "title": "Total atenciones de trabajo social",
+            "stat_key": "total_trasocial_atenciones",
+            "border_color": BRAND,
+        },
+    ]
+    build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
+    
     DEFAULT_TIPO_ASEGURADO = 'Todos'
     TIPO_ASEGURADO_SQL = {
         'Asegurado': "('1')",
@@ -542,6 +562,36 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     def resolve_tipo_asegurado_clause(selection):
         normalized = selection if selection in TIPO_ASEGURADO_SQL else DEFAULT_TIPO_ASEGURADO
         return TIPO_ASEGURADO_SQL[normalized]
+
+    FICHA_TECNICA_ID = 11
+
+    def _build_safe_pdf_name(raw_name: Optional[str]) -> str:
+        base = (raw_name or "ficha_tecnica").strip()
+        safe_chars = [ch if ch.isalnum() or ch in (" ", "-", "_") else "_" for ch in base]
+        normalized = ''.join(safe_chars).strip().replace(' ', '_').lower()
+        normalized = normalized or "ficha_tecnica"
+        return normalized if normalized.endswith('.pdf') else f"{normalized}.pdf"
+
+    def fetch_ficha_tecnica(engine, ficha_id: int = FICHA_TECNICA_ID):
+        if engine is None:
+            return None
+
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
+                    {"id": ficha_id}
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch ficha tecnica {ficha_id}: {exc}")
+            return None
+
+        if not row or not row.get('archivo_pdf'):
+            return None
+
+        filename = _build_safe_pdf_name(row.get('nombre'))
+        pdf_bytes = bytes(row['archivo_pdf'])
+        return filename, pdf_bytes
 
     def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
         link_content = html.H5(
@@ -1144,6 +1194,76 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
 
 
+    def build_queries_psicologia(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+            ("psicologia_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad ='005'
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+        ]
+        return {
+            "queries": queries,
+        }
+
+    def build_queries_trasocial(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+            ("trasocial_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='F51'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad ='055'
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+        ]
+        return {
+            "queries": queries,
+        }
+
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
         if not periodo or not codcas or not anio:
             return None
@@ -1172,6 +1292,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_complementarias_df = results.get("complementarias", pd.DataFrame())
         atenciones_preconcepcional_df = results.get("preconcepcional", pd.DataFrame())
 
+
         atenciones_p_df = results.get("atenciones_p", pd.DataFrame())
         atenciones_domiciliaria_df = results.get("domiciliaria", pd.DataFrame())
         atenciones_grupal_df = results.get("grupal", pd.DataFrame())
@@ -1186,6 +1307,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_cronicas_am_df = results.get("enfermeria_cronicas_am", pd.DataFrame())
         atenciones_enfermeria_otros_df = results.get("enfermeria_otros", pd.DataFrame())
         atenciones_prev_anemia_df = results.get("enfermeria_prev_anemia", pd.DataFrame())
+
+        atenciones_psicologia_df = results.get("psicologia_total", pd.DataFrame())
+
+        atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
 
         def summarize_sub_activities(frame):
             if frame.empty or 'actespnom' not in frame:
@@ -1245,6 +1370,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_enfermeria_otros_df_agru = summarize_sub_activities(atenciones_enfermeria_otros_df)
         atenciones_prev_anemia_df_agru = summarize_sub_activities(atenciones_prev_anemia_df)
 
+        total_atenciones_psicologia_df = len(atenciones_psicologia_df)
+        total_atenciones_trasocial_df = len(atenciones_trasocial_df)
+
         nombre_centro = resolve_nombre_centro([
             atenciones_df,
             atenciones_prenatal_df,
@@ -1263,6 +1391,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_cronicas_am_df,
             atenciones_enfermeria_otros_df,
             atenciones_prev_anemia_df,
+            atenciones_psicologia_df,
+            atenciones_trasocial_df,
         ])
 
         stats = {
@@ -1284,6 +1414,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_enfermeria_cronicas_am': total_enfermeria_cronicas_am,
             'total_enfermeria_otros': total_enfermeria_otros,
             'total_enfermeria_prev_anemia': total_enfermeria_prev_anemia,
+            'total_psicologia_atenciones': total_atenciones_psicologia_df,
+            'total_trasocial_atenciones': total_atenciones_trasocial_df,
         }
 
         tables = {
@@ -1320,6 +1452,18 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
     def load_dashboard_data_enfermeria(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_enfermeria, tipo_asegurado_value)
+
+    def load_dashboard_data_psicologia(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_psicologia, tipo_asegurado_value)
+
+    def load_dashboard_data_trasocial(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_trasocial, tipo_asegurado_value)
+
+    # if 'build_trasocial_cards' not in locals():
+    #     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
+    
+    def load_dashboard_data_trasocial(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_trasocial, tipo_asegurado_value)
 
     DASHBOARD_TABS = [
         TabConfig(
@@ -1393,6 +1537,42 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             charts_container_id='charts-container-enfermeria',
             data_loader=load_dashboard_data_enfermeria,
             cards_builder=build_enfermeria_cards
+        ),
+        TabConfig(
+            key="psicologia",
+            label="Psicología",
+            value='tab-psicologia',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-psicologia',
+                anio='filter-anio-psicologia',
+                tipo='filter-tipo-asegurado-psicologia'
+            ),
+            search_button_id='search-button-psicologia',
+            download_button_id='download-button-psicologia',
+            download_component_id='download-dataframe-csv-psicologia',
+            back_button_id='back-button-psicologia',
+            summary_container_id='summary-container-psicologia',
+            charts_container_id='charts-container-psicologia',
+            data_loader=load_dashboard_data_psicologia,
+            cards_builder=build_psicologia_cards
+        ),
+        TabConfig(
+            key="trasocial",
+            label="Trabajo social",
+            value='tab-trasocial',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-trasocial',
+                anio='filter-anio-trasocial',
+                tipo='filter-tipo-asegurado-trasocial'
+            ),
+            search_button_id='search-button-trasocial',
+            download_button_id='download-button-trasocial',
+            download_component_id='download-dataframe-csv-trasocial',
+            back_button_id='back-button-trasocial',
+            summary_container_id='summary-container-trasocial',
+            charts_container_id='charts-container-trasocial',
+            data_loader=load_dashboard_data_trasocial,
+            cards_builder=build_trasocial_cards
         )
     ]
 
@@ -1429,6 +1609,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             ("Atención en Enfermedades crónicas no trasmisibles-adulto mayor", stats.get('total_enfermeria_cronicas_am', 0)),
             ("Otras actividades ambulatorias", stats.get('total_enfermeria_otros', 0)),
             ("Atención en prevención y control de la anemia", stats.get('total_enfermeria_prev_anemia', 0)),
+            ("Total atenciones psicología", stats.get('total_psicologia_atenciones', 0)),
+            ("Total atenciones trabajo social", stats.get('total_trasocial_atenciones', 0)),
         ]
         if include_citas:
             indicadores_rows.append(("Total Citados", stats.get('total_citados', 0)))
@@ -1464,18 +1646,42 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 ),
                 html.Div([
                     html.Div([
-                        html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
-                        html.H2(
-                            "Consulta externa - No médicas",
+                        html.Div([
+                            html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
+                            html.H2(
+                                "Consulta externa - No médicas",
+                                style={
+                                    'color': BRAND,
+                                    'fontFamily': FONT_FAMILY,
+                                    'fontSize': '26px',
+                                    'fontWeight': 800,
+                                    'margin': '0'
+                                }
+                            ),
+                        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
+                        dbc.Button(
+                            [html.I(className="bi bi-file-earmark-arrow-down me-2"), "Ficha técnica"],
+                            id='download-ficha-tecnica-button-nm',
+                            color='light',
+                            outline=True,
+                            size='sm',
                             style={
+                                'borderColor': BRAND,
                                 'color': BRAND,
                                 'fontFamily': FONT_FAMILY,
-                                'fontSize': '26px',
-                                'fontWeight': 800,
-                                'margin': '0'
+                                'fontWeight': '600',
+                                'borderRadius': '8px',
+                                'padding': '4px 12px'
                             }
                         ),
-                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
+                        dcc.Download(id='download-ficha-tecnica-nm')
+                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '12px', 'flexWrap': 'wrap'}),
+                    dbc.Tooltip(
+                        "Descargar ficha técnica",
+                        target='download-ficha-tecnica-button-nm',
+                        placement='bottom',
+                        style={'zIndex': 9999}
+                    ),
                     html.P(
                         f"Informacion actualizada al 31/12/2025 | Sistema de Gestion Estadística",
                         style={
@@ -1598,6 +1804,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         Input('back-button-programas', 'n_clicks'),
         Input('back-button-nutricion', 'n_clicks'),
         Input('back-button-enfermeria', 'n_clicks'),
+        Input('back-button-psicologia', 'n_clicks'),
+        Input('back-button-trasocial', 'n_clicks'),
         prevent_initial_call=True
     )
     def go_root(*_):
@@ -1645,6 +1853,23 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
     for tab_config in DASHBOARD_TABS:
         register_download_callback(tab_config)
+
+    @dash_app.callback(
+        Output('download-ficha-tecnica-nm', 'data'),
+        Input('download-ficha-tecnica-button-nm', 'n_clicks'),
+        prevent_initial_call=True
+    )
+    def download_ficha_tecnica(n_clicks):
+        if not n_clicks:
+            return dash.no_update
+
+        engine = create_connection()
+        ficha = fetch_ficha_tecnica(engine)
+        if not ficha:
+            return dash.no_update
+
+        filename, pdf_bytes = ficha
+        return dcc.send_bytes(pdf_bytes, filename)
 
     dash_app.layout = serve_layout
     return dash_app
