@@ -313,11 +313,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             # ),
             dcc.Download(id=tab_config.download_component_id),
             dbc.Button(
-                [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                [html.I(className="bi bi-arrow-left me-1"), "Volver"],
                 id=tab_config.back_button_id,
                 color='secondary',
                 outline=True,
-                n_clicks=0,
+                href='javascript:history.back();',
+                external_link=True,
                 style={'marginLeft': 'auto', 'padding': '8px 12px'}
             ),
         ], style={**CONTROL_BAR_STYLE})
@@ -330,7 +331,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             children=[
                 html.Div([
                     controls,
-                    dbc.Tooltip("Regresar al inicio", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
+                    dbc.Tooltip("Volver a la página anterior", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
                     dbc.Tooltip("Buscar datos", target=tab_config.search_button_id, placement='bottom', style={'zIndex': 9999}),
                     dbc.Tooltip("Descargar Excel", target=tab_config.download_button_id, placement='bottom', style={'zIndex': 9999}),
                     dbc.Row([
@@ -1748,7 +1749,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         return html.Div([
             html.H3('No autenticado'),
             html.P('Debes iniciar sesion para ver el dashboard.'),
-            html.A('Ir a inicio', href='/', target='_top')
+            dbc.Button(
+                'Volver',
+                id='unauth-back-button-nm',
+                color='primary',
+                href='javascript:history.back();',
+                external_link=True,
+                style={'marginTop': '12px'}
+            )
         ])
 
     def register_summary_callback(tab_config):
@@ -1797,19 +1805,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         if pathname and pathname.startswith(f"{base}dash/"):
             return {'display': 'none'}, {'display': 'block'}
         return {'display': 'block'}, {'display': 'none'}
-
-    @dash_app.callback(
-        Output('url', 'pathname'),
-        Input('back-button-complementaria', 'n_clicks'),
-        Input('back-button-programas', 'n_clicks'),
-        Input('back-button-nutricion', 'n_clicks'),
-        Input('back-button-enfermeria', 'n_clicks'),
-        Input('back-button-psicologia', 'n_clicks'),
-        Input('back-button-trasocial', 'n_clicks'),
-        prevent_initial_call=True
-    )
-    def go_root(*_):
-        return "/"
 
     primary_filters = DASHBOARD_TABS[0].filter_ids
 

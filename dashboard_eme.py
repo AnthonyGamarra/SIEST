@@ -199,7 +199,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         if getattr(current_user, "is_authenticated", False):
             return dbc.Container([
                 dcc.Location(id='url', refresh=False),
-                dcc.Location(id='location-redirect', refresh=True),
 
                 html.Div([
                 # ENCABEZADO
@@ -271,7 +270,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         dcc.Dropdown(
                             id='filter-anio',
                             options=anio_options,
-                            placeholder='Año',
+                            placeholder='Seleccione un año',
                             clearable=True,
                             style={
                                 'width': '160px',
@@ -281,7 +280,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         dcc.Dropdown(
                             id='filter-periodo',
                             options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                            placeholder='Periodo',
+                            placeholder='Seleccione un periodo',
                             clearable=True,
                             style={
                                 'width': '240px',
@@ -327,17 +326,18 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     ),
                     dcc.Download(id="download-dataframe-csv"),
                     dbc.Button(
-                        [html.I(className="bi bi-arrow-left me-1"), "Inicio"],
+                        [html.I(className="bi bi-arrow-left me-1"), "Volver"],
                         id="btn-volver-eme",
                         color='secondary',
                         outline=True,
-                        n_clicks=0,
+                        href='javascript:history.back();',
+                        external_link=True,
                         style={
                             'marginLeft': 'auto',
                             'padding': '8px 12px'
                         }
                     ),
-                    dbc.Tooltip("Regresar a la página principal", target='btn-volver-eme', placement='bottom')
+                    dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme', placement='bottom')
                 ], style={
                     'display': 'flex',
                     'alignItems': 'center',
@@ -402,7 +402,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         return html.Div([
             html.H3('No autenticado'),
             html.P('Debes iniciar sesión para ver el dashboard.'),
-            html.A('Ir a inicio', href='/', target='_top')
+            dbc.Button(
+                'Volver',
+                id='unauth-back-button-eme',
+                color='primary',
+                href='javascript:history.back();',
+                external_link=True,
+                style={'marginTop': '12px'}
+            )
         ])
 
     # ========== CONEXIÓN DB ==========
@@ -949,16 +956,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         df = df.astype(str)
         filename = f"atenciones_por_prioridad_{codcas}_{anio_str}_{periodo}.csv"
         return dcc.send_data_frame(df.to_csv, filename, index=False)
-
-    @dash_app.callback(
-        Output("location-redirect", "href"),
-        Input("btn-volver-eme", "n_clicks"),
-        prevent_initial_call=True
-    )
-    def navegar_volver_eme(n_clicks):
-        if n_clicks:
-            return "/"
-        return ""
 
     dash_app.layout = serve_layout
     return dash_app
