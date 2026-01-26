@@ -42,6 +42,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         "borderTopRightRadius": "10px",
         "fontFamily": FONT_FAMILY,
         "fontWeight": "600",
+        "fontSize": "12px",   # 👈 AQUÍ defines el tamaño de letra  
         "color": MUTED,
         "backgroundColor": CARD_BG,
         "marginRight": "0"
@@ -238,7 +239,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         ]
         controls = html.Div([
             html.I(
-                className="bi bi-calendar3",
+                className="bi bi-calendar3 dashboard-control-icon",
                 style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}
             ),
             dcc.Dropdown(
@@ -286,6 +287,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 id=tab_config.search_button_id,
                 color='primary',
                 size='md',
+                className='dashboard-control-btn',
                 style={
                     'backgroundColor': BRAND,
                     'borderColor': BRAND,
@@ -317,11 +319,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 id=tab_config.back_button_id,
                 color='secondary',
                 outline=True,
+                className='dashboard-control-btn dashboard-control-btn-back',
                 href='javascript:history.back();',
                 external_link=True,
                 style={'marginLeft': 'auto', 'padding': '8px 12px'}
             ),
-        ], style={**CONTROL_BAR_STYLE})
+        ], className='dashboard-control-bar', style={**CONTROL_BAR_STYLE})
 
         return dcc.Tab(
             label=tab_config.label,
@@ -553,6 +556,49 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     ]
     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
     
+
+
+    PROC_TERA_CARD_TEMPLATE = [
+        {
+            "title": "Total atenciones de procedimiento terapéutico",
+            "stat_key": "total_proc_tera_atenciones",
+            "border_color": BRAND,
+        },
+        {
+            "title": "Terapia individual",
+            "stat_key": "total_terap_indiv_atenciones",
+            "border_color": ACCENT,
+            "table_key": "terap_indiv_por_sub_act",
+            "table_title": "Detalle terapia individual",
+        },
+        {
+            "title": "Terapia pareja/familiar",
+            "stat_key": "total_terap_par_fam_atenciones",
+            "border_color": BRAND_SOFT,
+            "table_key": "terap_par_fam_por_sub_act",
+            "table_title": "Detalle terapia pareja/familiar",
+        },
+        {
+            "title": "Terapia grupal",
+            "stat_key": "total_terap_grup_atenciones",
+            "border_color": ACCENT,
+            "table_key": "terap_grup_por_sub_act",
+            "table_title": "Detalle terapia grupal",
+        },
+    ]
+
+    build_proc_tera_cards = create_cards_builder(PROC_TERA_CARD_TEMPLATE)
+
+    PROC_DIAG_CARD_TEMPLATE = [
+        {
+            "title": "Total atenciones de procedimiento diagnóstico",
+            "stat_key": "total_proc_diag_atenciones",
+            "border_color": BRAND,
+        },
+    ]
+    build_proc_diag_cards = create_cards_builder(PROC_DIAG_CARD_TEMPLATE)
+    
+
     DEFAULT_TIPO_ASEGURADO = 'Todos'
     TIPO_ASEGURADO_SQL = {
         'Asegurado': "('1')",
@@ -1265,6 +1311,161 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "queries": queries,
         }
 
+    def build_queries_proc_tera(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+            ("proc_tera_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad in ('752','760','763','006')
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+            ("terap_indiv", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad in ('752')
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+
+            ("terap_par_fam", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad in ('760','763')
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+    
+            ("terap_grup", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad in ('006')
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+        ]
+        return {
+            "queries": queries,
+        }
+
+    def build_queries_proc_diag(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+            ("proc_diag_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad ='705'
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+        ]
+        return {
+            "queries": queries,
+        }
+
+
+
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
         if not periodo or not codcas or not anio:
             return None
@@ -1312,6 +1513,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_psicologia_df = results.get("psicologia_total", pd.DataFrame())
 
         atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
+
+        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())
+        terap_indiv_df = results.get("terap_indiv", pd.DataFrame())
+        terap_par_fam_df = results.get("terap_par_fam", pd.DataFrame())
+        terap_grup_df = results.get("terap_grup", pd.DataFrame())
+       
+        atenciones_proc_diag_df = results.get("proc_diag_total", pd.DataFrame())
 
         def summarize_sub_activities(frame):
             if frame.empty or 'actespnom' not in frame:
@@ -1374,6 +1582,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_atenciones_psicologia_df = len(atenciones_psicologia_df)
         total_atenciones_trasocial_df = len(atenciones_trasocial_df)
 
+        total_atenciones_proc_tera_df = len(atenciones_proc_tera_df)
+        total_terap_indiv_df = len(terap_indiv_df)
+        total_terap_par_fam_df = len(terap_par_fam_df)
+        total_terap_grup_df = len(terap_grup_df)
+
+        total_terap_indiv_df_agru = summarize_sub_activities(terap_indiv_df)
+        total_terap_par_fam_df_agru = summarize_sub_activities(terap_par_fam_df)
+        total_terap_grup_df_agru = summarize_sub_activities(terap_grup_df)
+
+        total_proc_diag_df = len(atenciones_proc_diag_df)
+
         nombre_centro = resolve_nombre_centro([
             atenciones_df,
             atenciones_prenatal_df,
@@ -1394,6 +1613,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_prev_anemia_df,
             atenciones_psicologia_df,
             atenciones_trasocial_df,
+            atenciones_proc_diag_df,
+            terap_indiv_df,
+            terap_par_fam_df,
+            terap_grup_df,
+            
         ])
 
         stats = {
@@ -1417,6 +1641,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_enfermeria_prev_anemia': total_enfermeria_prev_anemia,
             'total_psicologia_atenciones': total_atenciones_psicologia_df,
             'total_trasocial_atenciones': total_atenciones_trasocial_df,
+            'total_proc_tera_atenciones': total_atenciones_proc_tera_df,
+            'total_terap_indiv_atenciones': total_terap_indiv_df,
+            'total_terap_par_fam_atenciones': total_terap_par_fam_df,
+            'total_terap_grup_atenciones': total_terap_grup_df,
+            'total_proc_diag_atenciones': total_proc_diag_df,
         }
 
         tables = {
@@ -1434,6 +1663,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'enfermeria_cronicas_am_por_sub_act': atenciones_cronicas_am_df_agru,
             'enfermeria_otros_por_sub_act': atenciones_enfermeria_otros_df_agru,
             'enfermeria_prev_anemia_por_sub_act': atenciones_prev_anemia_df_agru,
+            'terap_indiv_por_sub_act': total_terap_indiv_df_agru,
+            'terap_par_fam_por_sub_act': total_terap_par_fam_df_agru,
+            'terap_grup_por_sub_act': total_terap_grup_df_agru, 
         }
 
         return {
@@ -1465,6 +1697,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     
     def load_dashboard_data_trasocial(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_trasocial, tipo_asegurado_value)
+
+    def load_dashboard_data_proc(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_proc_tera, tipo_asegurado_value)
+    
+    def load_dashboard_data_proc_diag(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_proc_diag, tipo_asegurado_value)
+
 
     DASHBOARD_TABS = [
         TabConfig(
@@ -1574,7 +1813,44 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             charts_container_id='charts-container-trasocial',
             data_loader=load_dashboard_data_trasocial,
             cards_builder=build_trasocial_cards
-        )
+        ),
+        TabConfig(
+            key="proc_tera",
+            label="Procedimientos terapéuticos",
+            value='tab-proc-tera',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-proc-tera',
+                anio='filter-anio-proc-tera',
+                tipo='filter-tipo-asegurado-proc-tera'
+            ),
+            search_button_id='search-button-proc-tera',
+            download_button_id='download-button-proc-tera',
+            download_component_id='download-dataframe-csv-proc-tera',
+            back_button_id='back-button-proc-tera',
+            summary_container_id='summary-container-proc-tera',
+            charts_container_id='charts-container-proc-tera',
+            data_loader=load_dashboard_data_proc,
+            cards_builder=build_proc_tera_cards
+        ),
+    
+            TabConfig(
+            key="proc_diag",
+            label="Procedimientos diagnósticos",
+            value='tab-proc-diag',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-proc-diag',
+                anio='filter-anio-proc-diag',
+                tipo='filter-tipo-asegurado-proc-diag'
+            ),
+            search_button_id='search-button-proc-diag',
+            download_button_id='download-button-proc-diag',
+            download_component_id='download-dataframe-csv-proc-diag',
+            back_button_id='back-button-proc-diag',
+            summary_container_id='summary-container-proc-diag',
+            charts_container_id='charts-container-proc-diag',
+            data_loader=load_dashboard_data_proc_diag,
+            cards_builder=build_proc_diag_cards
+        ),
     ]
 
     def build_download_response(periodo, anio, pathname, tipo_asegurado_value, data_loader, include_citas=True, include_desercion=True):

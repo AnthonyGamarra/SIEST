@@ -238,7 +238,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         ]
         controls = html.Div([
             html.I(
-                className="bi bi-calendar3",
+                className="bi bi-calendar3 dashboard-control-icon",
                 style={'fontSize': '18px', 'color': BRAND, 'marginRight': '8px'}
             ),
             dcc.Dropdown(
@@ -286,6 +286,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 id=tab_config.search_button_id,
                 color='primary',
                 size='md',
+                className='dashboard-control-btn',
                 style={
                     'backgroundColor': BRAND,
                     'borderColor': BRAND,
@@ -317,11 +318,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 id=tab_config.back_button_id,
                 color='secondary',
                 outline=True,
+                className='dashboard-control-btn dashboard-control-btn-back',
                 href='javascript:history.back();',
                 external_link=True,
                 style={'marginLeft': 'auto', 'padding': '8px 12px'}
             ),
-        ], style={**CONTROL_BAR_STYLE})
+        ], className='dashboard-control-bar', style={**CONTROL_BAR_STYLE})
 
         return dcc.Tab(
             label=tab_config.label,

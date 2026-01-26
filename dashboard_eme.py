@@ -261,47 +261,46 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
 
                 # FILTROS + BOTONES
                 html.Div([
-                    html.Div([
-                        html.I(className="bi bi-calendar-week", style={
-                            'fontSize': '20px',
-                            'color': BRAND,
-                            'marginRight': '10px'
-                        }),
-                        dcc.Dropdown(
-                            id='filter-anio',
-                            options=anio_options,
-                            placeholder='Seleccione un año',
-                            clearable=True,
-                            style={
-                                'width': '160px',
-                                'fontFamily': FONT_FAMILY
-                            }
-                        ),
-                        dcc.Dropdown(
-                            id='filter-periodo',
-                            options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
-                            placeholder='Seleccione un periodo',
-                            clearable=True,
-                            style={
-                                'width': '240px',
-                                'fontFamily': FONT_FAMILY
-                            }
-                        ),
-                        dcc.Dropdown(
-                            id='filter-tipo-asegurado',
-                            options=tipo_asegurado_options,
-                            value=DEFAULT_TIPO_ASEGURADO,
-                            clearable=False,
-                            style={
-                                'width': '200px',
-                                'fontFamily': FONT_FAMILY
-                            }
-                        ),
-                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
+                    html.I(className="bi bi-calendar-week dashboard-control-icon", style={
+                        'fontSize': '20px',
+                        'color': BRAND,
+                        'marginRight': '10px'
+                    }),
+                    dcc.Dropdown(
+                        id='filter-anio',
+                        options=anio_options,
+                        placeholder='Seleccione un año',
+                        clearable=True,
+                        style={
+                            'width': '160px',
+                            'fontFamily': FONT_FAMILY
+                        }
+                    ),
+                    dcc.Dropdown(
+                        id='filter-periodo',
+                        options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
+                        placeholder='Seleccione un periodo',
+                        clearable=True,
+                        style={
+                            'width': '240px',
+                            'fontFamily': FONT_FAMILY
+                        }
+                    ),
+                    dcc.Dropdown(
+                        id='filter-tipo-asegurado',
+                        options=tipo_asegurado_options,
+                        value=DEFAULT_TIPO_ASEGURADO,
+                        clearable=False,
+                        style={
+                            'width': '200px',
+                            'fontFamily': FONT_FAMILY
+                        }
+                    ),
                     dbc.Button(
                         [html.I(className="bi bi-search me-2"), "Buscar"],
                         id='search-button',
                         color='primary',
+                        className='dashboard-control-btn',
                         style={
                             'backgroundColor': BRAND,
                             'borderColor': BRAND,
@@ -315,6 +314,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         [html.I(className="bi bi-download me-2"), "Exportar CSV"],
                         id='download-button',
                         color='success',
+                        className='dashboard-control-btn',
                         style={
                             'backgroundColor': '#28a745',
                             'borderColor': '#28a745',
@@ -330,6 +330,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         id="btn-volver-eme",
                         color='secondary',
                         outline=True,
+                        className='dashboard-control-btn dashboard-control-btn-back',
                         href='javascript:history.back();',
                         external_link=True,
                         style={
@@ -337,8 +338,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                             'padding': '8px 12px'
                         }
                     ),
-                    dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme', placement='bottom')
-                ], style={
+                ], className='dashboard-control-bar', style={
                     'display': 'flex',
                     'alignItems': 'center',
                     'gap': '16px',
@@ -348,6 +348,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     'borderRadius': '14px',
                     'boxShadow': '0 8px 20px rgba(0,0,0,0.08)'
                 }),
+                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme', placement='bottom'),
 
                 # CONTENEDORES
                 dbc.Row([
