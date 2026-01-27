@@ -22,7 +22,6 @@ def get_centro_asistencial():
     query="""
         SELECT cenasicod, cenasides 
         FROM dwsge.sgss_cmcas10
-        WHERE estregcod = '1'
         ORDER BY id ASC 
     """
 
@@ -39,9 +38,23 @@ def get_centro_asistencial_by_code_red(code_red):
         LEFT JOIN dwsge.sgss_cmras10 r
             ON c.redasiscod = r.redasiscod
         WHERE c.redasiscod = %(code_red)s
-        AND c.estregcod = '1'
     """
     df=pd.read_sql_query(query,create_connection(),params={"code_red": str(code_red)})
+    return df
+
+def get_redes_asistenciales():
+    query = """
+        SELECT DISTINCT
+            r.redasiscod,
+            r.redasisdes
+        FROM dwsge.sgss_cmcas10 c
+        LEFT JOIN dwsge.sgss_cmras10 r
+            ON c.redasiscod = r.redasiscod
+        WHERE r.redasiscod IS NOT NULL
+        ORDER BY r.redasisdes ASC
+    """
+
+    df = pd.read_sql_query(query, create_connection())
     return df
 
 def getNombreCentroAsistencial(request):

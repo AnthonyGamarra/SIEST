@@ -1,4 +1,142 @@
-{% extends "base.html" %} {% block body %}
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .register-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 0 1rem;
+  }
+
+  .register-container {
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .register-form {
+    width: 100%;
+  }
+
+  .register-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .register-row .register-form-group {
+    flex: 1 1 280px;
+  }
+
+  .register-form-group .select2-container {
+    width: 100% !important;
+  }
+
+  .select-field {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .select-field .select2-container {
+    flex: 1 1 auto;
+  }
+
+  .register-select {
+    width: 100%;
+  }
+
+  .register-select + .select2-container .select2-selection--single {
+    min-height: 48px;
+    border-radius: 16px;
+    border: 1px solid #e1e6ef !important;
+    background: #ffffff !important;
+    color: #0f2b46 !important;
+    box-shadow: 0 6px 18px rgba(10, 37, 64, 0.08);
+  }
+
+  .register-select + .select2-container .select2-selection--single:hover {
+    border-color: #c5d0de !important;
+  }
+
+  .register-select + .select2-container .select2-selection--single .select2-selection__rendered {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #0f2b46;
+    line-height: 48px;
+    padding: 0 1.5rem;
+  }
+
+  .register-select + .select2-container .select2-selection--single .select2-selection__placeholder {
+    font-weight: 500;
+    color: #7c8797;
+  }
+
+  .register-select + .select2-container .select2-selection__arrow {
+    height: 48px;
+    right: 1rem;
+  }
+
+  .register-select + .select2-container .select2-selection__arrow b {
+    border-color: #0f2b46 transparent transparent transparent;
+    border-width: 5px 4px 0 4px;
+  }
+
+  .select2-results__option {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #0f2b46;
+  }
+
+  .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: #e8f0fb;
+    color: #0f2b46;
+  }
+
+  .register-help {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+  }
+
+  .select2-container.is-loading .select2-selection__rendered::after {
+    content: 'Cargando...';
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-left: 0.5rem;
+  }
+
+  .btn-reset {
+    border: 1px solid #d9e2ef;
+    background: #f7f9fc;
+    color: #0f2b46;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.85rem 1.5rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .btn-reset:hover {
+    border-color: #c0ccdd;
+    box-shadow: 0 6px 16px rgba(15, 43, 70, 0.08);
+  }
+
+  .select-clear-btn {
+    border: 1px solid #d9e2ef;
+    background: #ffffff;
+    color: #0f2b46;
+    border-radius: 999px;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .select-clear-btn:hover {
+    border-color: #c0ccdd;
+    box-shadow: 0 4px 12px rgba(15, 43, 70, 0.08);
+  }
+</style>
 <div class="register-wrapper">
   <div class="register-container">
     <div class="register-header">
@@ -60,27 +198,64 @@
         />
       </div>
 
-      <!-- CODCAS y Rol en dos columnas -->
+      <!-- Código Red y Código Centro en dos columnas -->
       <div class="register-row">
         <div class="register-form-group">
-          <label for="codcas">Código CAS</label>
-          <input
-            type="number"
-            id="codcas"
-            name="codcas"
-            placeholder="001"
-            required
-          />
+          <label for="code_red_select">Código Red</label>
+          <div class="select-field">
+            <select
+              id="code_red_select"
+              name="code_red"
+              class="register-select"
+              data-placeholder="Seleccionar red..."
+            >
+              <option value="">Seleccionar red...</option>
+              {% for red in red_options|default([]) %}
+              <option value="{{ red.code }}">{{ red.label }} ({{ red.code }})</option>
+              {% endfor %}
+            </select>
+            <button
+              type="button"
+              class="select-clear-btn"
+              data-select-clear="code_red_select"
+              aria-label="Limpiar selección de código red"
+            >
+              Limpiar
+            </button>
+          </div>
+          <span class="register-help"
+            >Escribe para buscar una red y filtrar los centros.</span
+          >
         </div>
         <div class="register-form-group">
-          <label for="codcas">Código Centro</label>
-          <input
-            type="number"
-            id="code_red"
-            name="code_red"
-            placeholder="001"
-            required
-          />
+          <label for="codcas_select">Código Centro</label>
+          <div class="select-field">
+            <select
+              id="codcas_select"
+              name="codcas"
+              class="register-select"
+              data-placeholder="Seleccionar centro..."
+              required
+            >
+              <option value="">Seleccionar centro...</option>
+              {% for centro in centros_options|default([]) %}
+              <option value="{{ centro.code }}">
+                {{ centro.label }} ({{ centro.code }})
+              </option>
+              {% endfor %}
+            </select>
+            <button
+              type="button"
+              class="select-clear-btn"
+              data-select-clear="codcas_select"
+              aria-label="Limpiar selección de código centro"
+            >
+              Limpiar
+            </button>
+          </div>
+          <span class="register-help"
+            >Puedes buscar por nombre o código.</span
+          >
         </div>
       </div>
       <div class="register-form-group">
@@ -93,8 +268,9 @@
         </select>
       </div>
       <!-- Botón de envío -->
-      <div class="register-submit">
+      <div class="register-submit" style="display: flex; gap: 1rem; flex-wrap: wrap">
         <button type="submit">Crear cuenta</button>
+        <button type="reset" class="btn-reset">Limpiar campos</button>
       </div>
 
       <!-- Link de retorno -->
@@ -104,4 +280,155 @@
     </form>
   </div>
 </div>
+<script>
+  window.addEventListener('load', function () {
+    const $ = window.jQuery;
+    if (!$ || !$.fn || !$.fn.select2) {
+      console.warn('Select2 no está disponible en esta página.');
+      return;
+    }
+
+    const defaultCenters = {{ centros_options|default([])|tojson }};
+    const centersEndpointTemplate = {{ url_for('main.centros_by_red_api', code_red='__CODE__')|tojson }};
+    const $centerSelect = $('#codcas_select');
+    const $redSelect = $('#code_red_select');
+    const selectClearButtons = document.querySelectorAll('[data-select-clear]');
+    const formElement = document.querySelector('.register-form');
+
+    function initSelect($element, placeholder) {
+      if (!$element.length) {
+        return;
+      }
+      $element.select2({
+        width: '100%',
+        allowClear: false,
+        placeholder,
+        language: {
+          noResults: function () {
+            return 'Sin coincidencias';
+          },
+          searching: function () {
+            return 'Buscando...';
+          },
+        },
+      });
+    }
+
+    initSelect($centerSelect, 'Buscar centro...');
+    initSelect($redSelect, 'Buscar red...');
+
+    function normalizeOptions(list) {
+      if (!Array.isArray(list)) {
+        return [];
+      }
+
+      return list
+        .map(function (item) {
+          const code = String(item.code || '').trim();
+          const label = String(item.label || '').trim();
+          return { code, label };
+        })
+        .filter(function (item) {
+          return item.code && item.label;
+        });
+    }
+
+    const normalizedDefaults = normalizeOptions(defaultCenters);
+
+    selectClearButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        const targetId = button.getAttribute('data-select-clear');
+        if (!targetId) {
+          return;
+        }
+        const $target = $('#' + targetId);
+        if (!$target.length) {
+          return;
+        }
+        $target.val(null).trigger('change');
+      });
+    });
+
+    function setCenterOptions(options) {
+      const selectEl = $centerSelect.get(0);
+      if (!selectEl) {
+        return;
+      }
+
+      const placeholderLabel =
+        $centerSelect.data('placeholder') || 'Seleccionar centro...';
+
+      selectEl.innerHTML = '';
+      const placeholderOption = new Option(placeholderLabel, '', true, true);
+      selectEl.appendChild(placeholderOption);
+
+      normalizeOptions(options).forEach(function (option) {
+        const text = option.label + ' (' + option.code + ')';
+        const optionNode = new Option(text, option.code, false, false);
+        selectEl.appendChild(optionNode);
+      });
+
+      $centerSelect.val(null).trigger('change.select2');
+    }
+
+    function toggleCenterDisabled(isDisabled) {
+      $centerSelect.prop('disabled', isDisabled);
+      const container = $centerSelect.next('.select2-container');
+      if (!container.length) {
+        return;
+      }
+      if (isDisabled) {
+        container.addClass('is-loading');
+      } else {
+        container.removeClass('is-loading');
+      }
+    }
+
+    async function loadCentersByRed(codeRed) {
+      if (!codeRed) {
+        toggleCenterDisabled(false);
+        setCenterOptions(normalizedDefaults);
+        return;
+      }
+
+      toggleCenterDisabled(true);
+      try {
+        const endpoint = centersEndpointTemplate.replace(
+          '__CODE__',
+          encodeURIComponent(codeRed)
+        );
+        const response = await fetch(endpoint, {
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+        if (!response.ok) {
+          throw new Error('No se pudieron obtener los centros');
+        }
+        const payload = await response.json();
+        setCenterOptions(payload.centers || []);
+      } catch (error) {
+        console.error('Error al cargar centros:', error);
+        setCenterOptions(normalizedDefaults);
+      } finally {
+        toggleCenterDisabled(false);
+      }
+    }
+
+    setCenterOptions(normalizedDefaults);
+
+    $redSelect.on('change', function (event) {
+      loadCentersByRed(event.target.value);
+    });
+
+    if (formElement) {
+      formElement.addEventListener('reset', function () {
+        window.setTimeout(function () {
+          $redSelect.val(null).trigger('change');
+          setCenterOptions(normalizedDefaults);
+        }, 0);
+      });
+    }
+  });
+</script>
 {% endblock %}

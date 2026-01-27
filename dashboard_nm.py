@@ -42,7 +42,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         "borderTopRightRadius": "10px",
         "fontFamily": FONT_FAMILY,
         "fontWeight": "600",
-        "fontSize": "12px",   
+        "fontSize": "12px", 
         "color": MUTED,
         "backgroundColor": CARD_BG,
         "marginRight": "0"
@@ -77,6 +77,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         "border": f"1px solid {BORDER}",
         "padding": "14px 16px",
         
+        # Solo esquinas inferiores redondeadas
         "borderTopLeftRadius": "0px",
         "borderTopRightRadius": "0px",
         "borderBottomLeftRadius": "14px",
@@ -359,15 +360,42 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             ]
         )
 
+    def build_required_params_message(message=None):
+        subtitle = message or (
+            "Por favor, seleccione un año y un periodo y asegúrese de tener un centro válido."
+        )
+        return html.Div([
+            html.I(className="bi bi-exclamation-circle", style={
+                'fontSize': '64px',
+                'color': '#ffc107',
+                'marginBottom': '20px'
+            }),
+            html.H4("Información requerida", style={
+                'color': TEXT,
+                'fontFamily': FONT_FAMILY,
+                'marginBottom': '10px'
+            }),
+            html.P(subtitle, style={
+                'color': MUTED,
+                'fontFamily': FONT_FAMILY
+            })
+        ], style={
+            'textAlign': 'center',
+            'padding': '60px',
+            'backgroundColor': CARD_BG,
+            'borderRadius': '16px',
+            'boxShadow': '0 10px 30px rgba(0,0,0,0.08)'
+        })
+
     def fetch_dashboard_payload(periodo, anio_value, tipo_asegurado_value, pathname, data_loader):
         if not periodo or not anio_value:
-            return None, html.Div("Seleccione un año y un periodo, y asegurese de tener un centro valido."), None
+            return None, build_required_params_message(), None
 
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_url) if codcas_url else None
 
         if not codcas:
-            return None, html.Div("Seleccione un centro valido."), None
+            return None, build_required_params_message(), None
 
         engine = create_connection()
         if engine is None:

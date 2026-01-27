@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
@@ -9,7 +9,29 @@ from secure_code import encode_code, decode_code
 from backend.centro_asistencial import get_centro_asistencial
 from backend.centro_asistencial import get_centro_asistencial_by_code_red
 from backend.centro_asistencial import getNombreCentroAsistencial
+from backend.centro_asistencial import get_redes_asistenciales
 
+
+def _format_select_options(df, code_key, label_key):
+	if df is None:
+		return []
+
+	try:
+		records = df.to_dict(orient='records')
+	except AttributeError:
+		return []
+
+	formatted = []
+	for record in records:
+		code = record.get(code_key)
+		label = record.get(label_key)
+		if code is None or label is None:
+			continue
+		code_str = str(code).strip()
+		label_str = str(label).strip()
+		if code_str and label_str:
+			formatted.append({'code': code_str, 'label': label_str})
+	return formatted
 
 
 def register_routes(app):
@@ -44,7 +66,10 @@ def register_routes(app):
 			flash('No tienes permisos para registrar usuarios', 'danger')
 			return redirect(url_for('main.index'))
 		
-		
+		centros_df = get_centro_asistencial()
+		redes_df = get_redes_asistenciales()
+		centros_options = _format_select_options(centros_df, 'cenasicod', 'cenasides')
+		red_options = _format_select_options(redes_df, 'redasiscod', 'redasisdes')
 		
 		if request.method == 'POST':
 			name = request.form.get('nombre', '')
@@ -71,7 +96,25 @@ def register_routes(app):
 				flash('Usuario creado exitosamente', 'success')
 				return redirect(url_for('main.index'))
 		
-		return render_template('register.html', show_modules=False)
+		return render_template(
+			'register.html',
+			show_modules=False,
+			centros_options=centros_options,
+			red_options=red_options,
+		)
+
+	@bp.route('/api/redes/<code_red>/centros', methods=['GET'])
+	@login_required
+	def centros_by_red_api(code_red):
+		if current_user.role not in ('admin', 'admin_red'):
+			return jsonify({'error': 'No autorizado'}), 403
+
+		if not code_red:
+			return jsonify({'centers': []})
+
+		df = get_centro_asistencial_by_code_red(code_red)
+		centers = _format_select_options(df, 'cenasicod', 'cenasides')
+		return jsonify({'centers': centers})
 
 	@bp.route('/login', methods=['GET', 'POST'])
 	def login():
