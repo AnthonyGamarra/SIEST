@@ -76,7 +76,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "border": f"1px solid {BORDER}",
         "padding": "14px 16px",
         
-        # Solo esquinas inferiores redondeadas
         "borderTopLeftRadius": "0px",
         "borderTopRightRadius": "0px",
         "borderBottomLeftRadius": "14px",

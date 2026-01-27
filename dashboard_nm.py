@@ -42,7 +42,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         "borderTopRightRadius": "10px",
         "fontFamily": FONT_FAMILY,
         "fontWeight": "600",
-        "fontSize": "12px",   # 👈 AQUÍ defines el tamaño de letra  
+        "fontSize": "12px",   
         "color": MUTED,
         "backgroundColor": CARD_BG,
         "marginRight": "0"
@@ -77,7 +77,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         "border": f"1px solid {BORDER}",
         "padding": "14px 16px",
         
-        # Solo esquinas inferiores redondeadas
         "borderTopLeftRadius": "0px",
         "borderTopRightRadius": "0px",
         "borderBottomLeftRadius": "14px",

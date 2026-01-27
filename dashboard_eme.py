@@ -78,6 +78,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         suppress_callback_exceptions=True,
     )
 
+    dash_app.title = "SIEST"
+
     # Registrar callbacks de páginas de detalle
     from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
     ate_topicos_1.register_callbacks(dash_app)
