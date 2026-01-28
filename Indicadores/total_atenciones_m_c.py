@@ -191,7 +191,7 @@ def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_d
 
 # Layout sin verificador de query
 layout = html.Div([
-    dcc.Location(id="page-url", refresh=False),
+    dcc.Location(id="page-url_m_c", refresh=False),
     html.Div([
         # Header con icono
         html.Div([
@@ -209,7 +209,7 @@ layout = html.Div([
         html.Div([
             html.Button(
                 [html.I(className="bi bi-download me-2"), "Descargar CSV"],
-                id="btn-download-query1",
+                id="btn-download-query1_m_c",
                 n_clicks=0,
                 style={
                     "backgroundColor": BRAND,
@@ -228,7 +228,7 @@ layout = html.Div([
                     "gap": "6px"
                 }
             ),
-            dcc.Download(id="download-query1-csv")
+            dcc.Download(id="download-query1-csv_m_c")
         ])
     ], style={
         "padding": "16px 20px",
@@ -244,7 +244,7 @@ layout = html.Div([
     }),
     # PESTA??AS
     dcc.Tabs(
-        id="main-tabs",
+        id="main-tabs_m_c",
         value="tab-graficos",
         style={"border": "none"},
         parent_style={"marginTop": "12px"},
@@ -260,9 +260,9 @@ layout = html.Div([
                     html.Div([
                         dcc.Loading(
                             html.Div([
-                                html.Div(dcc.Graph(id="bar-servicio-graph", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
+                                html.Div(dcc.Graph(id="bar-servicio-graph_m_c", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
                                          style={"flex": "1", "minWidth": "320px"}),
-                                html.Div(dcc.Graph(id="bar-especialidad-graph", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
+                                html.Div(dcc.Graph(id="bar-especialidad-graph_m_c", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
                                          style={"flex": "1", "minWidth": "320px"}),
                             ], style={"display": "flex", "gap": "12px", "flexWrap": "wrap"}),
                             type="dot"
@@ -275,18 +275,18 @@ layout = html.Div([
                         dcc.Loading(
                             html.Div([
                                 html.Div(
-                                    dcc.Graph(id="total-atenciones-graph", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
+                                    dcc.Graph(id="total-atenciones-graph_m_c", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
                                     style={"flex": "1", "minWidth": "320px"}
                                 ),
                                 html.Div(
-                                    dcc.Graph(id="total-atenciones-graph-esp", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
+                                    dcc.Graph(id="total-atenciones-graph-esp_m_c", config=GRAPH_CONFIG, style={"height": "320px", "width": "100%"}),
                                     style={"flex": "1", "minWidth": "320px"}
                                 ),
                             ], style={"display": "flex", "gap": "12px", "flexWrap": "wrap"}),
                             type="dot"
                         ),
                         html.Div(
-                            id="total-atenciones-msg",
+                            id="total-atenciones-msg_m_c",
                             style={"marginTop": "10px", "color": MUTED, "fontFamily": FONT_FAMILY, "fontSize": "12px", "fontWeight": "600"}
                         )
                     ], style={**CARD_STYLE}),
@@ -300,11 +300,11 @@ layout = html.Div([
                         ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '12px'}),
                         dcc.Loading(
                             html.Div([
-                                dcc.Graph(id="tornado-atenciones-graph", config=GRAPH_CONFIG, style={"height": "360px", "width": "100%"})
+                                dcc.Graph(id="tornado-atenciones-graph_m_c", config=GRAPH_CONFIG, style={"height": "360px", "width": "100%"})
                             ]),
                             type="dot"
                         ),
-                        html.Div(id="tornado-atenciones-msg",
+                        html.Div(id="tornado-atenciones-msg_m_c",
                                  style={"marginTop": "10px", "color": MUTED, "fontFamily": FONT_FAMILY,
                                         "fontSize": "12px", "fontWeight": "600"})
                     ], style={**CARD_STYLE})
@@ -327,7 +327,7 @@ layout = html.Div([
             #                 html.Div([
             #                     html.Label("Filtrar por DNI del m??dico", style={"fontSize": "12px", "color": MUTED}),
             #                     dcc.Input(
-            #                         id="dni-filter",
+            #                         id="dni-filter_m_c",
             #                         type="text",
             #                         placeholder="Ingrese DNI m??dico y presione Enter",
             #                         debounce=True,
@@ -340,11 +340,11 @@ layout = html.Div([
             #                 html.Div(style={"flex": 1})
             #             ], style={"display": "flex", "alignItems": "end", "gap": "12px", "marginBottom": "10px"}),
             #             dcc.Loading(
-            #                 dcc.Graph(id="line-atenciones-medico", style={"height": "320px", "width": "100%"}),
+            #                 dcc.Graph(id="line-atenciones-medico_m_c", style={"height": "320px", "width": "100%"}),
             #                 type="dot"
             #             ),
             #             # Tabla (ya existente) debajo del gr??fico
-            #             html.Div(id="tabla-prod-medico-wrapper")
+            #             html.Div(id="tabla-prod-medico-wrapper_m_c")
             #         ], style={**CARD_STYLE}),
             #     ], style={"padding": "4px"})
             # ),
@@ -363,10 +363,10 @@ layout = html.Div([
                         ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '12px'}),
                         # NUEVO: gráfico Top10 coddiag x sexo (antes de la tabla)
                         dcc.Loading(
-                            dcc.Graph(id="bar-topdiag-graph", config=GRAPH_CONFIG, style={"height": "360px", "width": "100%"}),
+                            dcc.Graph(id="bar-topdiag-graph_m_c", config=GRAPH_CONFIG, style={"height": "360px", "width": "100%"}),
                             type="dot"
                         ),
-                        html.Div(id="tabla-resumen-atenciones-wrapper")
+                        html.Div(id="tabla-resumen-atenciones-wrapper_m_c")
                     ], style={**CARD_STYLE})
                 ], style={"padding": "8px"})
             ),
@@ -383,7 +383,7 @@ layout = html.Div([
                                     style={"color": BRAND, "fontFamily": FONT_FAMILY, "fontWeight": 700,
                                            "marginBottom": 0, "letterSpacing": "-0.2px"}),
                         ], style={'display': 'flex', 'alignItems': 'center', 'marginBottom': '12px'}),
-                        html.Div(id="tabla-detalle-wrapper")
+                        html.Div(id="tabla-detalle-wrapper_m_c")
                     ], style={**CARD_STYLE})
                 ], style={"padding": "8px"})
             )
@@ -391,7 +391,7 @@ layout = html.Div([
         content_style=TABS_CONTAINER_STYLE
     ),
     # Stores
-    dcc.Store(id="store-detalle-data")
+    dcc.Store(id="store-detalle-data_m_c")
 ], style={
     "width": "100%",
     "maxWidth": "1700px",
@@ -404,8 +404,8 @@ layout = html.Div([
 # Registrar página
 register_page(
     __name__,
-    path_template="/dash/total_atenciones/<codcas>",
-    name="total_atenciones",
+    path_template="/dash/total_atenciones_m_c/<codcas>",
+    name="total_atenciones_m_c",
     layout=layout
 )
 
@@ -440,10 +440,10 @@ def _parse_codasegu(search: str) -> str | None:
 
 # Callback nuevas barras (inicio)
 @callback(
-    Output("bar-servicio-graph", "figure"),
-    Output("bar-especialidad-graph", "figure"),
-    Input("page-url", "pathname"),
-    Input("page-url", "search"),
+    Output("bar-servicio-graph_m_c", "figure"),
+    Output("bar-especialidad-graph_m_c", "figure"),
+    Input("page-url_m_c", "pathname"),
+    Input("page-url_m_c", "search"),
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
     State("filter-tipo-asegurado", "value")
@@ -465,9 +465,8 @@ def update_barras_inicio(pathname, search, periodo_dropdown, anio_dropdown, tipo
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
         WHERE ce.cod_centro = '{codcas}'
-          AND ce.cod_actividad = '91'
+          AND cod_servicio= 'A91'
           AND ce.clasificacion in (2,4,6)
-          AND ce.cod_variable = '001'
           AND (
                     CASE 
                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -570,20 +569,20 @@ def update_barras_inicio(pathname, search, periodo_dropdown, anio_dropdown, tipo
 
 # Callback para construir el gráfico y las tablas
 @callback(
-    Output("total-atenciones-graph", "figure"),
-    Output("total-atenciones-graph-esp", "figure"),
-    Output("total-atenciones-msg", "children"),
-    Output("tabla-detalle-wrapper", "children"),
-    Output("store-detalle-data", "data"),
-    Output("tabla-resumen-atenciones-wrapper", "children"),
-    Output("bar-topdiag-graph", "figure"),
-    Input("page-url", "pathname"),
-    Input("page-url", "search"),
+    Output("total-atenciones-graph_m_c", "figure"),
+    Output("total-atenciones-graph-esp_m_c", "figure"),
+    Output("total-atenciones-msg_m_c", "children"),
+    Output("tabla-detalle-wrapper_m_c", "children"),
+    Output("store-detalle-data_m_c", "data"),
+    Output("tabla-resumen-atenciones-wrapper_m_c", "children"),
+    Output("bar-topdiag-graph_m_c", "figure"),
+    Input("page-url_m_c", "pathname"),
+    Input("page-url_m_c", "search"),
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
     State("filter-tipo-asegurado", "value")
 )
-def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+def update_total_atenciones_m_c(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
     empty_div = html.Div()
     codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown)
     codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
@@ -633,9 +632,8 @@ def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, t
         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
         WHERE ce.cod_centro = '{codcas}'
-          AND ce.cod_actividad = '91'
+          AND cod_servicio= 'A91'
           AND ce.clasificacion in (2,4,6)
-          AND ce.cod_variable = '001'
           AND (
                     CASE 
                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -667,9 +665,8 @@ def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, t
         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
         LEFT JOIN dwsge.dwe_cl10 as cl ON ce.clasificacion = cl.id_cl
         WHERE ce.cod_centro = '{codcas}'
-          AND ce.cod_actividad = '91'
+          AND cod_servicio= 'A91'
           AND ce.clasificacion in (1,3,5,0)
-          AND ce.cod_variable = '001'
           AND (
                     CASE 
                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -793,7 +790,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, t
             {"headerName": "desc_cl", "field": "desc_cl2"}
         ]
         aggrid_detalle = dag.AgGrid(
-            id="tabla-detalle-query2",
+            id="tabla-detalle-query2_m_c",
             defaultColDef={"sortable": True, "resizable": True, "filter": "agTextColumnFilter", "floatingFilter": True},
             columnDefs=col_defs_detalle,
             rowData=df2.to_dict("records"),
@@ -824,7 +821,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, t
         {"headerName": "Atenciones", "field": "Atenciones", "filter": "agNumberColumnFilter"}
     ]
     resumen_comp = dag.AgGrid(
-        id="tabla-resumen-atenciones",
+        id="tabla-resumen-atenciones_m_c",
         columnDefs=col_defs_resumen,
         rowData=resumen_df.to_dict("records"),
         defaultColDef={"sortable": True, "resizable": True, "filter": "agTextColumnFilter", "floatingFilter": True},
@@ -926,10 +923,10 @@ def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, t
     return fig, fig2, msg, aggrid_detalle, df2.to_dict("records"), resumen_comp, fig_topdiag
 
 @callback(
-    Output("tornado-atenciones-graph", "figure"),
-    Output("tornado-atenciones-msg", "children"),
-    Input("page-url", "pathname"),
-    Input("page-url", "search"),
+    Output("tornado-atenciones-graph_m_c", "figure"),
+    Output("tornado-atenciones-msg_m_c", "children"),
+    Input("page-url_m_c", "pathname"),
+    Input("page-url_m_c", "search"),
     State("filter-periodo", "value"),
     State("filter-anio", "value"),
     State("filter-tipo-asegurado", "value")
@@ -953,9 +950,8 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown, anio_dropdown,
         FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.dim_grupo_etario as ge ON ce.anio_edad = ge.edad
         WHERE ce.cod_centro = '{codcas}'
-          AND ce.cod_actividad = '91'
+          AND cod_servicio= 'A91'
           AND ce.clasificacion in (2,4,6)
-          AND ce.cod_variable = '001'
           AND (
                     CASE 
                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1157,9 +1153,9 @@ def _apply_filter(data_records, filter_model):
     return df_local.to_dict("records")
 
 @callback(
-    Output("tabla-detalle-query2", "dashGridOptions"),
-    Input("tabla-detalle-query2", "filterModel"),
-    State("store-detalle-data", "data")
+    Output("tabla-detalle-query2_m_c", "dashGridOptions"),
+    Input("tabla-detalle-query2_m_c", "filterModel"),
+    State("store-detalle-data_m_c", "data")
 )
 def actualizar_total_detalle(filter_model, base_data):
     registros_filtrados = _apply_filter(base_data, filter_model)
@@ -1176,9 +1172,9 @@ def actualizar_total_detalle(filter_model, base_data):
     }
 
 @callback(
-    Output("tabla-resumen-atenciones", "dashGridOptions"),
-    Input("tabla-resumen-atenciones", "filterModel"),
-    State("tabla-resumen-atenciones", "rowData")
+    Output("tabla-resumen-atenciones_m_c", "dashGridOptions"),
+    Input("tabla-resumen-atenciones_m_c", "filterModel"),
+    State("tabla-resumen-atenciones_m_c", "rowData")
 )
 def actualizar_total_resumen(filter_model, row_data):
     if not row_data:
@@ -1199,14 +1195,17 @@ def actualizar_total_resumen(filter_model, row_data):
     }
 
 @callback(
-    Output("download-query1-csv", "data"),
-    Input("btn-download-query1", "n_clicks"),
-    State("page-url", "pathname"),
-    State("page-url", "search"),
+    Output("download-query1-csv_m_c", "data"),
+    Input("btn-download-query1_m_c", "n_clicks"),
+    State("page-url_m_c", "pathname"),
+    State("page-url_m_c", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
+    State("filter-tipo-asegurado", "value"),
     prevent_initial_call=True
 )
-def descargar_query1_csv(n_clicks, pathname, search):
-    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, None, None, None)
+def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown)
     if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
@@ -1245,9 +1244,8 @@ def descargar_query1_csv(n_clicks, pathname, search):
         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
         WHERE ce.cod_centro = '{codcas}'
-          AND ce.cod_actividad = '91'
+          AND cod_servicio= 'A91'
           AND ce.clasificacion in (2,4,6)
-          AND ce.cod_variable = '001'
               AND (
                     CASE 
                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1256,10 +1254,10 @@ def descargar_query1_csv(n_clicks, pathname, search):
                     ) IN {codasegu_clause}
     """
     try:
-        df = pd.read_sql(query, engine, params={"codcas": codcas})
+        df = pd.read_sql(query, engine)
     except Exception:
         return None
 
-    filename = f"total_atenciones_{codcas}_{anio}_{periodo}.csv"
+    filename = f"total_atenciones_m_c_{codcas}_{anio}_{periodo}.csv"
     return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")
 

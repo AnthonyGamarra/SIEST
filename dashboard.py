@@ -108,13 +108,18 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             print(f"[Dash Pages] No se pudo importar el paquete '{pkg_name}': {exc}")
             return
 
-        for module in pkgutil.iter_modules(pkg.__path__):
-            mod_name = f"{pkg_name}.{module.name}"
-            try:
-                importlib.import_module(mod_name)
-                print(f"[Dash Pages] Página importada: {mod_name}")
-            except Exception as exc:
-                print(f"[Dash Pages] Error importando {mod_name}: {exc}")
+        def _import_children(package, package_name):
+            for module in pkgutil.iter_modules(package.__path__):
+                mod_name = f"{package_name}.{module.name}"
+                try:
+                    loaded_module = importlib.import_module(mod_name)
+                    print(f"[Dash Pages] Página importada: {mod_name}")
+                    if module.ispkg:
+                        _import_children(loaded_module, mod_name)
+                except Exception as exc:
+                    print(f"[Dash Pages] Error importando {mod_name}: {exc}")
+
+        _import_children(pkg, pkg_name)
 
     dash_app = Dash(
         __name__,
@@ -484,8 +489,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             },
         ]
 
-    def create_generic_cards_builder(primary_title):
-        def _builder(data, *_):
+    def create_generic_cards_builder(primary_title, link_map=None):
+        link_map = link_map or {}
+
+        def _builder(data, periodo=None, anio_value=None, tipo_filter=None, codcas_url=None, base_path=None, *_):
             stats = data['stats']
             tables = data['tables']
             total_consultantes_por_servicio_table = tables['consultantes_por_servicio']
@@ -502,16 +509,38 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 pd.DataFrame(columns=['agrupador', 'counts'])
             )
 
+            detail_query = ""
+            if periodo and anio_value:
+                tipo_value = quote_plus(tipo_filter or 'Todos')
+                detail_query = f"?periodo={periodo}&anio={anio_value}&codasegu={tipo_value}"
+
+            def resolve_href(card_key):
+                target = link_map.get(card_key)
+                if not target or not codcas_url or not base_path:
+                    return None
+                if callable(target):
+                    return target(
+                        periodo=periodo,
+                        anio=anio_value,
+                        tipo=tipo_filter,
+                        codcas=codcas_url,
+                        base_path=base_path,
+                        detail_query=detail_query
+                    )
+                return f"{base_path}{target.format(codcas=codcas_url)}{detail_query}"
+
             return [
                 {
                     "title": primary_title,
                     "value": f"{stats['total_consultantes']:,.0f}",
                     "border_color": ACCENT,
+                    "href": resolve_href('total_consultantes'),
                 },
                 {
                     "title": "Total de consultantes al servicio",
                     "value": f"{total_consultantes_servicio:,.0f}",
                     "border_color": ACCENT,
+                    "href": resolve_href('total_consultantes_servicio'),
                     "side_component": render_agrupador_table(
                         total_consultantes_por_servicio_table,
                         title="Consultantes por servicio"
@@ -521,18 +550,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     "title": "Total de Consultas",
                     "value": f"{stats['total_atenciones']:,.0f}",
                     "border_color": BRAND,
+                    "href": resolve_href('total_consultas'),
                     "side_component": render_agrupador_table(total_atenciones_agru),
                 },
                 {
                     "title": "Total de Médicos",
                     "value": f"{stats['total_medicos']:,.0f}",
                     "border_color": BRAND_SOFT,
+                    "href": resolve_href('total_medicos'),
                     "side_component": render_agrupador_table(medicos_por_agrupador_table),
                 },
                 {
                     "title": "Total horas programadas",
                     "value": f"{stats['total_horas_programadas']:,.0f}",
                     "border_color": BRAND,
+                    "href": resolve_href('horas_programadas'),
                     "side_component": render_agrupador_table(
                         horas_programadas_table,
                         value_format="{:,.2f}"
@@ -542,6 +574,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     "title": "Total de Horas Efectivas",
                     "value": f"{stats['total_horas_efectivas']:,.0f}",
                     "border_color": ACCENT,
+                    "href": resolve_href('horas_efectivas'),
                     "side_component": render_agrupador_table(
                         horas_efectivas_por_agrupador_table,
                         value_format="{:,.2f}"
@@ -2165,6 +2198,40 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
     def load_dashboard_data_apoyo_desc(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_consulta_apoyo_desc, tipo_asegurado_value)
 
+    MED_COMPLEMENTARIA_CARD_LINKS = {
+        "total_consultas": "dash/total_atenciones_m_c/{codcas}",
+        "total_medicos": "dash/total_medicos_m_c/{codcas}",
+        "horas_programadas": "dash/horas_programadas_m_c/{codcas}",
+        "horas_efectivas": "dash/horas_efectivas_m_c/{codcas}",
+    }
+
+    MED_OCUPACIONAL_CARD_LINKS = {
+        "total_consultas": "dash/total_atenciones_m_o/{codcas}",
+        "total_medicos": "dash/total_medicos_m_o/{codcas}",
+        "horas_programadas": "dash/horas_programadas_m_o/{codcas}",
+        "horas_efectivas": "dash/horas_efectivas_m_o/{codcas}",
+    }
+
+    MED_PERSONAL_CARD_LINKS = {
+        "total_consultas": "dash/total_atenciones_m_p/{codcas}",
+        "total_medicos": "dash/total_medicos_m_p/{codcas}",
+        "horas_programadas": "dash/horas_programadas_m_p/{codcas}",
+        "horas_efectivas": "dash/horas_efectivas_m_p/{codcas}",
+    }
+
+    ATE_INMEDIATA_CARD_LINKS = {
+        "total_consultas": "dash/total_atenciones_a_m/{codcas}",
+        "total_medicos": "dash/total_medicos_a_m/{codcas}",
+        "horas_programadas": "dash/horas_programadas_a_m/{codcas}",
+        "horas_efectivas": "dash/horas_efectivas_a_m/{codcas}",
+    }
+
+    APOYO_DESCONCEN_CARD_LINKS = {
+        "total_consultas": "dash/total_atenciones_a_d/{codcas}",
+        "total_medicos": "dash/total_medicos_a_d/{codcas}",
+        "horas_programadas": "dash/horas_programadas_a_d/{codcas}",
+        "horas_efectivas": "dash/horas_efectivas_a_d/{codcas}",
+    }
     DASHBOARD_TABS = [
         TabConfig(
             key="atenciones",
@@ -2202,7 +2269,10 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             summary_container_id='summary-container-complementaria',
             charts_container_id='charts-container-complementaria',
             data_loader=load_dashboard_data_complementaria,
-            cards_builder=create_generic_cards_builder("Total de consultantes a medicina complementaria")
+            cards_builder=create_generic_cards_builder(
+                "Total de consultantes a medicina complementaria",
+                link_map=MED_COMPLEMENTARIA_CARD_LINKS
+            )
         ),
         TabConfig(
             key="med-ocup",
@@ -2220,7 +2290,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             summary_container_id='summary-container-med-ocup',
             charts_container_id='charts-container-med-ocup',
             data_loader=load_dashboard_data_med_ocup,
-            cards_builder=create_generic_cards_builder("Total de consultantes a medicina ocupacional")
+            cards_builder=create_generic_cards_builder(
+                "Total de consultantes a medicina ocupacional", 
+                 link_map=MED_OCUPACIONAL_CARD_LINKS)
         ),
         TabConfig(
             key="med-personal",
@@ -2238,7 +2310,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             summary_container_id='summary-container-med-personal',
             charts_container_id='charts-container-med-personal',
             data_loader=load_dashboard_data_med_personal,
-            cards_builder=create_generic_cards_builder("Total de consultantes a medico de personal")
+            cards_builder=create_generic_cards_builder("Total de consultantes a medico de personal", link_map=MED_PERSONAL_CARD_LINKS)
         ),
         TabConfig(
             key="inmediata",
@@ -2256,7 +2328,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             summary_container_id='summary-container-inmediata',
             charts_container_id='charts-container-inmediata',
             data_loader=load_dashboard_data_inmediata,
-            cards_builder=create_generic_cards_builder("Total de consultantes a atención inmediata")
+            cards_builder=create_generic_cards_builder("Total de consultantes a atención inmediata", link_map=ATE_INMEDIATA_CARD_LINKS)
         ),
         TabConfig(
             key="apoyo-desc",
@@ -2274,7 +2346,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             summary_container_id='summary-container-apoyo-desc',
             charts_container_id='charts-container-apoyo-desc',
             data_loader=load_dashboard_data_apoyo_desc,
-            cards_builder=create_generic_cards_builder("Total de consultantes a cons. apoyo desc.")
+            cards_builder=create_generic_cards_builder("Total de consultantes a cons. apoyo desc.", link_map=APOYO_DESCONCEN_CARD_LINKS)
         )
     ]
 
