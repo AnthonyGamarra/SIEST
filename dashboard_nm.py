@@ -165,6 +165,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     border_color=card["border_color"],
                     subtitle_text=card.get("subtitle", subtitle),
                     href=card.get("href"),
+                    link_refresh=card.get("link_refresh", False),
                     extra_style=card.get("extra_style")
                 ),
                 style={'width': '100%'}
@@ -426,10 +427,38 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         return cards
 
     def create_cards_builder(template):
-        def _builder(data, *_):
+        def _builder(data, periodo=None, anio_value=None, tipo_filter=None, codcas_url=None, base_path=None, *_):
             stats = data['stats']
             tables = data['tables']
-            return build_cards_from_template(stats, tables, template)
+            cards = build_cards_from_template(stats, tables, template)
+
+            if codcas_url and base_path:
+                tipo_param = quote_plus((tipo_filter or DEFAULT_TIPO_ASEGURADO))
+                if periodo and anio_value:
+                    detail_query = f"?periodo={periodo}&anio={anio_value}&codasegu={tipo_param}"
+                else:
+                    detail_query = ""
+                base_root = base_path.rstrip("/") + "/"
+                for definition, card in zip(template, cards):
+                    target = definition.get("link_target")
+                    if not target:
+                        continue
+                    formatted_target = target.format(codcas=codcas_url)
+                    href = None
+                    force_refresh = False
+                    if formatted_target.startswith(("http://", "https://")):
+                        href = f"{formatted_target}{detail_query}"
+                        force_refresh = True
+                    elif formatted_target.startswith("/"):
+                        href = f"{formatted_target}{detail_query}"
+                        if not href.startswith(base_root):
+                            force_refresh = True
+                    else:
+                        href = f"{base_path}{formatted_target}{detail_query}"
+                    card["href"] = href
+                    if force_refresh:
+                        card["link_refresh"] = True
+            return cards
         return _builder
 
     COMPLEMENTARIA_CARD_TEMPLATE = [
@@ -437,6 +466,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de atenciones Obstétricas",
             "stat_key": "total_atenciones",
             "border_color": ACCENT,
+            "link_target": "/dashboard/dash/total_atenciones_nm_ob/{codcas}"
         },
         {
             "title": "Atenciones prenatales",
@@ -473,6 +503,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de atenciones preventivo promocional",
             "stat_key": "total_atenciones_p",
             "border_color": BRAND,
+            "link_target": "/dashboard/dash/total_atenciones_nm_pp/{codcas}"
         },
         {
             "title": "Visitas domiciliarias",
@@ -513,6 +544,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": BRAND,
             "table_key": "nutricion_individual_por_sub_act",
             "table_title": "Detalle consulta individual",
+            "link_target": "/dashboard/dash/total_atenciones_nm_nu/{codcas}"
         },
     ]
 
@@ -523,6 +555,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de enfermería",
             "stat_key": "total_enfermeria_atenciones",
             "border_color": BRAND,
+            "link_target": "/dashboard/dash/total_atenciones_nm_en/{codcas}"
         },
         {
             "title": "Atenciones en tuberculosis",
@@ -570,6 +603,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de psicología",
             "stat_key": "total_psicologia_atenciones",
             "border_color": BRAND,
+            "link_target": "/dashboard/dash/total_atenciones_nm_ps/{codcas}"
         },
     ]
     build_psicologia_cards = create_cards_builder(PSICOLOGIA_CARD_TEMPLATE)
@@ -579,6 +613,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de trabajo social",
             "stat_key": "total_trasocial_atenciones",
             "border_color": BRAND,
+            "link_target": "/dashboard/dash/total_atenciones_nm_ts/{codcas}"
         },
     ]
     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
@@ -590,6 +625,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de procedimiento terapéutico",
             "stat_key": "total_proc_tera_atenciones",
             "border_color": BRAND,
+            "link_target": "/dashboard/dash/total_atenciones_nm_pt/{codcas}"
         },
         {
             "title": "Terapia individual",
@@ -621,6 +657,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de procedimiento diagnóstico",
             "stat_key": "total_proc_diag_atenciones",
             "border_color": BRAND,
+            "link_target": "/dashboard/dash/total_atenciones_nm_pd/{codcas}"
         },
     ]
     build_proc_diag_cards = create_cards_builder(PROC_DIAG_CARD_TEMPLATE)
@@ -667,7 +704,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         pdf_bytes = bytes(row['archivo_pdf'])
         return filename, pdf_bytes
 
-    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
+    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None, link_refresh=False):
         link_content = html.H5(
             title,
             className="card-title",
@@ -681,6 +718,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         heading = dcc.Link(
             link_content,
             href=href,
+            refresh=link_refresh,
             className=(
                 "link-underline-primary link-underline-opacity-0 "
                 "link-underline-opacity-100-hover link-offset-2-hover text-reset"
