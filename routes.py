@@ -103,6 +103,37 @@ def register_routes(app):
 			red_options=red_options,
 		)
 
+	@bp.route('/change_password', methods=['GET', 'POST'])
+	@login_required
+	def change_password():
+		if request.method == 'POST':
+			current_password = request.form.get('current_password', '').strip()
+			new_password = request.form.get('new_password', '').strip()
+			confirm_password = request.form.get('confirm_password', '').strip()
+			errors = []
+
+			if not current_password or not new_password or not confirm_password:
+				errors.append('Todos los campos son obligatorios.')
+			if new_password and len(new_password) < 8:
+				errors.append('La nueva contraseña debe tener al menos 8 caracteres.')
+			if new_password and confirm_password and new_password != confirm_password:
+				errors.append('La nueva contraseña y la confirmación no coinciden.')
+
+			for error in errors:
+				flash(error, 'danger')
+
+			if not errors:
+				if not current_user.verify_password(current_password):
+					flash('La contraseña actual no es correcta.', 'danger')
+				else:
+					current_user.set_password(new_password)
+					db.session.add(current_user)
+					db.session.commit()
+					flash('Contraseña actualizada correctamente.', 'success')
+					return redirect(url_for('main.index'))
+
+		return render_template('change_password.html', show_modules=False)
+
 	@bp.route('/api/redes/<code_red>/centros', methods=['GET'])
 	@login_required
 	def centros_by_red_api(code_red):
@@ -163,6 +194,34 @@ def register_routes(app):
 		if code:
 			token = encode_code(code)
 			return redirect(f'/dashboard/{token}/')
+		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
+		return redirect(url_for('main.index'))
+	
+	@bp.route('/dashboard_nm', endpoint='dashboard_nm_redirect')
+	@login_required
+	def dashboard_nm_redirect():
+		code = ""
+		if current_user.role == 'admin':
+			code =  request.args.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_nm/{token}/')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_nm/')
+	@login_required
+	def dashboard_nm_index():
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '') 
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_nm/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
 
@@ -274,16 +333,17 @@ def register_routes(app):
 	@login_required
 	def total_horas_efectivas_redirect():
 		return redirect_with('/total_horas_efectivas', 'No hay código asociado al usuario para mostrar total_horas_efectivas.')
-
+	
 	@bp.route('/total_horas_programadas/')
 	@login_required
 	def total_horas_programadas_redirect():
 		return redirect_with('/total_horas_programadas', 'No hay código asociado al usuario para mostrar total_horas_programadas.')
-
+	
 	@bp.route('/total_medicos/')
 	@login_required
 	def total_medicos_redirect():
 		return redirect_with('/total_medicos', 'No hay código asociado al usuario para mostrar total_medicos.')
+
 	
 	@bp.route('/reportes_gerenciales/', endpoint='reportes_gerenciales')
 	@login_required

@@ -418,7 +418,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
     # ========== CONEXIÓN DB ==========
     def create_connection():
         try:
-            engine = create_engine('postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/DW_ESTADISTICA')
+            engine = create_engine('postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA')
             with engine.connect() as conn:
                 pass
             return engine

@@ -54,6 +54,11 @@
 
         <div class="header__actions">
           <a class="pill-btn pill-btn--primary" href="/">Inicio</a>
+          <a
+            class="pill-btn pill-btn--ghost"
+            href="{{ url_for('main.change_password') }}"
+            >Cambiar contraseña</a
+          >
           {% if current_user.role == 'admin' %}
           <a
             class="pill-btn pill-btn--primary"
@@ -154,7 +159,7 @@
             <!-- Botón selección -->
             <div class="register-submit">
               <button type="submit" id="btn-seleccionar-centro">
-                Seleccionar centro
+                Centro seleccionado
               </button>
             </div>
           </div>

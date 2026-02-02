@@ -810,7 +810,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     @lru_cache(maxsize=1)
     def create_connection():
         try:
-            engine = create_engine('postgresql+psycopg2://postgres:4dm1n@10.0.29.117:5433/DW_ESTADISTICA')
+            engine = create_engine(
+                'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+                pool_size=10,
+                max_overflow=20,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+                echo_pool=False
+            )
             with engine.connect():
                 pass
             return engine
