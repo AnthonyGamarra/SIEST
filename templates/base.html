@@ -159,7 +159,7 @@
             <!-- Botón selección -->
             <div class="register-submit">
               <button type="submit" id="btn-seleccionar-centro">
-                Centro seleccionado
+                Seleccionar centro
               </button>
             </div>
           </div>
@@ -257,6 +257,18 @@
             />
 
             <span>Auditoría del Sistema</span>
+          </a>
+          {% endif %}
+
+          <!-- Módulo 7: reporteador -->
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.dashboard_diag_admin') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='Documento.png') }}"
+              alt="Reporteador"
+            />
+
+            <span>Reporteador</span>
           </a>
           {% endif %}
 

@@ -9,6 +9,7 @@ from sqlalchemy import text
 from dashboard import create_dash_app as create_dash_main
 from dashboard_eme import create_dash_app as create_dash_eme
 from dashboard_nm import create_dash_app as create_dash_nm
+from dashboard_diag import create_dash_app as create_dash_diag
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -69,6 +70,8 @@ def create_app():
     create_dash_main(app, url_base_pathname='/dashboard/')
     create_dash_eme(app, url_base_pathname='/dashboard_alt/')
     create_dash_nm(app, url_base_pathname='/dashboard_nm/')
+    create_dash_diag(app, url_base_pathname='/diag_cap/')
+    
 
     # =============================
     # HELPER DE PASSWORD

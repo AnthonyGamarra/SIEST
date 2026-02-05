@@ -233,6 +233,14 @@ def register_routes(app):
 			return redirect(f'/dashboard_nm/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+	
+	@bp.route('/diag_cap_admin')
+	@login_required
+	def dashboard_diag_admin():
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden acceder al reporte diagnóstico.', 'danger')
+			return redirect(url_for('main.index'))
+		return redirect('/diag_cap/')
 
 	@bp.route('/dashboard_alt', endpoint='dashboard_alt_redirect')
 	@login_required
@@ -361,4 +369,8 @@ def register_routes(app):
 		back_url = url_for('main.index')
 		return render_template('reportes_gerenciales.html', bi_url=bi_url, show_modules=False, back_url=back_url)
 	
+
+
+
+
 	app.register_blueprint(bp)

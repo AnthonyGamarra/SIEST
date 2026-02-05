@@ -12,6 +12,22 @@
     z-index: 2000 !important;
 }
 
+#diag-filter-centro .Select-menu-outer .Select-option,
+#diag-filter-centro .Select-menu-outer .VirtualizedSelectOption,
+#diag-filter-servicio .Select-menu-outer .Select-option,
+#diag-filter-servicio .Select-menu-outer .VirtualizedSelectOption,
+#diag-filter-actividad .Select-menu-outer .Select-option,
+#diag-filter-actividad .Select-menu-outer .VirtualizedSelectOption,
+#diag-filter-subactividad .Select-menu-outer .Select-option,
+#diag-filter-subactividad .Select-menu-outer .VirtualizedSelectOption,
+#diag-filter-capitulo .Select-menu-outer .Select-option,
+#diag-filter-capitulo .Select-menu-outer .VirtualizedSelectOption {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
 @media (max-width: 992px) {
     .dashboard-control-bar {
         flex-wrap: wrap;
