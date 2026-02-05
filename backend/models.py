@@ -50,17 +50,53 @@ class User(UserMixin, db.Model):
     code_red = db.Column(db.String(50), nullable=True)
 
     def is_hashed(self):
-        return bool(self.password) and isinstance(self.password, str) and self.password.startswith('pbkdf2:')
+        """Verifica si la contraseña está hasheada."""
+        return bool(self.password) and isinstance(self.password, str) and (
+            self.password.startswith('scrypt:') or 
+            self.password.startswith('pbkdf2:')
+        )
 
-    def set_password(self, raw_password):
-        self.password = generate_password_hash(raw_password)
+    def set_password(self, plain_password):
+        """
+        Establece una nueva contraseña hasheada.
+        NO hace commit automático - debe hacerse externamente.
+        """
+        try:
+            self.password = generate_password_hash(plain_password, method='scrypt')
+        except (TypeError, ValueError):
+            # Fallback si scrypt no está disponible
+            self.password = generate_password_hash(plain_password, method='pbkdf2:sha256')
 
-    def check_password(self, raw_password):
-        if not self.password:
+    def verify_password(self, plain_password):
+        """
+        Verifica si la contraseña proporcionada coincide.
+        NO modifica la base de datos.
+        """
+        if not self.password or not plain_password:
             return False
-        if self.is_hashed():
-            return check_password_hash(self.password, raw_password)
-        return self.password == raw_password
+            
+        stored = self.password
+        if isinstance(stored, (bytes, bytearray)):
+            try:
+                stored = stored.decode('utf-8')
+            except Exception:
+                stored = str(stored)
+
+        # Si está hasheada, verificar con check_password_hash
+        if isinstance(stored, str) and (
+            stored.startswith('scrypt:') or 
+            stored.startswith('pbkdf2:sha256:') or 
+            stored.startswith('pbkdf2:')
+        ):
+            try:
+                return check_password_hash(stored, plain_password)
+            except Exception as e:
+                print(f"Error verificando contraseña hasheada: {e}")
+                return False
+        
+        # Si es texto plano (legacy), comparar directamente
+        # NOTA: No actualizar automáticamente aquí para evitar commits inesperados
+        return stored == plain_password
 
     def dashboard_code(self):
         """
@@ -74,37 +110,6 @@ class User(UserMixin, db.Model):
         if s.isdigit():
             return s.zfill(3)
         return s
-
-    def set_password(self, plain_password):
-        try:
-            self.password = generate_password_hash(plain_password, method='scrypt')
-        except TypeError:
-            self.password = generate_password_hash(plain_password, method='pbkdf2:sha256')
-
-    def verify_password(self, plain_password):
-        stored = self.password or ''
-        if isinstance(stored, (bytes, bytearray)):
-            try:
-                stored = stored.decode('utf-8')
-            except Exception:
-                stored = str(stored)
-
-        try:
-            if isinstance(stored, str) and (stored.startswith('scrypt:') or stored.startswith('pbkdf2:sha256:') or stored.startswith('pbkdf2:')):
-                return check_password_hash(stored, plain_password)
-        except Exception:
-            pass
-
-        if stored == plain_password:
-            try:
-                self.password = generate_password_hash(plain_password, method='scrypt')
-            except TypeError:
-                self.password = generate_password_hash(plain_password, method='pbkdf2:sha256')
-            db.session.add(self)
-            db.session.commit()
-            return True
-
-        return False
 
 @login_manager.user_loader
 def load_user(user_id):

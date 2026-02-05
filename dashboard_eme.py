@@ -416,15 +416,54 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         ])
 
     # ========== CONEXIÓN DB ==========
+    _engine = None
+    _engine_lock = None
+    
     def create_connection():
-        try:
-            engine = create_engine('postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA')
-            with engine.connect() as conn:
-                pass
-            return engine
-        except Exception as e:
-            print(f"Failed to connect to the database: {e}")
-            return None
+        """Crea o retorna una instancia singleton del engine de base de datos con reintentos."""
+        nonlocal _engine, _engine_lock
+        
+        if _engine_lock is None:
+            import threading
+            _engine_lock = threading.Lock()
+        
+        with _engine_lock:
+            if _engine is not None:
+                try:
+                    # Verificar si la conexión sigue válida
+                    with _engine.connect() as conn:
+                        pass
+                    return _engine
+                except Exception:
+                    # Si falla, recrear el engine
+                    _engine = None
+            
+            # Intentar crear nueva conexión con reintentos
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    import time
+                    engine = create_engine(
+                        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+                        pool_size=3,
+                        max_overflow=2,
+                        pool_pre_ping=True,
+                        pool_recycle=1800,
+                        pool_timeout=30,
+                        echo_pool=False
+                    )
+                    # Verificar la conexión
+                    with engine.connect() as conn:
+                        pass
+                    _engine = engine
+                    return _engine
+                except Exception as e:
+                    print(f"[Dashboard EME] Intento {attempt + 1}/{max_retries} - Failed to connect: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1 * (attempt + 1))
+                    else:
+                        print("[Dashboard EME] No se pudo establecer conexión después de todos los reintentos")
+                        return None
 
     # Callback de Enrutamiento Manual (Reemplaza a Dash Pages)
     @dash_app.callback(
@@ -902,7 +941,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             SELECT
             d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
             d.cod_prioridad,d.cod_emergencia,
-            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.doc_paciente,d.anio_edad,d.cod_prioridad_n
+            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
             FROM (
                 SELECT 
                     ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
@@ -924,8 +963,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         es.des_estandar,
                         a.cod_diagnostico,
                         dg.diagdes,
-                        a.doc_paciente,
-                        a.anio_edad,
                 (case when a.cod_estandar = '04' then '1'
                 else (case when a.cod_prioridad='1' then '2'
                             else (a.cod_prioridad) 

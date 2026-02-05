@@ -599,11 +599,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
 
     PSICOLOGIA_CARD_TEMPLATE = [
+
         {
-            "title": "Total atenciones de psicología",
+            "title": "Total consultantes a psicología",
+            "stat_key": "total_psicologia_consultantes",
+            "border_color": ACCENT,
+        },
+        {
+            "title": "Total de cunsultas de psicología",
             "stat_key": "total_psicologia_atenciones",
             "border_color": BRAND,
             "link_target": "/dashboard/dash/total_atenciones_nm_ps/{codcas}"
+        },
+
+        {
+            "title": "Total de horas efectivas (ejecutada)",
+            "stat_key": "total_psicologia_horas_efectivas",
+            "border_color": BRAND_SOFT,
+        },
+        {
+            "title": "Total de horas programadas",
+            "stat_key": "total_psicologia_horas_programadas",
+            "border_color": BRAND,
+        },
+        {
+            "title": "Número de profesionales",
+            "stat_key": "total_psicologia_medicos",
+            "border_color": ACCENT,
         },
     ]
     build_psicologia_cards = create_cards_builder(PSICOLOGIA_CARD_TEMPLATE)
@@ -807,23 +829,54 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
         )
 
-    @lru_cache(maxsize=1)
+    _engine = None
+    _engine_lock = None
+    
     def create_connection():
-        try:
-            engine = create_engine(
-                'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                pool_size=10,
-                max_overflow=20,
-                pool_pre_ping=True,
-                pool_recycle=3600,
-                echo_pool=False
-            )
-            with engine.connect():
-                pass
-            return engine
-        except Exception as exc:
-            print(f"Failed to connect to the database: {exc}")
-            return None
+        """Crea o retorna una instancia singleton del engine de base de datos con reintentos."""
+        nonlocal _engine, _engine_lock
+        
+        if _engine_lock is None:
+            import threading
+            _engine_lock = threading.Lock()
+        
+        with _engine_lock:
+            if _engine is not None:
+                try:
+                    # Verificar si la conexión sigue válida
+                    with _engine.connect() as conn:
+                        pass
+                    return _engine
+                except Exception:
+                    # Si falla, recrear el engine
+                    _engine = None
+            
+            # Intentar crear nueva conexión con reintentos
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    import time
+                    engine = create_engine(
+                        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+                        pool_size=3,
+                        max_overflow=2,
+                        pool_pre_ping=True,
+                        pool_recycle=1800,
+                        pool_timeout=30,
+                        echo_pool=False
+                    )
+                    # Verificar la conexión
+                    with engine.connect() as conn:
+                        pass
+                    _engine = engine
+                    return _engine
+                except Exception as exc:
+                    print(f"[Dashboard NM] Intento {attempt + 1}/{max_retries} - Failed to connect: {exc}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1 * (attempt + 1))
+                    else:
+                        print("[Dashboard NM] No se pudo establecer conexión después de todos los reintentos")
+                        return None
 
     def build_queries_complementaria(anio_str, periodo_str, params):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
@@ -1312,12 +1365,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         }
 
 
-
     def build_queries_psicologia(anio_str, periodo_str, params):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("psicologia_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.dni_medico,ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1343,9 +1395,114 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                                 ) IN {codasegu}
             """),
             params.copy()),
+            ("horas_efectivas", text(f"""
+                SELECT 
+                    ce.*,
+                    c.servhosdes,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_nm_{anio_str}_{periodo_str} AS ce
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON ce.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON ce.cod_actividad = a.actcod
+                    AND ce.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON ce.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON ce.cod_centro = ca.cenasicod
+                WHERE ce.cod_centro = :codcas
+                    AND ce.cod_servicio ='E21'
+                    AND ce.cod_actividad ='B1'
+                    AND ce.cod_subactividad ='005'
+            """),
+            params.copy()),
+            ("horas_programadas", text(f"""
+                SELECT 
+                    p.*,
+                    c.servhosdes,
+                    a.actespnom,
+                    am.actdes,
+                    ca.cenasides 
+                FROM dwsge.dwe_consulta_externa_programacion_nm_{anio_str}_{periodo_str} p
+                LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                    ON p.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.sgss_cmace10 AS a
+                    ON p.cod_actividad = a.actcod
+                    AND p.cod_subactividad = a.actespcod
+                LEFT JOIN dwsge.sgss_cmact10 AS am
+                    ON p.cod_actividad = am.actcod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                    ON p.cod_centro = ca.cenasicod
+                WHERE (
+                        p.cod_motivo_suspension IS NULL 
+                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                    )
+                AND p.cod_centro = :codcas
+                AND p.cod_servicio ='E21'
+                AND p.cod_actividad ='B1'
+                AND p.cod_subactividad ='005'
+            """),
+            params.copy()),
+            ("medicos_agrup", text(f"""
+                SELECT c.cod_centro,
+                    c.dni_medico,
+                    c.periodo,
+                    c.cantidad_medicos,
+                    c.medico
+                FROM ( SELECT b.cod_centro,
+                            b.dni_medico,
+                            b.periodo,
+                            b.cantidad_medicos,
+                            row_number() OVER (PARTITION BY b.cod_centro, b.dni_medico, b.periodo ORDER BY b.cantidad_medicos DESC) AS medico
+                        FROM ( SELECT a.cod_centro,
+                                    a.dni_medico,
+                                    a.periodo,
+                                    CASE WHEN a.cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                                    count(*) AS cantidad_medicos
+                                FROM (SELECT * FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str}) a
+                                WHERE a.cod_centro=:codcas
+                                    AND a.cod_servicio ='E21'
+                                    AND a.cod_actividad ='B1'
+                                    AND a.cod_subactividad ='005'
+                                    AND (
+                                            CASE 
+                                                WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                                ELSE '1'
+                                            END
+                                            ) IN {codasegu}
+                                    GROUP BY a.cod_centro, a.dni_medico, a.periodo,CASE WHEN a.cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+                                    ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
+                WHERE c.medico = '1'::bigint
+            """),
+            params.copy()),
         ]
+        primera_vez = text(f"""
+            WITH fecha_min_paciente AS (
+                SELECT cod_oricentro,cod_centro,doc_paciente,
+                    CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
+                       to_char(MIN(to_date(fecha_atencion,'YYYY/MM/DD')),'YYYYMM') periodo
+                FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str} p
+                WHERE p.cod_servicio ='E21'
+                    AND p.cod_actividad ='B1'
+                    AND p.cod_subactividad ='005'
+                    AND p.cod_centro=:codcas
+                    AND (
+                            CASE 
+                                WHEN cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+                GROUP BY cod_oricentro,cod_centro,doc_paciente,CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
+            )
+            SELECT COUNT(DISTINCT doc_paciente) AS cantidad
+            FROM fecha_min_paciente WHERE periodo=:periodo_sql
+        """)
+
         return {
             "queries": queries,
+            "primeras_consultas_query": primera_vez,
         }
 
     def build_queries_trasocial(anio_str, periodo_str, params):
@@ -1566,7 +1723,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_complementarias_df = results.get("complementarias", pd.DataFrame())
         atenciones_preconcepcional_df = results.get("preconcepcional", pd.DataFrame())
 
-
         atenciones_p_df = results.get("atenciones_p", pd.DataFrame())
         atenciones_domiciliaria_df = results.get("domiciliaria", pd.DataFrame())
         atenciones_grupal_df = results.get("grupal", pd.DataFrame())
@@ -1582,17 +1738,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_enfermeria_otros_df = results.get("enfermeria_otros", pd.DataFrame())
         atenciones_prev_anemia_df = results.get("enfermeria_prev_anemia", pd.DataFrame())
 
-        atenciones_psicologia_df = results.get("psicologia_total", pd.DataFrame())
-
-        atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
-
-        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())
-        terap_indiv_df = results.get("terap_indiv", pd.DataFrame())
-        terap_par_fam_df = results.get("terap_par_fam", pd.DataFrame())
-        terap_grup_df = results.get("terap_grup", pd.DataFrame())
-       
-        atenciones_proc_diag_df = results.get("proc_diag_total", pd.DataFrame())
-
         def summarize_sub_activities(frame):
             if frame.empty or 'actespnom' not in frame:
                 return pd.DataFrame(columns=['agrupador', 'counts'])
@@ -1603,6 +1748,64 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 .rename(columns={'actespnom': 'agrupador'})
                 .sort_values('counts', ascending=False)
             )
+
+        def sum_numeric_column(frame, candidate_columns):
+            if frame.empty:
+                return 0.0
+            for column in candidate_columns:
+                if column in frame.columns:
+                    numeric = pd.to_numeric(frame[column], errors='coerce')
+                    total = numeric.sum(skipna=True)
+                    if not pd.isna(total):
+                        return float(total)
+            return 0.0
+
+        def summarize_medicos(frame):
+            if frame.empty:
+                return pd.DataFrame(columns=['agrupador', 'counts'])
+            label_col = 'medico' if 'medico' in frame.columns else 'dni_medico'
+            labels = frame[label_col].copy()
+            if labels.isna().any() and 'dni_medico' in frame.columns:
+                labels = labels.fillna(frame['dni_medico'])
+            value_col = 'cantidad_medicos' if 'cantidad_medicos' in frame.columns else None
+            if value_col:
+                values = pd.to_numeric(frame[value_col], errors='coerce').fillna(0)
+            else:
+                values = pd.Series(1, index=frame.index)
+            return (
+                pd.DataFrame({'agrupador': labels, 'counts': values})
+                .groupby('agrupador', dropna=False)['counts']
+                .sum()
+                .reset_index()
+                .sort_values('counts', ascending=False)
+            )
+
+        atenciones_psicologia_df = results.get("psicologia_total", pd.DataFrame())
+        patient_stmt = builder_payload.get("primeras_consultas_query")
+        primeras_consultas_df = (
+            pd.read_sql(patient_stmt, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
+            if patient_stmt is not None else pd.DataFrame()
+        )
+        total_psicologia_consultantes = int(primeras_consultas_df['cantidad'].iloc[0]) if not primeras_consultas_df.empty else 0
+        horas_efectivas_df = results.get("horas_efectivas", pd.DataFrame())
+        horas_programadas_df = results.get("horas_programadas", pd.DataFrame())
+        medicos_agrup_df = results.get("medicos_agrup", pd.DataFrame())
+        total_psicologia_atenciones = len(atenciones_psicologia_df)
+        total_psicologia_horas_efectivas = sum_numeric_column(horas_efectivas_df, ['horas_efec_def'])
+        total_psicologia_horas_programadas = sum_numeric_column(horas_programadas_df, ['total_horas'])
+        total_psicologia_medicos = atenciones_psicologia_df['dni_medico'].nunique() if 'dni_medico' in atenciones_psicologia_df else 0
+
+
+
+        atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
+
+        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())
+        terap_indiv_df = results.get("terap_indiv", pd.DataFrame())
+        terap_par_fam_df = results.get("terap_par_fam", pd.DataFrame())
+        terap_grup_df = results.get("terap_grup", pd.DataFrame())
+       
+        atenciones_proc_diag_df = results.get("proc_diag_total", pd.DataFrame())
+
 
         def resolve_nombre_centro(dataframes):
             for frame in dataframes:
@@ -1651,7 +1854,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_enfermeria_otros_df_agru = summarize_sub_activities(atenciones_enfermeria_otros_df)
         atenciones_prev_anemia_df_agru = summarize_sub_activities(atenciones_prev_anemia_df)
 
-        total_atenciones_psicologia_df = len(atenciones_psicologia_df)
+
+
         total_atenciones_trasocial_df = len(atenciones_trasocial_df)
 
         total_atenciones_proc_tera_df = len(atenciones_proc_tera_df)
@@ -1711,7 +1915,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_enfermeria_cronicas_am': total_enfermeria_cronicas_am,
             'total_enfermeria_otros': total_enfermeria_otros,
             'total_enfermeria_prev_anemia': total_enfermeria_prev_anemia,
-            'total_psicologia_atenciones': total_atenciones_psicologia_df,
+            'total_psicologia_atenciones': total_psicologia_atenciones,
+            'total_psicologia_consultantes': total_psicologia_consultantes,
+            'total_psicologia_horas_efectivas': total_psicologia_horas_efectivas,
+            'total_psicologia_horas_programadas': total_psicologia_horas_programadas,
+            'total_psicologia_medicos': total_psicologia_medicos,
             'total_trasocial_atenciones': total_atenciones_trasocial_df,
             'total_proc_tera_atenciones': total_atenciones_proc_tera_df,
             'total_terap_indiv_atenciones': total_terap_indiv_df,

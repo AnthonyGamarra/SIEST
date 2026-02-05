@@ -126,11 +126,20 @@ def register_routes(app):
 				if not current_user.verify_password(current_password):
 					flash('La contraseña actual no es correcta.', 'danger')
 				else:
-					current_user.set_password(new_password)
-					db.session.add(current_user)
-					db.session.commit()
-					flash('Contraseña actualizada correctamente.', 'success')
-					return redirect(url_for('main.index'))
+					try:
+						# Cambiar la contraseña
+						current_user.set_password(new_password)
+						db.session.add(current_user)
+						db.session.commit()
+						
+						# Importante: actualizar la sesión de Flask-Login
+						db.session.refresh(current_user)
+						
+						flash('Contraseña actualizada correctamente.', 'success')
+						return redirect(url_for('main.index'))
+					except Exception as e:
+						db.session.rollback()
+						flash(f'Error al actualizar la contraseña: {str(e)}', 'danger')
 
 		return render_template('change_password.html', show_modules=False)
 

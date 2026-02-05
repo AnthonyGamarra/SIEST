@@ -727,23 +727,54 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
         )
 
-    @lru_cache(maxsize=1)
+    _engine = None
+    _engine_lock = None
+    
     def create_connection():
-        try:
-            engine = create_engine(
-                'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                pool_size=10,
-                max_overflow=20,
-                pool_pre_ping=True,
-                pool_recycle=3600,
-                echo_pool=False
-            )
-            with engine.connect():
-                pass
-            return engine
-        except Exception as exc:
-            print(f"Failed to connect to the database: {exc}")
-            return None
+        """Crea o retorna una instancia singleton del engine de base de datos con reintentos."""
+        nonlocal _engine, _engine_lock
+        
+        if _engine_lock is None:
+            import threading
+            _engine_lock = threading.Lock()
+        
+        with _engine_lock:
+            if _engine is not None:
+                try:
+                    # Verificar si la conexión sigue válida
+                    with _engine.connect() as conn:
+                        pass
+                    return _engine
+                except Exception:
+                    # Si falla, recrear el engine
+                    _engine = None
+            
+            # Intentar crear nueva conexión con reintentos
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    import time
+                    engine = create_engine(
+                        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+                        pool_size=3,
+                        max_overflow=2,
+                        pool_pre_ping=True,
+                        pool_recycle=1800,
+                        pool_timeout=30,
+                        echo_pool=False
+                    )
+                    # Verificar la conexión
+                    with engine.connect() as conn:
+                        pass
+                    _engine = engine
+                    return _engine
+                except Exception as exc:
+                    print(f"[Dashboard] Intento {attempt + 1}/{max_retries} - Failed to connect: {exc}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1 * (attempt + 1))
+                    else:
+                        print("[Dashboard] No se pudo establecer conexión después de todos los reintentos")
+                        return None
 
     def build_queries_consulta(anio_str, periodo_str, params):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
