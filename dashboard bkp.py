@@ -597,7 +597,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         ),
                     ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
                     html.P(
-                        f"Informacion actualizada al 31/12/2025 | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al 31/01/2026 | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,

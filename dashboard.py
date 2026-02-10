@@ -2479,7 +2479,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 31/12/2025 | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al 31/01/2026 | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,

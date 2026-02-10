@@ -504,7 +504,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                             style={"zIndex": 9999},
                         ),
                         html.P(
-                            "Información actualizada al 31/12/2025 | Sistema de Gestión Estadística",
+                            "Información actualizada al 31/01/2026 | Sistema de Gestión Estadística",
                             style={"color": muted, "fontFamily": font_family, "fontSize": "13px", "margin": "6px 0 0 0"},
                         ),
                     ],
