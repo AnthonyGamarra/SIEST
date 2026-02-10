@@ -207,15 +207,7 @@ def _tm_format_fecha_atencion(serie: pd.Series) -> pd.Series:
     """Normaliza la fecha al formato AAAA-MM-DD manteniendo valores válidos."""
     if serie.empty:
         return pd.Series([], index=serie.index, dtype=object)
-    parsed = pd.to_datetime(serie, errors="coerce", infer_datetime_format=True)
-    needs_dayfirst = parsed.isna() & serie.notna()
-    if needs_dayfirst.any():
-        parsed.loc[needs_dayfirst] = pd.to_datetime(
-            serie[needs_dayfirst],
-            errors="coerce",
-            infer_datetime_format=True,
-            dayfirst=True,
-        )
+    parsed = pd.to_datetime(serie, errors="coerce", dayfirst=True)
     formatted = parsed.dt.strftime("%Y-%m-%d")
     serie_str = serie.astype(str).str.strip()
     mask_missing = serie.isna() | serie_str.eq("") | serie_str.str.lower().isin({"nan", "nat", "none"})
@@ -372,7 +364,7 @@ def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown, tipo
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         WHERE ce.cod_centro = '{codcas}'
           AND ce.clasificacion in (2,4,6)
-          AND a.actespcod = '002' 
+          AND ce.cod_subactividad = '002' 
           AND (
                             CASE 
                                 WHEN ce.cod_tipo_paciente = '4' THEN '2'

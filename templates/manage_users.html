@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .manage-users-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem 3rem;
+  }
+
+  .manage-users-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .manage-users-header h2 {
+    color: #0f2b46;
+    font-weight: 700;
+  }
+
+  .search-card {
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid #e1e6ef;
+    padding: 1.5rem;
+    box-shadow: 0 16px 30px rgba(15, 43, 70, 0.08);
+    margin-bottom: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+  }
+
+  .search-card label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #4a5672;
+    margin-bottom: 0.35rem;
+  }
+
+  .search-card select,
+  .search-card input {
+    border-radius: 12px;
+    border: 1px solid #cfd8e7;
+    padding: 0.6rem 0.8rem;
+    min-width: 220px;
+    font-size: 0.95rem;
+  }
+
+  .search-card button {
+    border: none;
+    border-radius: 999px;
+    background: #0064af;
+    color: #ffffff;
+    padding: 0.65rem 1.6rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .users-table-wrapper {
+    overflow-x: auto;
+    border-radius: 24px;
+    border: 1px solid #e1e6ef;
+    background: #ffffff;
+    box-shadow: 0 24px 40px rgba(15, 43, 70, 0.07);
+  }
+
+  table.manage-users-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
+  }
+
+  table.manage-users-table thead {
+    background: #f6f9ff;
+  }
+
+  table.manage-users-table th,
+  table.manage-users-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .filter-row th {
+    background: #eef2ff;
+  }
+
+  .filter-row input,
+  .filter-row select {
+    width: 100%;
+    border-radius: 20px;
+    border: 1px solid #cfd8e7;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+    background: #fff;
+  }
+
+  table.manage-users-table th {
+    font-weight: 700;
+    color: #4a5672;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  table.manage-users-table input,
+  table.manage-users-table select {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid #d9e2ef;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.9rem;
+  }
+
+  .table-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .btn-save-row {
+    border: none;
+    border-radius: 999px;
+    padding: 0.35rem 1rem;
+    background: #0064af;
+    color: #ffffff;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .note-text {
+    color: #6b7280;
+    font-size: 0.8rem;
+    margin-top: 1rem;
+  }
+
+  .manage-footer {
+    margin-top: 1rem;
+    text-align: center;
+  }
+
+  .manage-footer a {
+    font-weight: 600;
+    color: #0064af;
+    text-decoration: none;
+  }
+</style>
+
+<div class="manage-users-wrapper">
+  <div class="manage-users-header">
+    <h2>Gestión de usuarios</h2>
+    <p>Edita los datos directamente en la tabla y guarda fila por fila.</p>
+  </div>
+
+  <form class="search-card" method="get" action="{{ url_for('main.manage_users') }}">
+    <div>
+      <label for="search-field">Buscar por</label>
+      <select id="search-field" name="field">
+        <option value="nombre" {% if search_field == 'nombre' %}selected{% endif %}>Nombre</option>
+        <option value="apellido" {% if search_field == 'apellido' %}selected{% endif %}>Apellido</option>
+        <option value="usuario" {% if search_field == 'usuario' %}selected{% endif %}>Usuario</option>
+      </select>
+    </div>
+    <div>
+      <label for="search-query">Valor</label>
+      <input
+        id="search-query"
+        type="text"
+        name="q"
+        placeholder="Ingresa el texto a buscar"
+        value="{{ search_query or '' }}"
+        required
+      />
+    </div>
+    <div>
+      <button type="submit">Buscar usuario</button>
+    </div>
+  </form>
+
+  {% if usuarios %}
+  {% for usuario in usuarios %}
+  <form
+    id="manage-form-{{ usuario.id }}"
+    method="post"
+    action="{{ url_for('main.manage_users') }}"
+    class="sr-only"
+  >
+    <input type="hidden" name="user_id" value="{{ usuario.id }}" />
+    <input type="hidden" name="field" value="{{ search_field }}" />
+    <input type="hidden" name="q" value="{{ search_query }}" />
+  </form>
+  {% endfor %}
+  <div class="users-table-wrapper">
+    <table class="manage-users-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombre</th>
+          <th>Apellido</th>
+          <th>Usuario</th>
+          <th>Código red</th>
+          <th>Código centro</th>
+          <th>Rol</th>
+          <th>Nueva contraseña</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for usuario in usuarios %}
+        <tr>
+          <td>{{ usuario.id }}</td>
+          <td>
+            <input form="manage-form-{{ usuario.id }}" type="text" name="nombre" value="{{ usuario.name or '' }}" required />
+          </td>
+          <td>
+            <input form="manage-form-{{ usuario.id }}" type="text" name="apellido" value="{{ usuario.lastname or '' }}" required />
+          </td>
+          <td>
+            <input form="manage-form-{{ usuario.id }}" type="text" name="username" value="{{ usuario.username }}" required />
+          </td>
+          <td>
+            <select form="manage-form-{{ usuario.id }}" name="code_red">
+              <option value="">Sin asignar</option>
+              {% for red in red_options|default([]) %}
+              <option value="{{ red.code }}" {% if red.code == (usuario.code_red or '') %}selected{% endif %}>
+                {{ red.label }} ({{ red.code }})
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select form="manage-form-{{ usuario.id }}" name="codcas" required>
+              <option value="">Seleccionar centro...</option>
+              {% for centro in centros_options|default([]) %}
+              <option value="{{ centro.code }}" {% if centro.code == (usuario.codcas or '') %}selected{% endif %}>
+                {{ centro.label }} ({{ centro.code }})
+              </option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <select form="manage-form-{{ usuario.id }}" name="rol" required>
+              <option value="admin" {% if usuario.role == 'admin' %}selected{% endif %}>Administrador</option>
+              <option value="admin_red" {% if usuario.role == 'admin_red' %}selected{% endif %}>Admin de red</option>
+              <option value="user" {% if usuario.role == 'user' %}selected{% endif %}>Usuario</option>
+            </select>
+          </td>
+          <td>
+            <input form="manage-form-{{ usuario.id }}" type="password" name="password" placeholder="Opcional" />
+          </td>
+          <td class="table-actions">
+            <button form="manage-form-{{ usuario.id }}" type="submit" class="btn-save-row">Guardar</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="note-text">Si dejas la contraseña vacía, se mantiene la actual.</p>
+  {% elif search_query %}
+  <p>No encontramos usuarios que coincidan con tu búsqueda.</p>
+  {% else %}
+  <p>Utiliza el buscador para encontrar y editar usuarios específicos.</p>
+  {% endif %}
+
+  <div class="manage-footer">
+    <a href="{{ url_for('main.index') }}">← Volver al inicio</a>
+  </div>
+</div>
+{% endblock %}

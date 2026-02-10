@@ -27,7 +27,7 @@
       {% if current_user.is_authenticated %}
       <div class="header__left">
         <a class="brand-link" href="/">
-          <div class="brand-logo" role="img" aria-label="Logoes"></div>
+          <div class="brand-logo" role="img" aria-label="Logo"></div>
           <div class="brand-meta">
             <span class="brand-name">SIEST</span>
             <span class="brand-sub">Gestión integral</span>
@@ -61,9 +61,14 @@
           >
           {% if current_user.role == 'admin' %}
           <a
-            class="pill-btn pill-btn--primary"
+            class="pill-btn pill-btn--ghost"
             href="{{ url_for('main.register') }}"
             >Agregar usuario</a
+          >
+          <a
+            class="pill-btn pill-btn--ghost"
+            href="{{ url_for('main.manage_users') }}"
+            >Gestión de usuarios</a
           >
           {% endif %}
           <a class="pill-btn pill-btn--ghost" href="/logout">Cerrar sesión</a>
@@ -159,7 +164,7 @@
             <!-- Botón selección -->
             <div class="register-submit">
               <button type="submit" id="btn-seleccionar-centro">
-                Seleccionar centro
+                Centro seleccionado
               </button>
             </div>
           </div>

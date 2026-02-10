@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
+from sqlalchemy import func
 from flask import current_app
 from bi import get_bi_url
 from backend.models import dashboard_code_for_user
@@ -103,6 +104,83 @@ def register_routes(app):
 			red_options=red_options,
 		)
 
+	@bp.route('/manage_users', methods=['GET', 'POST'])
+	@login_required
+	def manage_users():
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar usuarios', 'danger')
+			return redirect(url_for('main.index'))
+
+		centros_df = get_centro_asistencial()
+		redes_df = get_redes_asistenciales()
+		centros_options = _format_select_options(centros_df, 'cenasicod', 'cenasides')
+		red_options = _format_select_options(redes_df, 'redasiscod', 'redasisdes')
+
+		if request.method == 'POST':
+			user_id = request.form.get('user_id')
+			usuario = User.query.get(user_id)
+			if not usuario:
+				flash('El usuario seleccionado no existe.', 'danger')
+				return redirect(url_for('main.manage_users'))
+
+			nombre = request.form.get('nombre', '').strip()
+			apellido = request.form.get('apellido', '').strip()
+			username = request.form.get('username', '').strip()
+			codcas = request.form.get('codcas', '').strip()
+			rol = request.form.get('rol', '').strip() or 'user'
+			code_red = request.form.get('code_red', '').strip()
+			nuevo_password = request.form.get('password', '').strip()
+			search_field_post = request.form.get('field', 'nombre')
+			search_query_post = request.form.get('q', '').strip()
+
+			if not username:
+				flash('El nombre de usuario es obligatorio.', 'warning')
+				return redirect(url_for('main.manage_users', field=search_field_post, q=search_query_post))
+
+			usuario_existente = User.query.filter(User.username == username, User.id != usuario.id).first()
+			if usuario_existente:
+				flash('Ya existe otro usuario con el mismo nombre.', 'danger')
+				return redirect(url_for('main.manage_users', field=search_field_post, q=search_query_post))
+
+			usuario.name = nombre
+			usuario.lastname = apellido
+			usuario.username = username
+			usuario.codcas = codcas
+			usuario.role = rol
+			usuario.code_red = code_red
+			if nuevo_password:
+				usuario.set_password(nuevo_password)
+
+			db.session.add(usuario)
+			db.session.commit()
+			flash('Usuario actualizado correctamente.', 'success')
+			return redirect(url_for('main.manage_users', field=search_field_post, q=search_query_post))
+
+		search_field = request.args.get('field', 'nombre')
+		search_query = request.args.get('q', '').strip()
+		field_map = {
+			'nombre': User.name,
+			'apellido': User.lastname,
+			'usuario': User.username,
+		}
+		column = field_map.get(search_field, User.name)
+		usuarios = []
+		if search_query:
+			usuarios = (
+				User.query.filter(func.lower(column).like(f"%{search_query.lower()}%"))
+				.order_by(User.id.asc())
+				.all()
+			)
+		return render_template(
+			'manage_users.html',
+			show_modules=False,
+			usuarios=usuarios,
+			centros_options=centros_options,
+			red_options=red_options,
+			search_field=search_field,
+			search_query=search_query,
+		)
+
 	@bp.route('/change_password', methods=['GET', 'POST'])
 	@login_required
 	def change_password():
@@ -126,20 +204,11 @@ def register_routes(app):
 				if not current_user.verify_password(current_password):
 					flash('La contraseña actual no es correcta.', 'danger')
 				else:
-					try:
-						# Cambiar la contraseña
-						current_user.set_password(new_password)
-						db.session.add(current_user)
-						db.session.commit()
-						
-						# Importante: actualizar la sesión de Flask-Login
-						db.session.refresh(current_user)
-						
-						flash('Contraseña actualizada correctamente.', 'success')
-						return redirect(url_for('main.index'))
-					except Exception as e:
-						db.session.rollback()
-						flash(f'Error al actualizar la contraseña: {str(e)}', 'danger')
+					current_user.set_password(new_password)
+					db.session.add(current_user)
+					db.session.commit()
+					flash('Contraseña actualizada correctamente.', 'success')
+					return redirect(url_for('main.index'))
 
 		return render_template('change_password.html', show_modules=False)
 
@@ -233,7 +302,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_nm/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
-	
+
 	@bp.route('/diag_cap_admin')
 	@login_required
 	def dashboard_diag_admin():
@@ -369,8 +438,4 @@ def register_routes(app):
 		back_url = url_for('main.index')
 		return render_template('reportes_gerenciales.html', bi_url=bi_url, show_modules=False, back_url=back_url)
 	
-
-
-
-
 	app.register_blueprint(bp)
