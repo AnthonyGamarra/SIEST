@@ -445,7 +445,7 @@ body {
   height: 68px;
   z-index: 4;
   display: block;
-  background-color: #0064AF; /* requested color */
+  background-color: #ffffff; /* requested color */
   -webkit-mask-image: url('/static/Logoes.png');
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-position: center;

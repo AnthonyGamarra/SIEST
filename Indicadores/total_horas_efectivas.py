@@ -663,3 +663,39 @@ def update_grid(data):
     }]
 
     return df.to_dict("records"), column_defs, pinned
+
+
+@callback(
+    Output("he-download", "data"),
+    Input("he-download-btn", "n_clicks"),
+    State("he-store-data", "data"),
+    State("he-page-url", "pathname"),
+    State("he-page-url", "search"),
+    State("filter-periodo", "value"),
+    State("filter-anio", "value"),
+    prevent_initial_call=True
+)
+def download_csv(n_clicks, data, pathname, search, periodo_dropdown, anio_dropdown):
+    if not n_clicks or not data:
+        return None
+    
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+    
+    df = pd.DataFrame(data)
+    df = df[["fecha_prog", "dni_medico", "servicio", "subactividad", "agrupador", "especialidad", "horas_efec_def"]].copy()
+    df.rename(columns={
+        "fecha_prog": "Fecha Programada",
+        "dni_medico": "DNI Médico",
+        "servicio": "Servicio",
+        "subactividad": "Subactividad",
+        "agrupador": "Agrupador",
+        "especialidad": "Especialidad",
+        "horas_efec_def": "Horas Efectivas"
+    }, inplace=True)
+    
+    df["Fecha Programada"] = pd.to_datetime(df["Fecha Programada"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("Sin fecha")
+    df["DNI Médico"] = df["DNI Médico"].fillna("Sin DNI")
+    df["Horas Efectivas"] = pd.to_numeric(df["Horas Efectivas"], errors="coerce").fillna(0).round(0).astype(int)
+    
+    filename = f"horas_efectivas_{codcas}_{periodo}.csv"
+    return dcc.send_data_frame(df.to_csv, filename, index=False)
