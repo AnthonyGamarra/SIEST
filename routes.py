@@ -53,11 +53,20 @@ def register_routes(app):
 	@login_required
 	def index():
 		df = get_centro_asistencial()
-		code_red=current_user.code_red
-		df_by_code_red = (get_centro_asistencial_by_code_red(code_red) if code_red  else df)
+		code_red = getattr(current_user, 'code_red', None)
+		role = getattr(current_user, 'role', None)
+		limit_to_red = bool(code_red) and role == 'admin_red'
+		df_by_code_red = get_centro_asistencial_by_code_red(code_red) if limit_to_red else df
 		centros_asistenciales = df.to_dict(orient='records')
 		centros_asistenciales_by_code_red = df_by_code_red.to_dict(orient='records')
-		return render_template('index.html', centros_asistenciales=centros_asistenciales, centros_asistenciales_by_code_red=centros_asistenciales_by_code_red)
+		redes_df = get_redes_asistenciales()
+		red_options = _format_select_options(redes_df, 'redasiscod', 'redasisdes')
+		return render_template(
+			'index.html',
+			centros_asistenciales=centros_asistenciales,
+			centros_asistenciales_by_code_red=centros_asistenciales_by_code_red,
+			red_options=red_options,
+		)
 
 
 	@bp.route('/register', methods=['GET', 'POST'])
@@ -156,14 +165,14 @@ def register_routes(app):
 			flash('Usuario actualizado correctamente.', 'success')
 			return redirect(url_for('main.manage_users', field=search_field_post, q=search_query_post))
 
-		search_field = request.args.get('field', 'nombre')
+		search_field = request.args.get('field', 'usuario')
 		search_query = request.args.get('q', '').strip()
 		field_map = {
 			'nombre': User.name,
 			'apellido': User.lastname,
 			'usuario': User.username,
 		}
-		column = field_map.get(search_field, User.name)
+		column = field_map.get(search_field, User.username)
 		usuarios = []
 		if search_query:
 			usuarios = (
@@ -215,7 +224,7 @@ def register_routes(app):
 	@bp.route('/api/redes/<code_red>/centros', methods=['GET'])
 	@login_required
 	def centros_by_red_api(code_red):
-		if current_user.role not in ('admin', 'admin_red'):
+		if current_user.role not in ('admin', 'admin_red', 'consulta'):
 			return jsonify({'error': 'No autorizado'}), 403
 
 		if not code_red:

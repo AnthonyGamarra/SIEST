@@ -8,7 +8,8 @@ def dashboard_code_for_user(user, request):
 
     if not getattr(user, 'is_authenticated', False):
         return ''
-    if getattr(user, 'role', None) == 'admin' or getattr(user, 'role', None) == 'admin_red':
+    role = getattr(user, 'role', None)
+    if role in ('admin', 'admin_red', 'consulta'):
         code = request.form.get('codcas', '') or request.args.get('codcas', '')
     else:
         code = getattr(user, 'dashboard_code', lambda: '')()

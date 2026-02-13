@@ -151,7 +151,6 @@
 <div class="manage-users-wrapper">
   <div class="manage-users-header">
     <h2>Gestión de usuarios</h2>
-    <p>Edita los datos directamente en la tabla y guarda fila por fila.</p>
   </div>
 
   <form class="search-card" method="get" action="{{ url_for('main.manage_users') }}">
@@ -244,6 +243,7 @@
             <select form="manage-form-{{ usuario.id }}" name="rol" required>
               <option value="admin" {% if usuario.role == 'admin' %}selected{% endif %}>Administrador</option>
               <option value="admin_red" {% if usuario.role == 'admin_red' %}selected{% endif %}>Admin de red</option>
+              <option value="consulta" {% if usuario.role == 'consulta' %}selected{% endif %}>Consulta</option>
               <option value="user" {% if usuario.role == 'user' %}selected{% endif %}>Usuario</option>
             </select>
           </td>
@@ -258,11 +258,10 @@
       </tbody>
     </table>
   </div>
-  <p class="note-text">Si dejas la contraseña vacía, se mantiene la actual.</p>
+  <p class="note-text">Al dejar la contraseña vacía, se mantiene la actual.</p>
   {% elif search_query %}
   <p>No encontramos usuarios que coincidan con tu búsqueda.</p>
   {% else %}
-  <p>Utiliza el buscador para encontrar y editar usuarios específicos.</p>
   {% endif %}
 
   <div class="manage-footer">

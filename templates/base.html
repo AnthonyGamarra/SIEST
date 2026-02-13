@@ -53,7 +53,7 @@
         </div>
 
         <div class="header__actions">
-          <a class="pill-btn pill-btn--primary" href="/">Inicio</a>
+          <a class="pill-btn pill-btn--ghost" href="/">Inicio</a>
           <a
             class="pill-btn pill-btn--ghost"
             href="{{ url_for('main.change_password') }}"
@@ -106,6 +106,8 @@
           method="post"
           action="{{ url_for('main.index') }}"
         >
+          {% set limit_centers_to_red = current_user.role == 'admin_red' and current_user.code_red is not none %}
+          {% set show_red_selector = current_user.role in ['admin', 'consulta'] %}
           <div class="d-flex align-items-center mb-3">
             <img
               src="{{ url_for('static', filename='SIEST.png') }}"
@@ -114,7 +116,7 @@
             />
             <div>
               <h2>Seleccione un centro</h2>
-              {% if current_user.code_red != None %}
+              {% if limit_centers_to_red %}
               <p class="text-muted mb-0 small">
                 Elija el centro para ver los módulos disponibles de su red {{
                 current_user.code_red }}
@@ -126,17 +128,37 @@
               {% endif %}
             </div>
           </div>
+          {% if show_red_selector %}
+          <div class="form-group mb-3">
+            <label for="code_red_filter" class="form-label" style="font-weight: 500"
+              >Red asistencial</label
+            >
+            <select
+              id="code_red_filter"
+              name="code_red_filter"
+              class="form-select form-select-lg"
+              style="border-radius: 0.7rem; width: 100%"
+              data-placeholder="Buscar red..."
+            >
+              <option value="">Todas las redes...</option>
+              {% for red in red_options|default([]) %}
+              <option value="{{ red.code }}">{{ red.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
           <div class="form-group mb-0">
             <label for="codcas" class="form-label" style="font-weight: 500"
               >Centro asistencial</label
             >
-            {% if current_user.code_red != None %}
+            {% if limit_centers_to_red %}
             <select
               id="codcas"
               name="codcas"
               class="form-select form-select-lg"
               required
               style="border-radius: 0.7rem; width: 100%"
+              data-placeholder="Buscar centro..."
             >
               <option value="">Seleccionar centro...</option>
               {% for centro in centros_asistenciales_by_code_red %}
@@ -152,6 +174,7 @@
               class="form-select form-select-lg"
               required
               style="border-radius: 0.7rem; width: 100%"
+              data-placeholder="Buscar centro..."
             >
               <option value="">Seleccionar centro...</option>
               {% for centro in centros_asistenciales %}
@@ -242,8 +265,7 @@
 
 
           <!-- Módulo 5: reportes gerenciales -->
-          {% if current_user.role == 'admin' or current_user.role ==
-          'admin_red'%}
+          {% if current_user.role in ['admin', 'admin_red', 'consulta'] %}
           <a href="{{ url_for('main.reportes_gerenciales') }}" class="module">
             <img
               src="{{ url_for('static', filename='analytics.png') }}"
@@ -406,11 +428,101 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
       $(document).ready(function () {
-        var $codcas = document.getElementById("codcas");
-        if ($codcas && $codcas.tagName === "SELECT") {
-          $("#codcas").select2({
-            width: "100%",
-            placeholder: "Buscar centro...",
+        var $codcas = $("#codcas");
+        var $redFilter = $("#code_red_filter");
+        var centersEndpointTemplate = {{ url_for('main.centros_by_red_api', code_red='__CODE__')|tojson }};
+        var defaultCentersRaw = {{ centros_asistenciales|default([])|tojson }};
+
+        function normalizeCenters(list) {
+          if (!Array.isArray(list)) {
+            return [];
+          }
+          return list
+            .map(function (item) {
+              var code = String(item.code || item.cenasicod || '').trim();
+              var label = String(item.label || item.cenasides || '').trim();
+              if (!code || !label) {
+                return null;
+              }
+              return { code: code, label: label };
+            })
+            .filter(Boolean);
+        }
+
+        var normalizedDefaults = normalizeCenters(defaultCentersRaw);
+
+        function initSelect2($element) {
+          if (!$element.length) {
+            return;
+          }
+          var placeholder = $element.data('placeholder') || 'Seleccionar...';
+          $element.select2({
+            width: '100%',
+            placeholder: placeholder,
+            allowClear: false,
+          });
+        }
+
+        function setCenterOptions(options) {
+          if (!$codcas.length) {
+            return;
+          }
+          var selectEl = $codcas.get(0);
+          var placeholder = $codcas.data('placeholder') || 'Seleccionar centro...';
+          selectEl.innerHTML = '';
+          var placeholderOption = new Option(placeholder, '', true, true);
+          selectEl.appendChild(placeholderOption);
+          normalizeCenters(options).forEach(function (option) {
+            var optionNode = new Option(option.label, option.code, false, false);
+            selectEl.appendChild(optionNode);
+          });
+          $codcas.val('').trigger('change.select2');
+        }
+
+        function toggleCenterDisabled(isDisabled) {
+          if (!$codcas.length) {
+            return;
+          }
+          $codcas.prop('disabled', isDisabled);
+          var container = $codcas.next('.select2-container');
+          if (container.length) {
+            container.toggleClass('is-loading', isDisabled);
+          }
+        }
+
+        async function loadCentersByRed(codeRed) {
+          if (!$codcas.length) {
+            return;
+          }
+          if (!codeRed) {
+            setCenterOptions(normalizedDefaults);
+            toggleCenterDisabled(false);
+            return;
+          }
+          toggleCenterDisabled(true);
+          try {
+            var endpoint = centersEndpointTemplate.replace('__CODE__', encodeURIComponent(codeRed));
+            var response = await fetch(endpoint);
+            if (!response.ok) {
+              throw new Error('Respuesta inválida');
+            }
+            var data = await response.json();
+            setCenterOptions(data.centers || []);
+          } catch (error) {
+            console.warn('No se pudieron cargar los centros para la red seleccionada.', error);
+            setCenterOptions(normalizedDefaults);
+          } finally {
+            toggleCenterDisabled(false);
+          }
+        }
+
+        initSelect2($codcas);
+        initSelect2($redFilter);
+
+        if ($redFilter.length) {
+          $redFilter.on('change', function () {
+            var selectedRed = ($(this).val() || '').trim();
+            loadCentersByRed(selectedRed);
           });
         }
       });
