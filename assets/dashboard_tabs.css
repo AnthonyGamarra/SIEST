@@ -1,0 +1,110 @@
+/* Vertical navigation rail for dashboard modules */
+.dashboard-two-pane {
+    display: grid;
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: flex-start;
+    
+}
+
+.dashboard-left-rail {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #dbe4f3;
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 20px;
+    gap: 14px;
+    background-color: #ffffff;
+}
+
+.dashboard-nav-button-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.dashboard-nav-btn {
+    background-color: #ffffff;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    color: #0064af;
+    font-family: Inter, 'Segoe UI', Calibri, sans-serif;
+    font-weight: 600;
+    padding: 14px 16px;
+    text-align: left;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    box-shadow: none;
+} 
+/* Botones */
+
+.dashboard-nav-btn:hover {
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow: 0 8px 16px rgba(255, 255, 255, 0.15);
+    transform: translateX(2px);
+}
+
+.dashboard-nav-btn--active {
+    background-color: #ffffff;
+    border-color: #0064af;
+    color: #0064af;
+}
+
+.dashboard-nav-btn-label {
+    display: block;
+    line-height: 1.2;
+}
+
+.dashboard-tab-content-area {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    
+}
+
+.dashboard-tab-section {
+    animation: dashboardFadeIn 0.2s ease;
+}
+
+@keyframes dashboardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 991px) {
+    .dashboard-two-pane {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-left-rail {
+        position: relative;
+        top: 0;
+        background-color: #ffffff;
+    }
+
+    .dashboard-nav-button-stack {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .dashboard-nav-btn {
+        flex: 1 1 calc(50% - 10px);
+        text-align: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .dashboard-nav-btn {
+        flex: 1 1 100%;
+    }
+}
