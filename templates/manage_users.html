@@ -2,7 +2,7 @@
 {% block body %}
 <style>
   .manage-users-wrapper {
-    max-width: 1200px;
+    max-width: 1700px;
     margin: 0 auto;
     padding: 2rem 1rem 3rem;
   }
@@ -43,7 +43,7 @@
     border-radius: 12px;
     border: 1px solid #cfd8e7;
     padding: 0.6rem 0.8rem;
-    min-width: 220px;
+    min-width: 280px;
     font-size: 0.95rem;
   }
 
@@ -114,6 +114,11 @@
     font-size: 0.9rem;
   }
 
+  table.manage-users-table td input,
+  table.manage-users-table td select {
+    min-width: 160px;
+  }
+
   .table-actions {
     display: flex;
     align-items: center;
@@ -157,9 +162,9 @@
     <div>
       <label for="search-field">Buscar por</label>
       <select id="search-field" name="field">
+        <option value="usuario" {% if search_field == 'usuario' %}selected{% endif %}>Usuario</option>
         <option value="nombre" {% if search_field == 'nombre' %}selected{% endif %}>Nombre</option>
         <option value="apellido" {% if search_field == 'apellido' %}selected{% endif %}>Apellido</option>
-        <option value="usuario" {% if search_field == 'usuario' %}selected{% endif %}>Usuario</option>
       </select>
     </div>
     <div>
@@ -202,6 +207,7 @@
           <th>Código red</th>
           <th>Código centro</th>
           <th>Rol</th>
+          <th>Estado</th>
           <th>Nueva contraseña</th>
           <th></th>
         </tr>
@@ -248,6 +254,12 @@
             </select>
           </td>
           <td>
+            <select form="manage-form-{{ usuario.id }}" name="flag" required>
+              <option value="1" {% if usuario.flag != '0' %}selected{% endif %}>Activo (1)</option>
+              <option value="0" {% if usuario.flag == '0' %}selected{% endif %}>Inactivo (0)</option>
+            </select>
+          </td>
+          <td>
             <input form="manage-form-{{ usuario.id }}" type="password" name="password" placeholder="Opcional" />
           </td>
           <td class="table-actions">
@@ -258,7 +270,7 @@
       </tbody>
     </table>
   </div>
-  <p class="note-text">Al dejar la contraseña vacía, se mantiene la actual.</p>
+  <p class="note-text">Dejar la contraseña vacía mantiene la actual.</p>
   {% elif search_query %}
   <p>No encontramos usuarios que coincidan con tu búsqueda.</p>
   {% else %}

@@ -89,6 +89,8 @@ def register_routes(app):
 			password = request.form.get('password', '')
 			role = request.form.get('rol', 'user')
 			code_red = request.form.get('code_red', '')
+			flag = (request.form.get('flag', '1') or '1').strip()
+			flag = '0' if flag == '0' else '1'
 
 			
 			if User.query.filter_by(username=username).first():
@@ -101,6 +103,7 @@ def register_routes(app):
 				new_user.codcas = codcas
 				new_user.code_red = code_red
 				new_user.role = role
+				new_user.flag = flag
 				db.session.add(new_user)
 				db.session.commit()
 				flash('Usuario creado exitosamente', 'success')
@@ -139,6 +142,8 @@ def register_routes(app):
 			rol = request.form.get('rol', '').strip() or 'user'
 			code_red = request.form.get('code_red', '').strip()
 			nuevo_password = request.form.get('password', '').strip()
+			flag = (request.form.get('flag', '1') or '1').strip()
+			flag = '0' if flag == '0' else '1'
 			search_field_post = request.form.get('field', 'nombre')
 			search_query_post = request.form.get('q', '').strip()
 
@@ -157,6 +162,7 @@ def register_routes(app):
 			usuario.codcas = codcas
 			usuario.role = rol
 			usuario.code_red = code_red
+			usuario.flag = flag
 			if nuevo_password:
 				usuario.set_password(nuevo_password)
 
@@ -241,10 +247,13 @@ def register_routes(app):
 			password = request.form.get('password', '')
 			user = User.query.filter_by(username=username).first()
 			verify = getattr(current_app, 'verify_and_migrate_password', None)
-			if user and verify and verify(user, password):
+			if user and getattr(user, 'flag', '1') != '1':
+				flash('Tu usuario está inactivo. Solicita la activación al administrador.', 'warning')
+			elif user and verify and verify(user, password):
 				login_user(user)
 				return redirect(url_for('main.index'))
-			flash('Credenciales inválidas', 'danger')
+			else:
+				flash('Credenciales inválidas', 'danger')
 		return render_template('login.html')
 
 	@bp.route('/logout')

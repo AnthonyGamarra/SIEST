@@ -49,6 +49,7 @@ class User(UserMixin, db.Model):
     codcas = db.Column(db.String(50), nullable=True)
     role = db.Column(db.String(20), nullable=True)
     code_red = db.Column(db.String(50), nullable=True)
+    flag = db.Column(db.String(1), nullable=False, default='1', server_default='1')
 
     def is_hashed(self):
         """Verifica si la contraseña está hasheada."""
@@ -111,6 +112,11 @@ class User(UserMixin, db.Model):
         if s.isdigit():
             return s.zfill(3)
         return s
+
+    @property
+    def is_active(self):
+        # Integrates with Flask-Login to disable access when flag is 0
+        return getattr(self, 'flag', '1') == '1'
 
 @login_manager.user_loader
 def load_user(user_id):
