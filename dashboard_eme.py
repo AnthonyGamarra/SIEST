@@ -234,7 +234,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                 )
                             ], style={'display': 'flex', 'alignItems': 'center'}),
                             html.P(
-                                f"📅 Información actualizada al 16/02/2026 | Sistema de Gestión Estadístico",
+                                f"📅 Información actualizada al 31/01/2026 | Sistema de Gestión Estadístico",
                                 style={
                                     'color': MUTED,
                                     'fontFamily': FONT_FAMILY,
@@ -655,59 +655,96 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         # Query base para obtener datos con cod_prioridad_n
         query_base = f"""
             SELECT
-            d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
-            d.cod_prioridad,d.cod_emergencia,
-            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
+                d.cod_centro,
+                d.periodo,
+                d.cod_topico,
+                d.topemedes AS topico_essi,
+                d.acto_med,
+                d.fecha_aten,
+                d.hora_aten,
+                d.cod_tipo_paciente,
+                d.tipopacinom,
+                d.cod_prioridad,
+                d.cod_emergencia,
+                d.secuen_aten,
+                d.cod_estandar,
+                d.des_estandar AS topico_ses,
+                d.cod_diagnostico,
+                d.diagdes,
+                d.cod_prioridad_n
             FROM (
                 SELECT 
-                    ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
-            acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
-                FROM (SELECT
+                    ROW_NUMBER() OVER (
+                        PARTITION BY cod_centro, cod_estandar, acto_med, cod_emergencia
+                        ORDER BY CAST(secuen_aten AS INTEGER) ASC
+                    ) AS SECUENCIA,
+                    c.*
+                FROM (
+                    SELECT
                         a.cod_centro, 
                         a.periodo, 
                         a.cod_topico,
                         top.topemedes,
-                        acto_med, 
-                        fecha_aten, 
-                        hora_aten, 
-                        cod_tipo_paciente,
+                        a.acto_med, 
+                        a.fecha_aten, 
+                        a.hora_aten, 
+                        a.cod_tipo_paciente,
                         tp.tipopacinom,
-                        cod_prioridad, 
+                        a.cod_prioridad, 
                         a.cod_emergencia, 
-                        secuen_aten, 
+                        a.secuen_aten, 
                         a.cod_estandar,
                         es.des_estandar,
                         a.cod_diagnostico,
                         dg.diagdes,
-                (case when a.cod_estandar = '04' then '1'
-                else (case when a.cod_prioridad='1' then '2'
-                            else (a.cod_prioridad) 
-                            end) 
-                end )as cod_prioridad_n
-                        FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
-                LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
-                LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
-                LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
-                LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
-                where (a.cod_diagnostico IS not NULL )
-                and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
-                and (
+
                         CASE 
-                            WHEN a.cod_tipo_paciente = '4' THEN '2'
-                            ELSE '1'
-                        END
+                            WHEN a.cod_estandar = '04' THEN '1'
+                            WHEN a.cod_prioridad = '1' THEN '2'
+                            ELSE a.cod_prioridad
+                        END AS cod_prioridad_n
+
+                    FROM dwsge.dwe_emergencia_atenciones_homologacion_{anio_str} a
+
+                    LEFT JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod = a.cod_diagnostico
+
+                    LEFT JOIN dwsge.sgss_cbtpc10 tp 
+                        ON tp.tipopacicod = a.cod_tipo_paciente
+
+                    LEFT JOIN dwsge.sgss_mbtoe10 top 
+                        ON top.topemecod = a.cod_topico
+
+                    LEFT JOIN dwsge.dim_estandar es 
+                        ON es.id_estandar = a.cod_estandar
+
+                    WHERE 
+                        a.cod_diagnostico IS NOT NULL
+                        AND a.cod_estandar IN ('04','05','06','07','08','09','10','11','12','13','14')
+                        AND (
+                            CASE 
+                                WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
                         ) IN {codasegu_clause}
-                ) c	
+
+                ) c
             ) d
             WHERE
-                d.SECUENCIA = '1'
-            and cod_centro = '{codcas}'
+                d.SECUENCIA = 1
+                AND d.cod_centro = '{codcas}'
+                AND d.periodo = '{anio_str}{periodo}'
         """
-        
-        # Obtener datos para cada prioridad (1-5)
+
+        # Ejecutar SOLO UNA VEZ
+        df_base = pd.read_sql(query_base, engine)
+
+
+        # === Procesar por prioridad en Pandas ===
+
         prioridades_data = {}
         priority_tables = {}
+
         prioridad_labels = {
             '1': 'Prioridad I',
             '2': 'Prioridad II',
@@ -715,26 +752,39 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             '4': 'Prioridad IV',
             '5': 'Prioridad V'
         }
-        
+
         for prioridad in ['1', '2', '3', '4', '5']:
-            query_prioridad = query_base + f" and cod_prioridad_n = '{prioridad}'"
-            try:
-                df_prioridad = pd.read_sql(query_prioridad, engine)
-                topic_col = 'topico_ses' if 'topico_ses' in df_prioridad.columns else 'des_estandar'
-                df_prioridad_tabla = (
-                    df_prioridad
-                    .groupby(df_prioridad[topic_col])
-                    .size()
-                    .reset_index(name='Atenciones')
-                    .sort_values(by='Atenciones', ascending=False)
-                )
-                df_prioridad_tabla = df_prioridad_tabla.rename(columns={topic_col: 'des_estandar'})
-                priority_tables[prioridad] = df_prioridad_tabla
-                prioridades_data[prioridad] = len(df_prioridad)
-            except Exception as e:
-                print(f"Error en query de prioridad {prioridad}: {e}")
+
+            # Filtrar en memoria (no en SQL)
+            df_prioridad = df_base[df_base['cod_prioridad_n'] == prioridad]
+
+            if df_prioridad.empty:
                 prioridades_data[prioridad] = 0
-                priority_tables[prioridad] = pd.DataFrame(columns=['des_estandar', 'Atenciones'])
+                priority_tables[prioridad] = pd.DataFrame(
+                    columns=['des_estandar', 'Atenciones']
+                )
+                continue
+
+            topic_col = (
+                'topico_ses'
+                if 'topico_ses' in df_prioridad.columns
+                else 'des_estandar'
+            )
+
+            df_prioridad_tabla = (
+                df_prioridad
+                .groupby(topic_col)
+                .size()
+                .reset_index(name='Atenciones')
+                .sort_values(by='Atenciones', ascending=False)
+            )
+
+            df_prioridad_tabla = df_prioridad_tabla.rename(
+                columns={topic_col: 'des_estandar'}
+            )
+
+            priority_tables[prioridad] = df_prioridad_tabla
+            prioridades_data[prioridad] = len(df_prioridad)
 
         query_mayor_24h = f"""
             SELECT des_estancia, COUNT(*) AS total

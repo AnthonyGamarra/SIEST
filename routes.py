@@ -61,11 +61,21 @@ def register_routes(app):
 		centros_asistenciales_by_code_red = df_by_code_red.to_dict(orient='records')
 		redes_df = get_redes_asistenciales()
 		red_options = _format_select_options(redes_df, 'redasiscod', 'redasisdes')
+		selected_codcas = ''
+		selected_code_red = ''
+		if request.method == 'POST':
+			selected_codcas = (request.form.get('codcas', '') or '').strip()
+			selected_code_red = (request.form.get('code_red_filter', '') or '').strip()
+		else:
+			selected_codcas = (request.args.get('codcas', '') or '').strip()
+			selected_code_red = (request.args.get('code_red_filter', '') or '').strip()
 		return render_template(
 			'index.html',
 			centros_asistenciales=centros_asistenciales,
 			centros_asistenciales_by_code_red=centros_asistenciales_by_code_red,
 			red_options=red_options,
+			selected_codcas=selected_codcas,
+			selected_code_red=selected_code_red,
 		)
 
 

@@ -53,7 +53,7 @@
         </div>
 
         <div class="header__actions">
-          <a class="pill-btn pill-btn--ghost" href="/">Inicio</a>
+          <a class="pill-btn pill-btn--primary" href="/">Inicio</a>
           <a
             class="pill-btn pill-btn--ghost"
             href="{{ url_for('main.change_password') }}"
@@ -102,6 +102,7 @@
       {% if current_user.role != 'user' %}
       <div class="modules-section">
         <form
+          id="codcas-form"
           class="codcas-selector"
           method="post"
           action="{{ url_for('main.index') }}"
@@ -140,9 +141,9 @@
               style="border-radius: 0.7rem; width: 100%"
               data-placeholder="Buscar red..."
             >
-              <option value="">Todas las redes...</option>
+              <option value="" {% if not selected_code_red|default('') %}selected{% endif %}>Todas las redes...</option>
               {% for red in red_options|default([]) %}
-              <option value="{{ red.code }}">{{ red.label }}</option>
+              <option value="{{ red.code }}" {% if red.code == selected_code_red|default('') %}selected{% endif %}>{{ red.label }}</option>
               {% endfor %}
             </select>
           </div>
@@ -160,9 +161,9 @@
               style="border-radius: 0.7rem; width: 100%"
               data-placeholder="Buscar centro..."
             >
-              <option value="">Seleccionar centro...</option>
+              <option value="" {% if not selected_codcas|default('') %}selected{% endif %}>Seleccionar centro...</option>
               {% for centro in centros_asistenciales_by_code_red %}
-              <option value="{{ centro.cenasicod }}">
+              <option value="{{ centro.cenasicod }}" {% if centro.cenasicod == selected_codcas|default('') %}selected{% endif %}>
                 {{ centro.cenasides }}
               </option>
               {% endfor %}
@@ -176,9 +177,9 @@
               style="border-radius: 0.7rem; width: 100%"
               data-placeholder="Buscar centro..."
             >
-              <option value="">Seleccionar centro...</option>
+              <option value="" {% if not selected_codcas|default('') %}selected{% endif %}>Seleccionar centro...</option>
               {% for centro in centros_asistenciales %}
-              <option value="{{ centro.cenasicod }}">
+              <option value="{{ centro.cenasicod }}" {% if centro.cenasicod == selected_codcas|default('') %}selected{% endif %}>
                 {{ centro.cenasides }}
               </option>
               {% endfor %}
@@ -186,8 +187,8 @@
             {% endif %}
             <!-- Botón selección -->
             <div class="register-submit">
-              <button type="submit" id="btn-seleccionar-centro">
-                Seleccione un centro
+              <button type="button" id="btn-seleccionar-centro">
+                Limpiar selección
               </button>
             </div>
           </div>
@@ -430,6 +431,11 @@
       $(document).ready(function () {
         var $codcas = $("#codcas");
         var $redFilter = $("#code_red_filter");
+        var $codcasForm = $("#codcas-form");
+        var $btnSeleccionarCentro = $("#btn-seleccionar-centro");
+        var persistedCodcas = {{ selected_codcas|default('', true)|tojson }};
+        var persistedRed = {{ selected_code_red|default('', true)|tojson }};
+        var autoSubmitEnabled = true;
         var centersEndpointTemplate = {{ url_for('main.centros_by_red_api', code_red='__CODE__')|tojson }};
         var defaultCentersRaw = {{ centros_asistenciales|default([])|tojson }};
 
@@ -463,20 +469,28 @@
           });
         }
 
-        function setCenterOptions(options) {
+        function setCenterOptions(options, selectedValue) {
           if (!$codcas.length) {
             return;
           }
           var selectEl = $codcas.get(0);
           var placeholder = $codcas.data('placeholder') || 'Seleccionar centro...';
           selectEl.innerHTML = '';
-          var placeholderOption = new Option(placeholder, '', true, true);
+          var targetValue = (selectedValue || '').trim();
+          var placeholderOption = new Option(placeholder, '', !targetValue, !targetValue);
           selectEl.appendChild(placeholderOption);
           normalizeCenters(options).forEach(function (option) {
-            var optionNode = new Option(option.label, option.code, false, false);
+            var isSelected = option.code === targetValue && !!targetValue;
+            var optionNode = new Option(option.label, option.code, false, isSelected);
             selectEl.appendChild(optionNode);
           });
-          $codcas.val('').trigger('change.select2');
+          autoSubmitEnabled = false;
+          if (targetValue) {
+            $codcas.val(targetValue).trigger('change.select2');
+          } else {
+            $codcas.val('').trigger('change.select2');
+          }
+          autoSubmitEnabled = true;
         }
 
         function toggleCenterDisabled(isDisabled) {
@@ -490,12 +504,12 @@
           }
         }
 
-        async function loadCentersByRed(codeRed) {
+        async function loadCentersByRed(codeRed, selectedValue) {
           if (!$codcas.length) {
             return;
           }
           if (!codeRed) {
-            setCenterOptions(normalizedDefaults);
+            setCenterOptions(normalizedDefaults, selectedValue || persistedCodcas);
             toggleCenterDisabled(false);
             return;
           }
@@ -507,10 +521,10 @@
               throw new Error('Respuesta inválida');
             }
             var data = await response.json();
-            setCenterOptions(data.centers || []);
+            setCenterOptions(data.centers || [], selectedValue);
           } catch (error) {
             console.warn('No se pudieron cargar los centros para la red seleccionada.', error);
-            setCenterOptions(normalizedDefaults);
+            setCenterOptions(normalizedDefaults, selectedValue || persistedCodcas);
           } finally {
             toggleCenterDisabled(false);
           }
@@ -522,8 +536,47 @@
         if ($redFilter.length) {
           $redFilter.on('change', function () {
             var selectedRed = ($(this).val() || '').trim();
-            loadCentersByRed(selectedRed);
+            loadCentersByRed(selectedRed, '');
           });
+        }
+
+        if ($codcas.length && $codcasForm.length) {
+          $codcas.on('select2:select', function () {
+            var selectedValue = ($(this).val() || '').trim();
+            if (!autoSubmitEnabled) {
+              return;
+            }
+            if (selectedValue) {
+              $codcasForm.trigger('submit');
+            }
+          });
+        }
+
+        if ($btnSeleccionarCentro.length && $codcasForm.length) {
+          $btnSeleccionarCentro.on('click', function () {
+            autoSubmitEnabled = false;
+            persistedRed = '';
+            persistedCodcas = '';
+            if ($redFilter.length) {
+              $redFilter.val('').trigger('change.select2');
+            }
+            if ($codcas.length) {
+              setCenterOptions(normalizedDefaults, '');
+            }
+            autoSubmitEnabled = true;
+            if ($codcasForm.length) {
+              $codcasForm.trigger('submit');
+            }
+          });
+        }
+
+        if (persistedRed && $redFilter.length) {
+          $redFilter.val(persistedRed).trigger('change.select2');
+          loadCentersByRed(persistedRed, persistedCodcas);
+        } else if (persistedCodcas) {
+          autoSubmitEnabled = false;
+          $codcas.val(persistedCodcas).trigger('change.select2');
+          autoSubmitEnabled = true;
         }
       });
     </script>
