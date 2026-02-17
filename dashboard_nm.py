@@ -1,5 +1,6 @@
 ﻿import io
 import importlib
+import json
 import pkgutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
 from dash import Dash, html, dcc, Input, Output, State
+from dash.dependencies import ALL
 from flask import has_request_context
 from flask_login import current_user
 from sqlalchemy import create_engine, text
@@ -34,25 +36,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     BORDER = "#E5E7EB"
     FONT_FAMILY = "Inter, 'Segoe UI', Calibri, sans-serif"
 
-    TAB_STYLE = {
-        "padding": "10px 18px",
-        "border": f"1px solid {BORDER}",
-        "borderBottom": "none",
-        "borderTopLeftRadius": "10px",
-        "borderTopRightRadius": "10px",
-        "fontFamily": FONT_FAMILY,
-        "fontWeight": "600",
-        "fontSize": "12px", 
-        "color": MUTED,
-        "backgroundColor": CARD_BG,
-        "marginRight": "0"
+    TAB_SECTION_BASE_STYLE = {
+        "width": "100%",
+        "transition": "opacity 0.2s ease"
     }
-    TAB_SELECTED_STYLE = {
-        **TAB_STYLE,
-        'color': BRAND,
-        'backgroundColor': CARD_BG,
-        'borderBottom': f'3px solid {BRAND}'
-    }
+    NAV_BUTTON_BASE_CLASS = "dashboard-nav-btn"
 
     CARD_STYLE = {
         "cursor": "pointer",
@@ -78,8 +66,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         "padding": "14px 16px",
         
         # Solo esquinas inferiores redondeadas
-        "borderTopLeftRadius": "0px",
-        "borderTopRightRadius": "0px",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
         "borderBottomLeftRadius": "14px",
         "borderBottomRightRadius": "14px",
 
@@ -233,7 +221,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
         return dbc.Container(summary_sections, fluid=True)
 
-    def build_tab_panel(tab_config):
+    def build_nav_button(tab_config):
+        return dbc.Button(
+            html.Span(tab_config.label, className='dashboard-nav-btn-label'),
+            id={'type': 'tab-nav-button-nm', 'value': tab_config.value},
+            color='light',
+            className=NAV_BUTTON_BASE_CLASS,
+            n_clicks=0,
+            style={'width': '100%'}
+        )
+
+    def build_tab_section(tab_config, is_active=False):
         periodo_options = [
             {'label': row['mes'], 'value': row['periodo']}
             for _, row in df_period.iterrows()
@@ -327,39 +325,36 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             ),
         ], className='dashboard-control-bar', style={**CONTROL_BAR_STYLE})
 
-        return dcc.Tab(
-            label=tab_config.label,
-            value=tab_config.value,
-            style=TAB_STYLE,
-            selected_style=TAB_SELECTED_STYLE,
-            children=[
-                html.Div([
-                    controls,
-                    dbc.Tooltip("Volver a la página anterior", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
-                    dbc.Tooltip("Buscar datos", target=tab_config.search_button_id, placement='bottom', style={'zIndex': 9999}),
-                    dbc.Tooltip("Descargar Excel", target=tab_config.download_button_id, placement='bottom', style={'zIndex': 9999}),
-                    dbc.Row([
-                        dbc.Col(
-                            html.Div(
-                                dcc.Loading(
-                                    className='dashboard-loading-inline',
-                                    parent_className='dashboard-loading-parent',
-                                    parent_style={'width': '100%'},
-                                    type='default',
-                                    style={'width': '100%'},
-                                    children=html.Div(id=tab_config.summary_container_id)
-                                ),
-                                className='dashboard-loading-shell'
-                            ),
-                            width=12
-                        )
-                    ]),
-                    html.Br(),
-                    dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
-                    html.Br(),
-                ], id=f'tab-{tab_config.key}-content')
-            ]
-        )
+        section_style = {
+            **TAB_SECTION_BASE_STYLE,
+            'display': 'block' if is_active else 'none'
+        }
+
+        return html.Div([
+            controls,
+            dbc.Tooltip("Volver a la página anterior", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
+            dbc.Tooltip("Buscar datos", target=tab_config.search_button_id, placement='bottom', style={'zIndex': 9999}),
+            dbc.Tooltip("Descargar Excel", target=tab_config.download_button_id, placement='bottom', style={'zIndex': 9999}),
+            dbc.Row([
+                dbc.Col(
+                    html.Div(
+                        dcc.Loading(
+                            className='dashboard-loading-inline',
+                            parent_className='dashboard-loading-parent',
+                            parent_style={'width': '100%'},
+                            type='default',
+                            style={'width': '100%'},
+                            children=html.Div(id=tab_config.summary_container_id)
+                        ),
+                        className='dashboard-loading-shell'
+                    ),
+                    width=12
+                )
+            ]),
+            html.Br(),
+            dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
+            html.Br(),
+        ], id=f'tab-{tab_config.key}-content', className='dashboard-tab-section', style=section_style)
 
     def build_required_params_message(message=None):
         subtitle = message or (
@@ -606,7 +601,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": ACCENT,
         },
         {
-            "title": "Total de cunsultas de psicología",
+            "title": "Total de consultas de psicología",
             "stat_key": "total_psicologia_atenciones",
             "border_color": BRAND,
             "link_target": "/dashboard/dash/total_atenciones_nm_ps/{codcas}"
@@ -625,6 +620,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         {
             "title": "Número de profesionales",
             "stat_key": "total_psicologia_medicos",
+            "border_color": ACCENT,
+        },
+
+        {
+            "title": "Total procedimiento terapéutico",
+            "stat_key": "total_psicologia_procedimiento_terapeutico",
+            "border_color": BRAND,
+        },
+        {
+            "title": "Número de procedimiento diagnóstico",
+            "stat_key": "total_psicologia_procedimiento_diagnostico",
             "border_color": ACCENT,
         },
     ]
@@ -1125,7 +1131,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         }
 
     def build_queries_nutricion(anio_str, periodo_str, params):
-        """Consultas base para la pestaña de nutrición (ajusta los filtros según tus requerimientos)."""
+        """Consultas base para la pestaña de nutrición"""
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("nutricion_total", text(f"""
@@ -1446,6 +1452,62 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 WHERE c.medico = '1'::bigint
             """),
             params.copy()),
+            ("proc_tera_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad in ('752','760','763','006')
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+
+            ("proc_diag_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='E21'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad ='705'
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+
         ]
         primera_vez = text(f"""
             WITH fecha_min_paciente AS (
@@ -1508,160 +1570,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         return {
             "queries": queries,
         }
-
-    def build_queries_proc_tera(anio_str, periodo_str, params):
-        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
-        queries = [
-            ("proc_tera_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('752','760','763','006')
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-            ("terap_indiv", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('752')
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-
-            ("terap_par_fam", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('760','763')
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-    
-            ("terap_grup", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('006')
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-        ]
-        return {
-            "queries": queries,
-        }
-
-    def build_queries_proc_diag(anio_str, periodo_str, params):
-        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
-        queries = [
-            ("proc_diag_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad ='705'
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-        ]
-        return {
-            "queries": queries,
-        }
-
 
 
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
@@ -1895,6 +1803,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_terap_par_fam_atenciones': total_terap_par_fam_df,
             'total_terap_grup_atenciones': total_terap_grup_df,
             'total_proc_diag_atenciones': total_proc_diag_df,
+            'total_psicologia_procedimiento_terapeutico':total_atenciones_proc_tera_df,
+            'total_psicologia_procedimiento_diagnostico':total_proc_diag_df
+
         }
 
         tables = {
@@ -1947,17 +1858,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     def load_dashboard_data_trasocial(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_trasocial, tipo_asegurado_value)
 
-    def load_dashboard_data_proc(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
-        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_proc_tera, tipo_asegurado_value)
-    
-    def load_dashboard_data_proc_diag(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
-        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_proc_diag, tipo_asegurado_value)
-
 
     DASHBOARD_TABS = [
         TabConfig(
             key="complementaria",
-            label="Obstetrícia",
+            label="Obstetricia",
             value='tab-complementaria',
             filter_ids=FilterIds(
                 periodo='filter-periodo-complementaria',
@@ -2062,44 +1967,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             charts_container_id='charts-container-trasocial',
             data_loader=load_dashboard_data_trasocial,
             cards_builder=build_trasocial_cards
-        ),
-        TabConfig(
-            key="proc_tera",
-            label="Procedimientos terapéuticos",
-            value='tab-proc-tera',
-            filter_ids=FilterIds(
-                periodo='filter-periodo-proc-tera',
-                anio='filter-anio-proc-tera',
-                tipo='filter-tipo-asegurado-proc-tera'
-            ),
-            search_button_id='search-button-proc-tera',
-            download_button_id='download-button-proc-tera',
-            download_component_id='download-dataframe-csv-proc-tera',
-            back_button_id='back-button-proc-tera',
-            summary_container_id='summary-container-proc-tera',
-            charts_container_id='charts-container-proc-tera',
-            data_loader=load_dashboard_data_proc,
-            cards_builder=build_proc_tera_cards
-        ),
-    
-            TabConfig(
-            key="proc_diag",
-            label="Procedimientos diagnósticos",
-            value='tab-proc-diag',
-            filter_ids=FilterIds(
-                periodo='filter-periodo-proc-diag',
-                anio='filter-anio-proc-diag',
-                tipo='filter-tipo-asegurado-proc-diag'
-            ),
-            search_button_id='search-button-proc-diag',
-            download_button_id='download-button-proc-diag',
-            download_component_id='download-dataframe-csv-proc-diag',
-            back_button_id='back-button-proc-diag',
-            summary_container_id='summary-container-proc-diag',
-            charts_container_id='charts-container-proc-diag',
-            data_loader=load_dashboard_data_proc_diag,
-            cards_builder=build_proc_diag_cards
-        ),
+        )
     ]
 
     def build_download_response(periodo, anio, pathname, tipo_asegurado_value, data_loader, include_citas=True, include_desercion=True):
@@ -2232,13 +2100,35 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 'gap': '14px'
             })
 
-            tabs_component = dcc.Tabs(
-                id='dashboard-tabs',
-                value=DASHBOARD_TABS[0].value,
-                children=[build_tab_panel(tab) for tab in DASHBOARD_TABS],
-                style={'backgroundColor': 'transparent', 'marginBottom': '0'},
-                content_style={'padding': '0', 'border': 'none', 'marginTop': '-1px'}
-            )
+            nav_buttons = [build_nav_button(tab) for tab in DASHBOARD_TABS]
+            tab_sections = [
+                build_tab_section(tab, is_active=(idx == 0))
+                for idx, tab in enumerate(DASHBOARD_TABS)
+            ]
+
+            tabs_component = html.Div([
+                dcc.Store(id='active-dashboard-tab-nm', data=DASHBOARD_TABS[0].value),
+                html.Div([
+                    html.Div([
+                        html.P(
+                            "Variables disponibles",
+                            className='dashboard-nav-title',
+                            style={
+                                'fontFamily': FONT_FAMILY,
+                                'fontWeight': 700,
+                                'color': BRAND,
+                                'marginBottom': '16px'
+                            }
+                        ),
+                        html.Div(nav_buttons, className='dashboard-nav-button-stack')
+                    ], className='dashboard-left-rail'),
+                    html.Div(
+                        tab_sections,
+                        id='tab-content-wrapper-nm',
+                        className='dashboard-tab-content-area'
+                    )
+                ], className='dashboard-two-pane')
+            ])
 
             main_dashboard = html.Div([
                 header,
@@ -2347,6 +2237,54 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
     for tab_config in DASHBOARD_TABS[1:]:
         register_filter_sync(tab_config.filter_ids)
+
+    @dash_app.callback(
+        Output('active-dashboard-tab-nm', 'data'),
+        Input({'type': 'tab-nav-button-nm', 'value': ALL}, 'n_clicks'),
+        State('active-dashboard-tab-nm', 'data'),
+        prevent_initial_call=True
+    )
+    def set_active_tab_nm(_clicks, current_value):
+        ctx = dash.callback_context
+        triggered = getattr(ctx, 'triggered_id', None)
+        if triggered is None:
+            if not ctx.triggered:
+                return dash.no_update
+            triggered = ctx.triggered[0]['prop_id'].split('.')[0]
+            triggered = json.loads(triggered)
+        if isinstance(triggered, str):
+            return dash.no_update
+        return triggered.get('value', current_value)
+
+    @dash_app.callback(
+        Output({'type': 'tab-nav-button-nm', 'value': ALL}, 'className'),
+        Input('active-dashboard-tab-nm', 'data')
+    )
+    def highlight_active_button_nm(active_value):
+        classes = []
+        for tab in DASHBOARD_TABS:
+            base_class = NAV_BUTTON_BASE_CLASS
+            if tab.value == active_value:
+                base_class += ' dashboard-nav-btn--active'
+            classes.append(base_class)
+        return classes
+
+    tab_visibility_outputs_nm = [
+        Output(f'tab-{tab.key}-content', 'style')
+        for tab in DASHBOARD_TABS
+    ]
+
+    @dash_app.callback(
+        tab_visibility_outputs_nm,
+        Input('active-dashboard-tab-nm', 'data')
+    )
+    def toggle_tab_visibility_nm(active_value):
+        styles = []
+        for tab in DASHBOARD_TABS:
+            section_style = dict(TAB_SECTION_BASE_STYLE)
+            section_style['display'] = 'block' if tab.value == active_value else 'none'
+            styles.append(section_style)
+        return styles
 
     def register_download_callback(tab_config):
         @dash_app.callback(

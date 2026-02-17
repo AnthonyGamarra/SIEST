@@ -1,5 +1,6 @@
 import io
 import importlib
+import json
 import pkgutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
 from dash import Dash, html, dcc, Input, Output, State
+from dash.dependencies import ALL
 from flask import has_request_context
 from flask_login import current_user
 from sqlalchemy import create_engine, text
@@ -34,24 +36,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
     BORDER = "#E5E7EB"
     FONT_FAMILY = "Inter, 'Segoe UI', Calibri, sans-serif"
 
-    TAB_STYLE = {
-        "padding": "10px 18px",
-        "border": f"1px solid {BORDER}",
-        "borderBottom": "none",
-        "borderTopLeftRadius": "10px",
-        "borderTopRightRadius": "10px",
-        "fontFamily": FONT_FAMILY,
-        "fontWeight": "600",
-        "color": MUTED,
-        "backgroundColor": CARD_BG,
-        "marginRight": "0"
+    TAB_SECTION_BASE_STYLE = {
+        "width": "100%",
+        "transition": "opacity 0.2s ease"
     }
-    TAB_SELECTED_STYLE = {
-        **TAB_STYLE,
-        'color': BRAND,
-        'backgroundColor': CARD_BG,
-        'borderBottom': f'3px solid {BRAND}'
-    }
+    NAV_BUTTON_BASE_CLASS = "dashboard-nav-btn"
 
     CARD_STYLE = {
         "cursor": "pointer",
@@ -77,8 +66,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         "padding": "14px 16px",
         
         # Solo esquinas inferiores redondeadas
-        "borderTopLeftRadius": "0px",
-        "borderTopRightRadius": "0px",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
         "borderBottomLeftRadius": "14px",
         "borderBottomRightRadius": "14px",
 
@@ -236,7 +225,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
 
         return dbc.Container(summary_sections, fluid=True)
 
-    def build_tab_panel(tab_config):
+    def build_nav_button(tab_config):
+        return dbc.Button(
+            html.Span(tab_config.label, className='dashboard-nav-btn-label'),
+            id={'type': 'tab-nav-button', 'value': tab_config.value},
+            color='light',
+            className=NAV_BUTTON_BASE_CLASS,
+            n_clicks=0,
+            style={'width': '100%'}
+        )
+
+    def build_tab_section(tab_config, is_active=False):
         periodo_options = [
             {'label': row['mes'], 'value': row['periodo']}
             for _, row in df_period.iterrows()
@@ -330,39 +329,36 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             ),
         ], className='dashboard-control-bar', style={**CONTROL_BAR_STYLE})
 
-        return dcc.Tab(
-            label=tab_config.label,
-            value=tab_config.value,
-            style=TAB_STYLE,
-            selected_style=TAB_SELECTED_STYLE,
-            children=[
-                html.Div([
-                    controls,
-                    dbc.Tooltip("Volver a la página anterior", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
-                    dbc.Tooltip("Buscar datos", target=tab_config.search_button_id, placement='bottom', style={'zIndex': 9999}),
-                    dbc.Tooltip("Descargar Excel", target=tab_config.download_button_id, placement='bottom', style={'zIndex': 9999}),
-                    dbc.Row([
-                        dbc.Col(
-                            html.Div(
-                                dcc.Loading(
-                                    className='dashboard-loading-inline',
-                                    parent_className='dashboard-loading-parent',
-                                    parent_style={'width': '100%'},
-                                    type='default',
-                                    style={'width': '100%'},
-                                    children=html.Div(id=tab_config.summary_container_id)
-                                ),
-                                className='dashboard-loading-shell'
-                            ),
-                            width=12
-                        )
-                    ]),
-                    html.Br(),
-                    dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
-                    html.Br(),
-                ], id=f'tab-{tab_config.key}-content')
-            ]
-        )
+        section_style = {
+            **TAB_SECTION_BASE_STYLE,
+            'display': 'block' if is_active else 'none'
+        }
+
+        return html.Div([
+            controls,
+            dbc.Tooltip("Volver a la página anterior", target=tab_config.back_button_id, placement='bottom', style={'zIndex': 9999}),
+            dbc.Tooltip("Buscar datos", target=tab_config.search_button_id, placement='bottom', style={'zIndex': 9999}),
+            dbc.Tooltip("Descargar Excel", target=tab_config.download_button_id, placement='bottom', style={'zIndex': 9999}),
+            dbc.Row([
+                dbc.Col(
+                    html.Div(
+                        dcc.Loading(
+                            className='dashboard-loading-inline',
+                            parent_className='dashboard-loading-parent',
+                            parent_style={'width': '100%'},
+                            type='default',
+                            style={'width': '100%'},
+                            children=html.Div(id=tab_config.summary_container_id)
+                        ),
+                        className='dashboard-loading-shell'
+                    ),
+                    width=12
+                )
+            ]),
+            html.Br(),
+            dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
+            html.Br(),
+        ], id=f'tab-{tab_config.key}-content', className='dashboard-tab-section', style=section_style)
 
     def build_required_params_message(message=None):
         subtitle = message or (
@@ -2502,13 +2498,35 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                 'gap': '14px'
             })
 
-            tabs_component = dcc.Tabs(
-                id='dashboard-tabs',
-                value=DASHBOARD_TABS[0].value,
-                children=[build_tab_panel(tab) for tab in DASHBOARD_TABS],
-                style={'backgroundColor': 'transparent', 'marginBottom': '0'},
-                content_style={'padding': '0', 'border': 'none', 'marginTop': '-1px'}
-            )
+            nav_buttons = [build_nav_button(tab) for tab in DASHBOARD_TABS]
+            tab_sections = [
+                build_tab_section(tab, is_active=(idx == 0))
+                for idx, tab in enumerate(DASHBOARD_TABS)
+            ]
+
+            tabs_component = html.Div([
+                dcc.Store(id='active-dashboard-tab', data=DASHBOARD_TABS[0].value),
+                html.Div([
+                    html.Div([
+                        html.P(
+                            "Variables disponibles",
+                            className='dashboard-nav-title',
+                            style={
+                                'fontFamily': FONT_FAMILY,
+                                'fontWeight': 700,
+                                'color': BRAND,
+                                'marginBottom': '16px'
+                            }
+                        ),
+                        html.Div(nav_buttons, className='dashboard-nav-button-stack')
+                    ], className='dashboard-left-rail'),
+                    html.Div(
+                        tab_sections,
+                        id='tab-content-wrapper',
+                        className='dashboard-tab-content-area'
+                    )
+                ], className='dashboard-two-pane')
+            ])
 
             main_dashboard = html.Div([
                 header,
@@ -2617,6 +2635,54 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
 
     for tab_config in DASHBOARD_TABS[1:]:
         register_filter_sync(tab_config.filter_ids)
+
+    @dash_app.callback(
+        Output('active-dashboard-tab', 'data'),
+        Input({'type': 'tab-nav-button', 'value': ALL}, 'n_clicks'),
+        State('active-dashboard-tab', 'data'),
+        prevent_initial_call=True
+    )
+    def set_active_tab(_clicks, current_value):
+        ctx = dash.callback_context
+        triggered = getattr(ctx, 'triggered_id', None)
+        if triggered is None:
+            if not ctx.triggered:
+                return dash.no_update
+            triggered = ctx.triggered[0]['prop_id'].split('.')[0]
+            triggered = json.loads(triggered)
+        if isinstance(triggered, str):
+            return dash.no_update
+        return triggered.get('value', current_value)
+
+    @dash_app.callback(
+        Output({'type': 'tab-nav-button', 'value': ALL}, 'className'),
+        Input('active-dashboard-tab', 'data')
+    )
+    def highlight_active_button(active_value):
+        classes = []
+        for tab in DASHBOARD_TABS:
+            base_class = NAV_BUTTON_BASE_CLASS
+            if tab.value == active_value:
+                base_class += ' dashboard-nav-btn--active'
+            classes.append(base_class)
+        return classes
+
+    tab_visibility_outputs = [
+        Output(f'tab-{tab.key}-content', 'style')
+        for tab in DASHBOARD_TABS
+    ]
+
+    @dash_app.callback(
+        tab_visibility_outputs,
+        Input('active-dashboard-tab', 'data')
+    )
+    def toggle_tab_visibility(active_value):
+        styles = []
+        for tab in DASHBOARD_TABS:
+            section_style = dict(TAB_SECTION_BASE_STYLE)
+            section_style['display'] = 'block' if tab.value == active_value else 'none'
+            styles.append(section_style)
+        return styles
 
     def register_download_callback(tab_config):
         @dash_app.callback(
