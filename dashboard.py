@@ -147,6 +147,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         include_citas: bool = False
         include_desercion: bool = False
         cards_builder: Optional[Callable] = None
+        is_placeholder: bool = False
+        placeholder_message: Optional[str] = None
 
     def build_summary_layout(cards, subtitle):
         summary_sections = []
@@ -232,7 +234,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             color='light',
             className=NAV_BUTTON_BASE_CLASS,
             n_clicks=0,
-            style={'width': '100%'}
+            style={'minWidth': '180px'}
         )
 
     def build_tab_section(tab_config, is_active=False):
@@ -255,7 +257,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     'width': '160px',
                     'fontFamily': FONT_FAMILY,
                     'position': 'relative',
-                    'zIndex': 1200
+                    'zIndex': 4000
                 }
             ),
             dcc.Dropdown(
@@ -851,6 +853,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 WHERE ce.cod_centro = :codcas
                 AND ce.cod_actividad = '91'
                 AND ce.cod_variable = '001'
+                AND ce.ate>0
             """),
             params.copy()),
             ("horas_programadas", text(f"""
@@ -862,7 +865,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -878,8 +881,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE p.cod_variable = '001'
                 AND (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND p.cod_actividad = '91'
@@ -1119,6 +1122,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                 WHERE ce.cod_centro = :codcas
                 AND cod_servicio= 'A91'
+                AND cod_actividad = '91'
                 AND ce.clasificacion in (2,4,6)
                 AND (
                         CASE 
@@ -1153,6 +1157,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                 LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                 WHERE ce.cod_centro = :codcas
                 AND cod_servicio= 'A91'
+                AND cod_actividad = '91'
+                AND ce.ate>0
             """),
             params.copy()),
             ("horas_programadas", text(f"""
@@ -1164,7 +1170,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1179,11 +1185,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     AND p.cod_centro = ca.cenasicod
                 LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND cod_servicio= 'A91'
+                AND cod_actividad = '91'
             """),
             params.copy()),
             ("medicos_agrup", text(f"""
@@ -1210,6 +1217,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                 ON a.cod_agrupador = ag.cod_agrupador
                                 WHERE a.cod_centro=:codcas
                                 AND cod_servicio= 'A91'
+                                AND cod_actividad = '91'
                                 AND a.clasificacion in (2,4,6)
                                 AND (
                                         CASE 
@@ -1230,6 +1238,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                        to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
                 FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
                 WHERE cod_servicio='A91'
+                AND cod_actividad = '91'
                 AND (
                         CASE 
                             WHEN cod_tipo_paciente = '4' THEN '2'
@@ -1250,6 +1259,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                 FROM dwsge.dwe_consulta_externa_homologacion_{anio_str} p
                 LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE p.cod_servicio='A91'
+                AND cod_actividad = '91'
                 AND p.clasificacion IN (2,4,6) AND p.cod_centro=:codcas
                 AND (
                         CASE 
@@ -1311,7 +1321,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             AND ce.cod_centro = ca.cenasicod
                         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                         WHERE ce.cod_centro = :codcas
-                        AND a.actespcod = '002'
+                        AND a.actespcod in ('002', '112')
+                        AND ce.cod_actividad ='91'
                         AND ce.clasificacion in (2,4,6)
                         AND (
                                 CASE 
@@ -1330,7 +1341,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1345,11 +1356,12 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     AND p.cod_centro = ca.cenasicod
                 LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND a.actespcod = '002'
+                AND p.cod_actividad ='91'
             """),
             params.copy()),
                     ("horas_efectivas", text(f"""
@@ -1377,6 +1389,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                         WHERE ce.cod_centro = :codcas
                         AND a.actespcod = '002'
+                        AND ce.cod_actividad ='91'
+                        AND ce.ate>0
                     """),
                     params.copy()),
                     ("medicos_agrup", text(f"""
@@ -1403,6 +1417,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         ON a.cod_agrupador = ag.cod_agrupador
                                         WHERE a.cod_centro=:codcas
                                         AND cod_subactividad = '002'
+                                        AND a.cod_actividad ='91'
                                         AND a.clasificacion in (2,4,6)
                                         AND (
                                                 CASE 
@@ -1423,6 +1438,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
                         FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
                         WHERE cod_subactividad = '002'
+                        AND cod_actividad ='91'
                         AND (
                                 CASE 
                                     WHEN cod_tipo_paciente = '4' THEN '2'
@@ -1445,6 +1461,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         WHERE p.clasificacion IN (2,4,6) 
                         AND p.cod_centro=:codcas
                         AND p.cod_subactividad = '002'
+                        AND p.cod_actividad ='91'
                         AND (
                                 CASE 
                                     WHEN p.cod_tipo_paciente = '4' THEN '2'
@@ -1525,7 +1542,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1540,8 +1557,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     AND p.cod_centro = ca.cenasicod
                 LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND p.cod_actividad = '91'
@@ -1574,6 +1591,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_actividad = '91'
                         AND ce.cod_subactividad = '003'
+                        AND ce.ate>0
                     """),
                     params.copy()),
                     ("medicos_agrup", text(f"""
@@ -1705,9 +1723,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             AND ce.cod_centro = ca.cenasicod
                         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                         WHERE ce.cod_centro = :codcas
-                        AND (ce.cod_actividad = 'B8' OR ce.cod_actividad = '91')
+                        AND ce.cod_actividad in ('B8', '91')
                         AND ce.cod_subactividad = '070'
-                        AND (ce.cod_servicio = 'AB1' OR ce.cod_servicio = 'AM6')
+                        AND ce.cod_servicio in ('AB1', 'AM6')
                         AND ce.clasificacion in (2,4,6)
                         AND (
                                 CASE 
@@ -1726,7 +1744,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1741,8 +1759,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     AND p.cod_centro = ca.cenasicod
                 LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND (p.cod_actividad = 'B8' OR p.cod_actividad = '91')
@@ -1777,6 +1795,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         AND (ce.cod_actividad = 'B8' OR ce.cod_actividad = '91')
                         AND ce.cod_subactividad = '070'
                         AND (ce.cod_servicio = 'AB1' OR ce.cod_servicio = 'AM6')
+                        AND ce.ate>0
                     """),
                     params.copy()),
                     ("medicos_agrup", text(f"""
@@ -1932,7 +1951,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1947,8 +1966,8 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                     AND p.cod_centro = ca.cenasicod
                 LEFT JOIN dwsge.dim_agrupador as ag ON p.cod_agrupador = ag.cod_agrupador
                 WHERE (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND p.cod_actividad = '91'
@@ -1983,6 +2002,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         AND ce.cod_actividad = '91'
                         AND ce.cod_subactividad = '682'
                         AND ce.cod_servicio = 'L16'
+                        AND ce.ate>0
                     """),
                     params.copy()),
                     ("medicos_agrup", text(f"""
@@ -2475,7 +2495,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 16/02/2026 | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al 31/01/2026 | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,
@@ -2506,27 +2526,13 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
 
             tabs_component = html.Div([
                 dcc.Store(id='active-dashboard-tab', data=DASHBOARD_TABS[0].value),
-                html.Div([
-                    html.Div([
-                        html.P(
-                            "Variables disponibles",
-                            className='dashboard-nav-title',
-                            style={
-                                'fontFamily': FONT_FAMILY,
-                                'fontWeight': 700,
-                                'color': BRAND,
-                                'marginBottom': '16px'
-                            }
-                        ),
-                        html.Div(nav_buttons, className='dashboard-nav-button-stack')
-                    ], className='dashboard-left-rail'),
-                    html.Div(
-                        tab_sections,
-                        id='tab-content-wrapper',
-                        className='dashboard-tab-content-area'
-                    )
-                ], className='dashboard-two-pane')
-            ])
+                html.Div(nav_buttons, className='dashboard-nav-bar'),
+                html.Div(
+                    tab_sections,
+                    id='tab-content-wrapper',
+                    className='dashboard-tab-content-area'
+                )
+            ], className='dashboard-tab-wrapper')
 
             main_dashboard = html.Div([
                 header,

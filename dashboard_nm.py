@@ -228,7 +228,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             color='light',
             className=NAV_BUTTON_BASE_CLASS,
             n_clicks=0,
-            style={'width': '100%'}
+            style={'minWidth': '180px'}
         )
 
     def build_tab_section(tab_config, is_active=False):
@@ -264,7 +264,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     'width': '240px',
                     'fontFamily': FONT_FAMILY,
                     'position': 'relative',
-                    'zIndex': 1200
+                    'zIndex': 4000
                 }
             ),
             dcc.Dropdown(
@@ -645,50 +645,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         },
     ]
     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
-    
-
-
-    PROC_TERA_CARD_TEMPLATE = [
-        {
-            "title": "Total atenciones de procedimiento terapéutico",
-            "stat_key": "total_proc_tera_atenciones",
-            "border_color": BRAND,
-            "link_target": "/dashboard/dash/total_atenciones_nm_pt/{codcas}"
-        },
-        {
-            "title": "Terapia individual",
-            "stat_key": "total_terap_indiv_atenciones",
-            "border_color": ACCENT,
-            "table_key": "terap_indiv_por_sub_act",
-            "table_title": "Detalle terapia individual",
-        },
-        {
-            "title": "Terapia pareja/familiar",
-            "stat_key": "total_terap_par_fam_atenciones",
-            "border_color": BRAND_SOFT,
-            "table_key": "terap_par_fam_por_sub_act",
-            "table_title": "Detalle terapia pareja/familiar",
-        },
-        {
-            "title": "Terapia grupal",
-            "stat_key": "total_terap_grup_atenciones",
-            "border_color": ACCENT,
-            "table_key": "terap_grup_por_sub_act",
-            "table_title": "Detalle terapia grupal",
-        },
-    ]
-
-    build_proc_tera_cards = create_cards_builder(PROC_TERA_CARD_TEMPLATE)
-
-    PROC_DIAG_CARD_TEMPLATE = [
-        {
-            "title": "Total atenciones de procedimiento diagnóstico",
-            "stat_key": "total_proc_diag_atenciones",
-            "border_color": BRAND,
-            "link_target": "/dashboard/dash/total_atenciones_nm_pd/{codcas}"
-        },
-    ]
-    build_proc_diag_cards = create_cards_builder(PROC_DIAG_CARD_TEMPLATE)
     
 
     DEFAULT_TIPO_ASEGURADO = 'Todos'
@@ -1391,6 +1347,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     AND ce.cod_servicio ='E21'
                     AND ce.cod_actividad ='B1'
                     AND ce.cod_subactividad ='005'
+                    AND ce.ate>0
             """),
             params.copy()),
             ("horas_programadas", text(f"""
@@ -1400,7 +1357,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     a.actespnom,
                     am.actdes,
                     ca.cenasides 
-                FROM dwsge.dwe_consulta_externa_programacion_nm_{anio_str}_{periodo_str} p
+                FROM dwsge.dwe_consulta_externa_horas_efectivas_nm_{anio_str}_{periodo_str} p
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON p.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.sgss_cmace10 AS a
@@ -1411,8 +1368,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 LEFT JOIN dwsge.sgss_cmcas10 AS ca
                     ON p.cod_centro = ca.cenasicod
                 WHERE (
-                        p.cod_motivo_suspension IS NULL 
-                        OR p.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+                        p.cod_mot_suspension IS NULL 
+                        OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
                 AND p.cod_servicio ='E21'
@@ -1637,25 +1594,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         return float(total)
             return 0.0
 
-        def summarize_medicos(frame):
-            if frame.empty:
-                return pd.DataFrame(columns=['agrupador', 'counts'])
-            label_col = 'medico' if 'medico' in frame.columns else 'dni_medico'
-            labels = frame[label_col].copy()
-            if labels.isna().any() and 'dni_medico' in frame.columns:
-                labels = labels.fillna(frame['dni_medico'])
-            value_col = 'cantidad_medicos' if 'cantidad_medicos' in frame.columns else None
-            if value_col:
-                values = pd.to_numeric(frame[value_col], errors='coerce').fillna(0)
-            else:
-                values = pd.Series(1, index=frame.index)
-            return (
-                pd.DataFrame({'agrupador': labels, 'counts': values})
-                .groupby('agrupador', dropna=False)['counts']
-                .sum()
-                .reset_index()
-                .sort_values('counts', ascending=False)
-            )
 
         atenciones_psicologia_df = results.get("psicologia_total", pd.DataFrame())
         patient_stmt = builder_payload.get("primeras_consultas_query")
@@ -1666,21 +1604,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_psicologia_consultantes = int(primeras_consultas_df['cantidad'].iloc[0]) if not primeras_consultas_df.empty else 0
         horas_efectivas_df = results.get("horas_efectivas", pd.DataFrame())
         horas_programadas_df = results.get("horas_programadas", pd.DataFrame())
-        medicos_agrup_df = results.get("medicos_agrup", pd.DataFrame())
         total_psicologia_atenciones = len(atenciones_psicologia_df)
         total_psicologia_horas_efectivas = sum_numeric_column(horas_efectivas_df, ['horas_efec_def'])
         total_psicologia_horas_programadas = sum_numeric_column(horas_programadas_df, ['total_horas'])
         total_psicologia_medicos = atenciones_psicologia_df['dni_medico'].nunique() if 'dni_medico' in atenciones_psicologia_df else 0
 
-
-
         atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
 
-        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())
-        terap_indiv_df = results.get("terap_indiv", pd.DataFrame())
-        terap_par_fam_df = results.get("terap_par_fam", pd.DataFrame())
-        terap_grup_df = results.get("terap_grup", pd.DataFrame())
-       
+        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())       
         atenciones_proc_diag_df = results.get("proc_diag_total", pd.DataFrame())
 
 
@@ -1736,14 +1667,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_atenciones_trasocial_df = len(atenciones_trasocial_df)
 
         total_atenciones_proc_tera_df = len(atenciones_proc_tera_df)
-        total_terap_indiv_df = len(terap_indiv_df)
-        total_terap_par_fam_df = len(terap_par_fam_df)
-        total_terap_grup_df = len(terap_grup_df)
-
-        total_terap_indiv_df_agru = summarize_sub_activities(terap_indiv_df)
-        total_terap_par_fam_df_agru = summarize_sub_activities(terap_par_fam_df)
-        total_terap_grup_df_agru = summarize_sub_activities(terap_grup_df)
-
         total_proc_diag_df = len(atenciones_proc_diag_df)
 
         nombre_centro = resolve_nombre_centro([
@@ -1767,9 +1690,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_psicologia_df,
             atenciones_trasocial_df,
             atenciones_proc_diag_df,
-            terap_indiv_df,
-            terap_par_fam_df,
-            terap_grup_df,
             
         ])
 
@@ -1798,11 +1718,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_psicologia_horas_programadas': total_psicologia_horas_programadas,
             'total_psicologia_medicos': total_psicologia_medicos,
             'total_trasocial_atenciones': total_atenciones_trasocial_df,
-            'total_proc_tera_atenciones': total_atenciones_proc_tera_df,
-            'total_terap_indiv_atenciones': total_terap_indiv_df,
-            'total_terap_par_fam_atenciones': total_terap_par_fam_df,
-            'total_terap_grup_atenciones': total_terap_grup_df,
-            'total_proc_diag_atenciones': total_proc_diag_df,
             'total_psicologia_procedimiento_terapeutico':total_atenciones_proc_tera_df,
             'total_psicologia_procedimiento_diagnostico':total_proc_diag_df
 
@@ -1823,9 +1738,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'enfermeria_cronicas_am_por_sub_act': atenciones_cronicas_am_df_agru,
             'enfermeria_otros_por_sub_act': atenciones_enfermeria_otros_df_agru,
             'enfermeria_prev_anemia_por_sub_act': atenciones_prev_anemia_df_agru,
-            'terap_indiv_por_sub_act': total_terap_indiv_df_agru,
-            'terap_par_fam_por_sub_act': total_terap_par_fam_df_agru,
-            'terap_grup_por_sub_act': total_terap_grup_df_agru, 
         }
 
         return {
@@ -2077,7 +1989,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 16/02/2026 | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al 31/01/2026 | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,
@@ -2108,27 +2020,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
             tabs_component = html.Div([
                 dcc.Store(id='active-dashboard-tab-nm', data=DASHBOARD_TABS[0].value),
-                html.Div([
-                    html.Div([
-                        html.P(
-                            "Variables disponibles",
-                            className='dashboard-nav-title',
-                            style={
-                                'fontFamily': FONT_FAMILY,
-                                'fontWeight': 700,
-                                'color': BRAND,
-                                'marginBottom': '16px'
-                            }
-                        ),
-                        html.Div(nav_buttons, className='dashboard-nav-button-stack')
-                    ], className='dashboard-left-rail'),
-                    html.Div(
-                        tab_sections,
-                        id='tab-content-wrapper-nm',
-                        className='dashboard-tab-content-area'
-                    )
-                ], className='dashboard-two-pane')
-            ])
+                html.Div(nav_buttons, className='dashboard-nav-bar'),
+                html.Div(
+                    tab_sections,
+                    id='tab-content-wrapper-nm',
+                    className='dashboard-tab-content-area'
+                )
+            ], className='dashboard-tab-wrapper')
 
             main_dashboard = html.Div([
                 header,
