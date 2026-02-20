@@ -207,13 +207,12 @@ def _tm_format_fecha_atencion(serie: pd.Series) -> pd.Series:
     """Normaliza la fecha al formato AAAA-MM-DD manteniendo valores válidos."""
     if serie.empty:
         return pd.Series([], index=serie.index, dtype=object)
-    parsed = pd.to_datetime(serie, errors="coerce", infer_datetime_format=True)
+    parsed = pd.to_datetime(serie, errors="coerce")
     needs_dayfirst = parsed.isna() & serie.notna()
     if needs_dayfirst.any():
         parsed.loc[needs_dayfirst] = pd.to_datetime(
             serie[needs_dayfirst],
             errors="coerce",
-            infer_datetime_format=True,
             dayfirst=True,
         )
     formatted = parsed.dt.strftime("%Y-%m-%d")
