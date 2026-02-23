@@ -1763,9 +1763,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         OR p.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
                     )
                 AND p.cod_centro = :codcas
-                AND (p.cod_actividad = 'B8' OR p.cod_actividad = '91')
+                AND p.cod_actividad IN ('B8', '91')
                 AND p.cod_subactividad = '070'
-                AND (p.cod_servicio = 'AB1' OR p.cod_servicio = 'AM6')
+                AND p.cod_servicio IN ('AB1', 'AM6')
             """),
             params.copy()),
                     ("horas_efectivas", text(f"""
@@ -1792,9 +1792,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             AND ce.cod_centro = ca.cenasicod
                         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
                         WHERE ce.cod_centro = :codcas
-                        AND (ce.cod_actividad = 'B8' OR ce.cod_actividad = '91')
+                        AND ce.cod_actividad IN ('B8', '91')
                         AND ce.cod_subactividad = '070'
-                        AND (ce.cod_servicio = 'AB1' OR ce.cod_servicio = 'AM6')
+                        AND ce.cod_servicio IN ('AB1', 'AM6')
                         AND ce.ate>0
                     """),
                     params.copy()),
@@ -1821,9 +1821,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         LEFT JOIN dwsge.dim_agrupador ag 
                                         ON a.cod_agrupador = ag.cod_agrupador
                                         WHERE a.cod_centro=:codcas
-                                        AND (a.cod_actividad = 'B8' OR a.cod_actividad = '91')
+                                        AND a.cod_actividad IN ('B8', '91')
                                         AND a.cod_subactividad = '070'
-                                        AND (a.cod_servicio = 'AB1' OR a.cod_servicio = 'AM6')
+                                        AND a.cod_servicio IN ('AB1', 'AM6')
                                         AND a.clasificacion in (2,4,6)
                                         AND (
                                                 CASE 
@@ -1843,9 +1843,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
         CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             to_char(MIN(to_date(fecha_atencion,'DD/MM/YYYY')),'YYYYMM') periodo
                         FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}
-                        WHERE (cod_actividad = 'B8' OR cod_actividad = '91')
+                        WHERE cod_actividad IN ('B8', '91')
                         AND cod_subactividad = '070'
-                        AND (cod_servicio = 'AB1' OR cod_servicio = 'AM6')
+                        AND cod_servicio IN ('AB1', 'AM6')
                         AND (
                                 CASE 
                                     WHEN cod_tipo_paciente = '4' THEN '2'
@@ -1867,9 +1867,9 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         LEFT JOIN dwsge.dim_agrupador ag ON p.cod_agrupador = ag.cod_agrupador
                         WHERE p.clasificacion IN (2,4,6) 
                         AND p.cod_centro=:codcas
-                        AND (p.cod_actividad = 'B8' OR p.cod_actividad = '91')
+                        AND p.cod_actividad IN ('B8', '91')
                         AND p.cod_subactividad = '070'
-                        AND (p.cod_servicio = 'AB1' OR p.cod_servicio = 'AM6')
+                        AND p.cod_servicio IN ('AB1', 'AM6')
                         AND (
                                 CASE 
                                     WHEN p.cod_tipo_paciente = '4' THEN '2'
@@ -2495,7 +2495,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 31/01/2026 | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al 22/02/2026 a las 18:00 horas | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,

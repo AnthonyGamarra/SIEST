@@ -538,9 +538,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "stat_key": "total_nutricion_atenciones",
             "border_color": BRAND,
             "table_key": "nutricion_individual_por_sub_act",
-            "table_title": "Detalle consulta individual",
+            "table_title": "Atenciones por subactividad",
             "link_target": "/dashboard/dash/total_atenciones_nm_nu/{codcas}"
         },
+        # {
+        #     "title": "Total de atenciones integral Anemia",
+        #     "stat_key": "total_nutricion_anemia",
+        #     "border_color": BRAND,
+        #     "table_key": "nutricion_anemia_por_sub_act",
+        #     "table_title": "Atenciones por subactividad",
+        #     "link_target": "/dashboard/dash/total_atenciones_nm_nu_anemia/{codcas}"
+        # },
     ]
 
     build_nutricion_cards = create_cards_builder(NUTRICION_CARD_TEMPLATE)
@@ -813,7 +821,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("atenciones", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -839,7 +847,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("prenatal", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -865,7 +873,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("familiar", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -891,7 +899,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("complementarias", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -917,7 +925,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("preconcepcional", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -952,7 +960,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("atenciones_p", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -978,7 +986,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("domiciliaria", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1004,7 +1012,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("grupal", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1030,7 +1038,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("psicoprofilaxis", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1056,7 +1064,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("consejeria", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1091,7 +1099,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("nutricion_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1107,7 +1115,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE cod_centro = :codcas
                         AND cod_servicio ='F31'
-                        AND ce.cod_subactividad in ('050', '056', '203', '093', '322')
+                        AND ce.cod_subactividad in ('050', '056', '093', '322','471','609','692','693','975')
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1116,6 +1124,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                                 ) IN {codasegu}
             """),
             params.copy()),
+
+            # ("nutricion_anemia", text(f"""
+            #         SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+            #         FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+            #         LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+            #             ON dg.diagcod=ce.diagcod
+            #         LEFT JOIN dwsge.sgss_cmsho10 AS c 
+            #             ON ce.cod_servicio = c.servhoscod
+            #         LEFT JOIN dwsge.sgss_cmace10 AS a
+            #             ON ce.cod_actividad = a.actcod
+            #             AND ce.cod_subactividad = a.actespcod
+            #         LEFT JOIN dwsge.sgss_cmact10 AS am
+            #             ON ce.cod_actividad = am.actcod
+            #         LEFT JOIN dwsge.sgss_cmcas10 AS ca
+            #             ON ce.cod_oricentro = ca.oricenasicod
+            #             AND ce.cod_centro = ca.cenasicod
+            #             WHERE cod_centro = :codcas
+            #             AND cod_servicio ='F31'
+            #             AND ce.cod_subactividad in ('056')
+            #             AND (
+            #                     CASE 
+            #                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
+            #                         ELSE '1'
+            #                     END
+            #                     ) IN {codasegu}
+            # """),
+            # params.copy()),
         ]
         return {
             "queries": queries,
@@ -1125,7 +1160,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("enfermeria_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1152,7 +1187,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("enfermeria_tuberculosis", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1180,7 +1215,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             params.copy()),
 
             ("enfermeria_vih", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1208,7 +1243,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             params.copy()),
     
             ("enfermeria_cronicas_am", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1236,7 +1271,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             params.copy()),
 
             ("enfermeria_otros", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1264,7 +1299,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             params.copy()),
 
             ("enfermeria_prev_anemia", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1300,7 +1335,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("psicologia_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.dni_medico,ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.dni_medico,ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1410,7 +1445,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("proc_tera_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1438,7 +1473,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             params.copy()),
 
             ("proc_diag_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1497,7 +1532,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("trasocial_total", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1564,6 +1599,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_consejeria_df = results.get("consejeria", pd.DataFrame())
 
         nutricion_total_df = results.get("nutricion_total", pd.DataFrame())
+        # nutricion_anemia_df = results.get("nutricion_anemia", pd.DataFrame())
 
         atenciones_e_df = results.get("enfermeria_total", pd.DataFrame())
         atenciones_tuberculosis_df = results.get("enfermeria_tuberculosis", pd.DataFrame())
@@ -1616,12 +1652,19 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
 
         def resolve_nombre_centro(dataframes):
+            def first_valid(series):
+                if 'dropna' not in dir(series):
+                    return None
+                cleaned = series.dropna().astype(str).str.strip()
+                cleaned = cleaned[cleaned != '']
+                return cleaned.iloc[0] if not cleaned.empty else None
+
             for frame in dataframes:
-                if frame.empty or 'cod_centro' not in frame:
+                if frame.empty or 'cenasides' not in frame:
                     continue
-                values = frame['cod_centro'].dropna().unique()
-                if len(values) > 0:
-                    return values[0]
+                value = first_valid(frame['cenasides'])
+                if value:
+                    return value
             return codcas
 
         total_atenciones = len(atenciones_df)
@@ -1637,6 +1680,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_atenciones_consejeria = len(atenciones_consejeria_df)
 
         total_nutricion_atenciones = len(nutricion_total_df)
+        # total_nutricion_anemia = len(nutricion_anemia_df)
         total_enfermeria_atenciones = len(atenciones_e_df)
         total_enfermeria_tuberculosis = len(atenciones_tuberculosis_df)
         total_enfermeria_vih = len(atenciones_vih_df)
@@ -1655,6 +1699,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_consejeria_df_agru = summarize_sub_activities(atenciones_consejeria_df)
 
         nutricion_total_df_agru = summarize_sub_activities(nutricion_total_df)
+        # nutricion_anemia_df_agru = summarize_sub_activities(nutricion_anemia_df)
 
         atenciones_tuberculosis_df_agru = summarize_sub_activities(atenciones_tuberculosis_df)
         atenciones_vih_df_agru = summarize_sub_activities(atenciones_vih_df)
@@ -1681,6 +1726,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_psicoprofilaxis_df,
             atenciones_consejeria_df,
             nutricion_total_df,
+            # nutricion_anemia_df,
             atenciones_e_df,
             atenciones_tuberculosis_df,
             atenciones_vih_df,
@@ -1706,6 +1752,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_atenciones_consejeria': total_atenciones_consejeria,
             'total_nutricion_atenciones': total_nutricion_atenciones,
             'total_nutricion_individual': total_nutricion_atenciones,
+            # 'total_nutricion_anemia': total_nutricion_anemia,
             'total_enfermeria_atenciones': total_enfermeria_atenciones,
             'total_enfermeria_tuberculosis': total_enfermeria_tuberculosis,
             'total_enfermeria_vih': total_enfermeria_vih,
@@ -1733,6 +1780,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'atenciones_psicoprofilaxis_por_sub_act': atenciones_psicoprofilaxis_df_agru,
             'atenciones_consejeria_por_sub_act': atenciones_consejeria_df_agru,
             'nutricion_individual_por_sub_act': nutricion_total_df_agru,
+            # 'nutricion_anemia_por_sub_act': nutricion_anemia_df_agru,
             'enfermeria_tuberculosis_por_sub_act': atenciones_tuberculosis_df_agru,
             'enfermeria_vih_por_sub_act': atenciones_vih_df_agru,
             'enfermeria_cronicas_am_por_sub_act': atenciones_cronicas_am_df_agru,
@@ -1909,6 +1957,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             ("Psicoprofilaxis", stats.get('total_atenciones_psicoprofilaxis', 0)),
             ("Consejería", stats.get('total_atenciones_consejeria', 0)),
             ("Total atenciones nutrición", stats.get('total_nutricion_atenciones', 0)),
+            ("Atenciones anemia", stats.get('total_nutricion_anemia', 0)),
             ("Total atenciones enfermería", stats.get('total_enfermeria_atenciones', 0)),
             ("Atención en Tuberculosis", stats.get('total_enfermeria_tuberculosis', 0)),
             ("Atención en ITS-HIV/SIDA", stats.get('total_enfermeria_vih', 0)),
@@ -1955,7 +2004,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         html.Div([
                             html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
                             html.H2(
-                                "Consulta externa - No médicas",
+                                "Consulta externa - No médicas (Por validar)",
                                 style={
                                     'color': BRAND,
                                     'fontFamily': FONT_FAMILY,
@@ -1989,7 +2038,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 31/01/2026 | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al 22/02/2026 a las 18:00 horas | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,
