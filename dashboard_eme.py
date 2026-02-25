@@ -1,7 +1,7 @@
 from dash import Dash, html, dcc, Input, Output, State
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine,text
 import pandas as pd
 import dash_bootstrap_components as dbc
 import plotly.express as px
@@ -148,7 +148,27 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             ], style=CARD_BODY_STYLE),
             style=card_style
         )
+    
+    def fecha_act(engine):
+        if engine is None:
+            return None
 
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT TO_CHAR(MIN(fecha_act), 'DD/MM/YYYY HH24:MI:SS') AS fecha_act FROM dwsge.fecha_act;"),
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch fecha_act: {exc}")
+            return None
+
+        # SQLAlchemy lowercases column aliases by default, so prefer the lowercase key
+        fecha_col_value = row.get('fecha_act') or row.get('fecha_Act')
+        if not row or not fecha_col_value:
+            return None
+
+        return fecha_col_value
+    
     def render_priority_table(dataframe):
         if dataframe is None or dataframe.empty:
             body_children = [
@@ -199,6 +219,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
             return html.Div()
 
         if getattr(current_user, "is_authenticated", False):
+            engine = create_connection()
+            fecha_act_value = fecha_act(engine)
+            if not fecha_act_value:
+                fecha_act_value = "Sin informacion disponible"
             return dbc.Container([
                 dcc.Location(id='url', refresh=False),
 
@@ -234,7 +258,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                 )
                             ], style={'display': 'flex', 'alignItems': 'center'}),
                             html.P(
-                                f"📅 Información actualizada al 22/02/2026 a las 18:00 horas | Sistema de Gestión Estadístico",
+                                f"📅 Información actualizada al {fecha_act_value} | Sistema de Gestión Estadístico",
                                 style={
                                     'color': MUTED,
                                     'fontFamily': FONT_FAMILY,
@@ -275,7 +299,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         clearable=True,
                         style={
                             'width': '160px',
-                            'fontFamily': FONT_FAMILY
+                            'fontFamily': FONT_FAMILY,
+                            'position': 'relative',
+                            'zIndex': 4000
                         }
                     ),
                     dcc.Dropdown(
@@ -989,56 +1015,86 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
 
         query =  f"""
             SELECT
-            d.cod_centro,d.periodo,d.cod_topico,d.topemedes as topico_essi,d.acto_med,d.fecha_aten,d.hora_aten,d.cod_tipo_paciente, d.tipopacinom,
-            d.cod_prioridad,d.cod_emergencia,
-            d.secuen_aten,d.cod_estandar,d.des_estandar as topico_ses,d.cod_diagnostico,d.diagdes,d.cod_prioridad_n
+                d.cod_centro,
+                d.periodo,
+                d.cod_topico,
+                d.topemedes AS topico_essi,
+                d.acto_med,
+                d.fecha_aten,
+                d.hora_aten,
+                d.cod_tipo_paciente,
+                d.tipopacinom,
+                d.cod_prioridad,
+                d.cod_emergencia,
+                d.secuen_aten,
+                d.cod_estandar,
+                d.des_estandar AS topico_ses,
+                d.cod_diagnostico,
+                d.diagdes,
+                d.cod_prioridad_n
             FROM (
                 SELECT 
-                    ROW_NUMBER() OVER (PARTITION BY cod_centro, cod_estandar, 
-            acto_med,cod_emergencia ORDER BY cast(secuen_aten as integer) asc) AS SECUENCIA, c.*
-                FROM (SELECT
+                    ROW_NUMBER() OVER (
+                        PARTITION BY cod_centro, cod_estandar, acto_med, cod_emergencia
+                        ORDER BY CAST(secuen_aten AS INTEGER) ASC
+                    ) AS SECUENCIA,
+                    c.*
+                FROM (
+                    SELECT
                         a.cod_centro, 
                         a.periodo, 
                         a.cod_topico,
                         top.topemedes,
-                        acto_med, 
-                        fecha_aten, 
-                        hora_aten, 
-                        cod_tipo_paciente,
+                        a.acto_med, 
+                        a.fecha_aten, 
+                        a.hora_aten, 
+                        a.cod_tipo_paciente,
                         tp.tipopacinom,
-                        cod_prioridad, 
+                        a.cod_prioridad, 
                         a.cod_emergencia, 
-                        secuen_aten, 
+                        a.secuen_aten, 
                         a.cod_estandar,
                         es.des_estandar,
                         a.cod_diagnostico,
                         dg.diagdes,
-                (case when a.cod_estandar = '04' then '1'
-                else (case when a.cod_prioridad='1' then '2'
-                            else (a.cod_prioridad) 
-                            end) 
-                end )as cod_prioridad_n
-                        FROM 
-                            dwsge.dwe_emergencia_atenciones_homologacion_{anio_str}_{periodo} a
-                LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=a.cod_diagnostico
-                LEFT OUTER JOIN dwsge.sgss_cbtpc10 tp ON tp.tipopacicod= a.cod_tipo_paciente
-                LEFT OUTER JOIN dwsge.sgss_mbtoe10 top ON top.topemecod=a.cod_topico
-                LEFT OUTER JOIN dwsge.dim_estandar es ON es.id_estandar = a.cod_estandar
-                where (a.cod_diagnostico IS not NULL )
-                and a.cod_estandar in ('04','05','06','07','08','09','10','11','12','13','14')
-                and (
-                        CASE 
-                            WHEN a.cod_tipo_paciente = '4' THEN '2'
-                            ELSE '1'
-                        END
-                        ) IN {codasegu_clause}
-                ) c	
-            ) d
 
+                        CASE 
+                            WHEN a.cod_estandar = '04' THEN '1'
+                            WHEN a.cod_prioridad = '1' THEN '2'
+                            ELSE a.cod_prioridad
+                        END AS cod_prioridad_n
+
+                    FROM dwsge.dwe_emergencia_atenciones_homologacion_{anio_str} a
+
+                    LEFT JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod = a.cod_diagnostico
+
+                    LEFT JOIN dwsge.sgss_cbtpc10 tp 
+                        ON tp.tipopacicod = a.cod_tipo_paciente
+
+                    LEFT JOIN dwsge.sgss_mbtoe10 top 
+                        ON top.topemecod = a.cod_topico
+
+                    LEFT JOIN dwsge.dim_estandar es 
+                        ON es.id_estandar = a.cod_estandar
+
+                    WHERE 
+                        a.cod_diagnostico IS NOT NULL
+                        AND a.cod_estandar IN ('04','05','06','07','08','09','10','11','12','13','14')
+                        AND (
+                            CASE 
+                                WHEN a.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu_clause}
+
+                ) c
+            ) d
             WHERE
-                d.SECUENCIA = '1'
-            and cod_centro = '{codcas}'
-            and cod_prioridad_n != '0'
+                d.SECUENCIA = 1
+                AND d.cod_centro = '{codcas}'
+                AND d.periodo = '{anio_str}{periodo}'
+                AND d.cod_prioridad_n != '0'
         """
         df = pd.read_sql(query, engine)
         if df.empty:

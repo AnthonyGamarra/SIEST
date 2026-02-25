@@ -623,6 +623,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         pdf_bytes = bytes(row['archivo_pdf'])
         return filename, pdf_bytes
 
+    def fecha_act(engine):
+        if engine is None:
+            return None
+
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT TO_CHAR(MIN(fecha_act), 'DD/MM/YYYY HH24:MI:SS') AS fecha_act FROM dwsge.fecha_act;"),
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch fecha_act: {exc}")
+            return None
+
+        # SQLAlchemy lowercases column aliases by default, so prefer the lowercase key
+        fecha_col_value = row.get('fecha_act') or row.get('fecha_Act')
+        if not row or not fecha_col_value:
+            return None
+
+        return fecha_col_value
+
     def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
         link_content = html.H5(
             title,
@@ -2446,6 +2466,10 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             return html.Div()
 
         if getattr(current_user, "is_authenticated", False):
+            engine = create_connection()
+            fecha_act_value = fecha_act(engine)
+            if not fecha_act_value:
+                fecha_act_value = "Sin informacion disponible"
             header = html.Div([
                 html.Img(
                     src=dash_app.get_asset_url('logo.png'),
@@ -2495,7 +2519,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 22/02/2026 a las 18:00 horas | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al {fecha_act_value} | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,

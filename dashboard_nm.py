@@ -695,6 +695,27 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         filename = _build_safe_pdf_name(row.get('nombre'))
         pdf_bytes = bytes(row['archivo_pdf'])
         return filename, pdf_bytes
+    
+
+    def fecha_act(engine):
+        if engine is None:
+            return None
+
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT TO_CHAR(MIN(fecha_act), 'DD/MM/YYYY HH24:MI:SS') AS fecha_act FROM dwsge.fecha_act;"),
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch fecha_act: {exc}")
+            return None
+
+        # SQLAlchemy lowercases column aliases by default, so prefer the lowercase key
+        fecha_col_value = row.get('fecha_act') or row.get('fecha_Act')
+        if not row or not fecha_col_value:
+            return None
+
+        return fecha_col_value
 
     def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None, link_refresh=False):
         link_content = html.H5(
@@ -899,10 +920,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
             ("complementarias", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom,ce.acto_med, ce.doc_paciente
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
                     LEFT JOIN dwsge.sgss_cmsho10 AS c 
                         ON ce.cod_servicio = c.servhoscod
                     LEFT JOIN dwsge.sgss_cmace10 AS a
@@ -914,14 +933,37 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         ON ce.cod_oricentro = ca.oricenasicod
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
-                        AND ce.cod_servicio ='F21'
-                        AND ce.cod_subactividad in ('417', '418', '127')
+                        AND ((ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad ='417')
+                        OR 
+                        (ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad ='418')
+                        OR
+                        (ce.cod_servicio ='F21' AND ce.cod_actividad = '96' AND ce.cod_subactividad ='127'))
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
                                     ELSE '1'
                                 END
                                 ) IN {codasegu}
+                    UNION ALL
+
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    WHERE ce.cod_centro = :codcas
+                    AND ce.cod_actividad ='96'
+                    AND ce.cod_servicio ='F21'
+                    AND ce.cod_subactividad ='127'
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
             """),
             params.copy()),
             ("preconcepcional", text(f"""
@@ -1989,6 +2031,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             return html.Div()
 
         if getattr(current_user, "is_authenticated", False):
+            engine = create_connection()
+            fecha_act_value = fecha_act(engine)
+            if not fecha_act_value:
+                fecha_act_value = "Sin informacion disponible"
             header = html.Div([
                 html.Img(
                     src=dash_app.get_asset_url('logo.png'),
@@ -2004,7 +2050,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         html.Div([
                             html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
                             html.H2(
-                                "Consulta externa - No médicas (Por validar)",
+                                "Consulta externa - No médicas",
                                 style={
                                     'color': BRAND,
                                     'fontFamily': FONT_FAMILY,
@@ -2038,7 +2084,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         style={'zIndex': 9999}
                     ),
                     html.P(
-                        f"Informacion actualizada al 22/02/2026 a las 18:00 horas | Sistema de Gestion Estadística",
+                        f"Informacion actualizada al {fecha_act_value} | Sistema de Gestion Estadística",
                         style={
                             'color': MUTED,
                             'fontFamily': FONT_FAMILY,
