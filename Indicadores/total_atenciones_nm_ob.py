@@ -531,7 +531,7 @@ def update_total_atenciones_nm_ob(pathname, search):
             color_continuous_scale=BAR_COLOR_SCALE,
         )
         fig = style_horizontal_bar(fig, height=320)
-        msg_fig = f"{bar_df['Atenciones'].sum():,} atenciones en {bar_df.shape[0]} diagnósticos."
+        msg_fig = f"{bar_df['Atenciones'].sum():,} atenciones en {bar_df.shape[0]} diagnósticos. Los gráficos no contemplan atenciones por procedimientos"
     fig.update_layout(
         xaxis_title="Atenciones",
         yaxis_title="Diagnóstico",

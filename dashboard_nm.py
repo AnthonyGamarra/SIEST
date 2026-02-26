@@ -653,6 +653,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         },
     ]
     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
+
+    CRED_CARD_TEMPLATE = [
+        {
+            "title": "Total atenciones de control de crecimiento y desarrollo (CRED)",
+            "stat_key": "total_cred_atenciones",
+            "border_color": BRAND,
+            "table_key": "atenciones_cred_por_sub_act",
+            "table_title": "Detalle CRED",
+        },
+    ]
+    build_cred_cards = create_cards_builder(CRED_CARD_TEMPLATE)
     
 
     DEFAULT_TIPO_ASEGURADO = 'Todos'
@@ -842,7 +853,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
             ("atenciones", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom,ce.acto_med, ce.doc_paciente
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -858,6 +869,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE cod_centro = :codcas
                         AND cod_servicio ='F21'
+                        AND cod_actividad = 'B1'
                         AND ce.cod_subactividad in ('007', '480', '643','694','417', '418', '127', '008','040')
                         AND (
                                 CASE 
@@ -865,6 +877,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                                     ELSE '1'
                                 END
                                 ) IN {codasegu}
+                    UNION ALL
+                    
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    WHERE ce.cod_centro = :codcas
+                    AND ce.cod_actividad ='96'
+                    AND ce.cod_servicio ='F21'
+                    AND ce.cod_subactividad ='127'
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
             """),
             params.copy()),
             ("prenatal", text(f"""
@@ -884,6 +916,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='F21'
+                        AND cod_actividad = 'B1'
                         AND ce.cod_subactividad in ('007', '480', '643', '008')
                         AND (
                                 CASE 
@@ -910,6 +943,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='F21'
+                        AND cod_actividad = 'B1'
                         AND ce.cod_subactividad ='694'
                         AND (
                                 CASE 
@@ -983,6 +1017,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='F21'
+                        AND ce.cod_actividad = 'B1'
                         AND ce.cod_subactividad ='040'
                         AND (
                                 CASE 
@@ -1016,15 +1051,19 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     LEFT JOIN dwsge.sgss_cmcas10 AS ca
                         ON ce.cod_oricentro = ca.oricenasicod
                         AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND ce.cod_subactividad in ('079', '078', '685','724','416')
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
+                    WHERE ce.cod_centro = :codcas
+                    AND ce.cod_servicio = 'E21'
+                    AND (
+                            (ce.cod_actividad = 'A1' AND ce.cod_subactividad IN ('079','078','685'))
+                            OR
+                            (ce.cod_actividad = 'B1' AND ce.cod_subactividad IN ('724','416'))
+                        )
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu}
             """),
             params.copy()),
             ("domiciliaria", text(f"""
@@ -1157,6 +1196,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE cod_centro = :codcas
                         AND cod_servicio ='F31'
+                        AND cod_actividad ='B1'
                         AND ce.cod_subactividad in ('050', '056', '093', '322','471','609','692','693','975')
                         AND (
                                 CASE 
@@ -1605,6 +1645,68 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "queries": queries,
         }
 
+    def build_queries_cred(anio_str, periodo_str, params):
+        codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
+        queries = [
+            ("cred_total", text(f"""
+                        WITH base AS (
+                            SELECT *,
+                                (anio_edad::int * 12 + meses::int) AS edad_meses
+                            FROM dwsge.dwe_consulta_externa_no_medicas_2026_01 ce
+                            LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                            ON ce.cod_oricentro = ca.oricenasicod
+                            AND ce.cod_centro = ca.cenasicod
+                        ),
+                                
+                        clasificado AS (
+                            SELECT *,
+                                CASE
+                                    WHEN edad_meses = 0 THEN 1
+                                    WHEN edad_meses BETWEEN 1 AND 11 THEN 2
+                                    WHEN edad_meses BETWEEN 12 AND 23 THEN 3
+                                    WHEN edad_meses BETWEEN 24 AND 35 THEN 4
+                                    WHEN edad_meses BETWEEN 36 AND 47 THEN 5
+                                    WHEN edad_meses BETWEEN 48 AND 59 THEN 6
+                                    WHEN edad_meses BETWEEN 60 AND 143 THEN 7
+                                    WHEN edad_meses BETWEEN 144 AND 215 THEN 8
+                                    ELSE 99
+                                END AS orden_edad,
+
+                                CASE
+                                    WHEN edad_meses = 0 THEN '0-28 días'
+                                    WHEN edad_meses BETWEEN 1 AND 11 THEN '29 días < 1 año'
+                                    WHEN edad_meses BETWEEN 12 AND 23 THEN '1 a <2'
+                                    WHEN edad_meses BETWEEN 24 AND 35 THEN '2 a <3'
+                                    WHEN edad_meses BETWEEN 36 AND 47 THEN '3 a <4'
+                                    WHEN edad_meses BETWEEN 48 AND 59 THEN '4 a <5'
+                                    WHEN edad_meses BETWEEN 60 AND 143 THEN '5 a <12'
+                                    WHEN edad_meses BETWEEN 144 AND 215 THEN '12 a <18'
+                                    ELSE 'Fuera de rango'
+                                END AS actespnom
+                            FROM base
+                        )
+
+                        SELECT
+                            *
+                        FROM clasificado
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio = 'F11'
+                        AND cod_actividad ='B1'
+                        AND cod_subactividad in ('382','384')
+                        AND (
+                                CASE 
+                                    WHEN cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
+        ]
+        return {
+            "queries": queries,
+        }
+
+
 
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
         if not periodo or not codcas or not anio:
@@ -1650,6 +1752,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_enfermeria_otros_df = results.get("enfermeria_otros", pd.DataFrame())
         atenciones_prev_anemia_df = results.get("enfermeria_prev_anemia", pd.DataFrame())
 
+
         def summarize_sub_activities(frame):
             if frame.empty or 'actespnom' not in frame:
                 return pd.DataFrame(columns=['agrupador', 'counts'])
@@ -1692,6 +1795,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())       
         atenciones_proc_diag_df = results.get("proc_diag_total", pd.DataFrame())
 
+        
+        atenciones_cred_df = results.get("cred_total", pd.DataFrame())
+
 
         def resolve_nombre_centro(dataframes):
             def first_valid(series):
@@ -1729,6 +1835,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_enfermeria_cronicas_am = len(atenciones_cronicas_am_df)
         total_enfermeria_otros = len(atenciones_enfermeria_otros_df)
         total_enfermeria_prev_anemia = len(atenciones_prev_anemia_df)
+        total_atenciones_cred = len(atenciones_cred_df)
 
         atenciones_prenatal_df_agru = summarize_sub_activities(atenciones_prenatal_df)
         atenciones_familiar_df_agru = summarize_sub_activities(atenciones_familiar_df)
@@ -1748,6 +1855,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_cronicas_am_df_agru = summarize_sub_activities(atenciones_cronicas_am_df)
         atenciones_enfermeria_otros_df_agru = summarize_sub_activities(atenciones_enfermeria_otros_df)
         atenciones_prev_anemia_df_agru = summarize_sub_activities(atenciones_prev_anemia_df)
+        atenciones_cred_df_agru = summarize_sub_activities(atenciones_cred_df)
 
 
 
@@ -1778,6 +1886,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_psicologia_df,
             atenciones_trasocial_df,
             atenciones_proc_diag_df,
+            atenciones_cred_df,    
             
         ])
 
@@ -1808,7 +1917,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_psicologia_medicos': total_psicologia_medicos,
             'total_trasocial_atenciones': total_atenciones_trasocial_df,
             'total_psicologia_procedimiento_terapeutico':total_atenciones_proc_tera_df,
-            'total_psicologia_procedimiento_diagnostico':total_proc_diag_df
+            'total_psicologia_procedimiento_diagnostico':total_proc_diag_df,
+            'total_cred_atenciones': total_atenciones_cred,
 
         }
 
@@ -1828,6 +1938,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'enfermeria_cronicas_am_por_sub_act': atenciones_cronicas_am_df_agru,
             'enfermeria_otros_por_sub_act': atenciones_enfermeria_otros_df_agru,
             'enfermeria_prev_anemia_por_sub_act': atenciones_prev_anemia_df_agru,
+            'atenciones_cred_por_sub_act': atenciones_cred_df_agru,
         }
 
         return {
@@ -1851,15 +1962,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     def load_dashboard_data_psicologia(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_psicologia, tipo_asegurado_value)
 
-    def load_dashboard_data_trasocial(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
-        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_trasocial, tipo_asegurado_value)
-
     # if 'build_trasocial_cards' not in locals():
     #     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
     
     def load_dashboard_data_trasocial(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
         return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_trasocial, tipo_asegurado_value)
 
+    def load_dashboard_data_cred(periodo, anio, codcas, engine, tipo_asegurado_value=DEFAULT_TIPO_ASEGURADO):
+        return _load_dashboard_data(periodo, anio, codcas, engine, build_queries_cred, tipo_asegurado_value)
 
     DASHBOARD_TABS = [
         TabConfig(
@@ -1969,6 +2079,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             charts_container_id='charts-container-trasocial',
             data_loader=load_dashboard_data_trasocial,
             cards_builder=build_trasocial_cards
+        ),
+        TabConfig(
+            key="cred",
+            label="CRED",
+            value='tab-cred',
+            filter_ids=FilterIds(
+                periodo='filter-periodo-cred',
+                anio='filter-anio-cred',
+                tipo='filter-tipo-asegurado-cred'
+            ),
+            search_button_id='search-button-cred',
+            download_button_id='download-button-cred',
+            download_component_id='download-dataframe-csv-cred',
+            back_button_id='back-button-cred',
+            summary_container_id='summary-container-cred',
+            charts_container_id='charts-container-cred',
+            data_loader=load_dashboard_data_cred,
+            cards_builder=build_cred_cards
         )
     ]
 
@@ -2008,6 +2136,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             ("Atención en prevención y control de la anemia", stats.get('total_enfermeria_prev_anemia', 0)),
             ("Total atenciones psicología", stats.get('total_psicologia_atenciones', 0)),
             ("Total atenciones trabajo social", stats.get('total_trasocial_atenciones', 0)),
+            ("Total atenciones cred", stats.get('total_cred_atenciones', 0)),
         ]
         if include_citas:
             indicadores_rows.append(("Total Citados", stats.get('total_citados', 0)))
@@ -2050,7 +2179,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         html.Div([
                             html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
                             html.H2(
-                                "Consulta externa - No médicas",
+                                "Consulta externa - No médicas (En proceso de validación)",
                                 style={
                                     'color': BRAND,
                                     'fontFamily': FONT_FAMILY,
