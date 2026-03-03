@@ -1041,12 +1041,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                 AND a.cod_actividad = '91'
                                 AND a.cod_variable = '001'
                                 AND a.clasificacion in (2,4,6)
-                                AND (
-                                        CASE 
-                                            WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                            ELSE '1'
-                                        END
-                                        ) IN {codasegu}
                                 GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo,CASE WHEN a.cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                 ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                 WHERE c.medico = '1'::bigint
@@ -1239,12 +1233,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                 AND cod_servicio= 'A91'
                                 AND cod_actividad = '91'
                                 AND a.clasificacion in (2,4,6)
-                                AND (
-                                        CASE 
-                                            WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                            ELSE '1'
-                                        END
-                                        ) IN {codasegu}
                                 GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                 ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                 WHERE c.medico = '1'::bigint
@@ -1439,12 +1427,6 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         AND cod_subactividad = '002'
                                         AND a.cod_actividad ='91'
                                         AND a.clasificacion in (2,4,6)
-                                        AND (
-                                                CASE 
-                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                                    ELSE '1'
-                                                END
-                                                ) IN {codasegu}
                                         GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                         ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                         WHERE c.medico = '1'::bigint
@@ -1640,12 +1622,6 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         AND a.cod_actividad = '91'
                                         AND a.cod_subactividad = '003'
                                         AND a.clasificacion in (2,4,6)
-                                        AND (
-                                                CASE 
-                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                                    ELSE '1'
-                                                END
-                                                ) IN {codasegu}
                                         GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                         ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                         WHERE c.medico = '1'::bigint
@@ -1845,12 +1821,6 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         AND a.cod_subactividad = '070'
                                         AND a.cod_servicio IN ('AB1', 'AM6')
                                         AND a.clasificacion in (2,4,6)
-                                        AND (
-                                                CASE 
-                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                                    ELSE '1'
-                                                END
-                                                ) IN {codasegu}
                                         GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                         ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                         WHERE c.medico = '1'::bigint
@@ -2052,12 +2022,6 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                         AND a.cod_subactividad = '682'
                                         AND a.cod_servicio = 'L16'
                                         AND a.clasificacion in (2,4,6)
-                                        AND (
-                                                CASE 
-                                                    WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                                    ELSE '1'
-                                                END
-                                                ) IN {codasegu}
                                         GROUP BY a.cod_centro, a.dni_medico, ag.agrupador, a.periodo, CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                         ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                         WHERE c.medico = '1'::bigint
@@ -2205,7 +2169,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             df8.rename(columns={"cantidad": "counts"}) if not df8.empty else pd.DataFrame(columns=['agrupador', 'counts'])
         )
 
-        total_medicos = atenciones_df['dni_medico'].nunique() if 'dni_medico' in atenciones_df else 0
+        total_medicos = medicos_agr['dni_medico'].nunique() if 'dni_medico' in medicos_agr else 0
         medicos_por_agrupador = (
             medicos_agr.groupby('agrupador')['dni_medico']
             .nunique()

@@ -330,6 +330,39 @@ def register_routes(app):
 			return redirect(f'/dashboard_nm/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+	
+
+	@bp.route('/dashboard_odo', endpoint='dashboard_odo_redirect')
+	@login_required
+	def dashboard_odo_redirect():
+		code = ""
+		if current_user.role == 'admin':
+			code =  request.args.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_odo/{token}/')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_odo/')
+	@login_required
+	def dashboard_odo_index():
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '') 
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_odo/{token}/')
+		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
+		return redirect(url_for('main.index'))
+
+
+
+
 
 	@bp.route('/diag_cap_admin')
 	@login_required
@@ -407,6 +440,7 @@ def register_routes(app):
 		center_name = get_center_name_by_code(code)
 		medical_url = f'/dashboard/{token}/'
 		non_medical_url = f'/dashboard_nm/{token}/'
+		odo_medical_url = f'/dashboard_odo/{token}/'
 		return render_template(
 			'Ce.html',
 			show_modules=False,
@@ -415,6 +449,7 @@ def register_routes(app):
 			center_name=center_name,
 			medical_url=medical_url,
 			non_medical_url=non_medical_url,
+			odo_medical_url=odo_medical_url,
 		)
 
 	@bp.route('/dashboard_eme_prioridad_<prioridad>/<codcas>')
