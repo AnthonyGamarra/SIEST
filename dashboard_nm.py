@@ -836,7 +836,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         try:
             engine = create_engine(
                 'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                pool_size=10,
+                pool_size=20,
                 max_overflow=20,
                 pool_pre_ping=True,
                 pool_recycle=3600,
@@ -868,9 +868,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         ON ce.cod_oricentro = ca.oricenasicod
                         AND ce.cod_centro = ca.cenasicod
                         WHERE cod_centro = :codcas
-                        AND cod_servicio ='F21'
+                        AND ((cod_servicio ='F21'
                         AND cod_actividad = 'B1'
-                        AND ce.cod_subactividad in ('007', '480', '643','694','417', '418', '127', '008','040')
+                        AND ce.cod_subactividad in ('694','417', '418','040','127'))
+                        OR (cod_servicio ='F21'
+                        AND cod_actividad = 'B1' AND cod_subactividad in ('007', '480', '643', '008') AND ce.cod_tipo_gravidez = '1'))
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -917,6 +919,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='F21'
                         AND cod_actividad = 'B1'
+                        AND cod_tipo_gravidez = '1'
                         AND ce.cod_subactividad in ('007', '480', '643', '008')
                         AND (
                                 CASE 
@@ -1083,6 +1086,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='E21'
+                        AND ce.cod_actividad = 'A1'
                         AND ce.cod_subactividad in ('079', '078')
                         AND (
                                 CASE 
@@ -1109,6 +1113,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='E21'
+                        AND ce.cod_actividad = 'A1'
                         AND ce.cod_subactividad ='685'
                         AND (
                                 CASE 
@@ -1135,6 +1140,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='E21'
+                        AND ce.cod_actividad = 'B1'
                         AND ce.cod_subactividad in ('724')
                         AND (
                                 CASE 
@@ -1161,6 +1167,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_centro = ca.cenasicod
                         WHERE ce.cod_centro = :codcas
                         AND ce.cod_servicio ='E21'
+                        AND ce.cod_actividad = 'B1'
                         AND ce.cod_subactividad ='416'
                         AND (
                                 CASE 
@@ -1515,12 +1522,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                                     AND a.cod_servicio ='E21'
                                     AND a.cod_actividad ='B1'
                                     AND a.cod_subactividad ='005'
-                                    AND (
-                                            CASE 
-                                                WHEN a.cod_tipo_paciente = '4' THEN '2'
-                                                ELSE '1'
-                                            END
-                                            ) IN {codasegu}
                                     GROUP BY a.cod_centro, a.dni_medico, a.periodo,CASE WHEN a.cod_tipo_paciente = '4' THEN '2' ELSE '1' END
                                     ORDER BY a.dni_medico, a.periodo, (count(*))) b) c
                 WHERE c.medico = '1'::bigint
@@ -1777,6 +1778,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
 
         atenciones_psicologia_df = results.get("psicologia_total", pd.DataFrame())
+        total_medicos_psicologia_df=results.get("medicos_agrup", pd.DataFrame())
         patient_stmt = builder_payload.get("primeras_consultas_query")
         primeras_consultas_df = (
             pd.read_sql(patient_stmt, engine, params={"codcas": codcas, "periodo_sql": periodo_sql})
@@ -1788,7 +1790,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_psicologia_atenciones = len(atenciones_psicologia_df)
         total_psicologia_horas_efectivas = sum_numeric_column(horas_efectivas_df, ['horas_efec_def'])
         total_psicologia_horas_programadas = sum_numeric_column(horas_programadas_df, ['total_horas'])
-        total_psicologia_medicos = atenciones_psicologia_df['dni_medico'].nunique() if 'dni_medico' in atenciones_psicologia_df else 0
+        total_psicologia_medicos = total_medicos_psicologia_df['dni_medico'].nunique() if 'dni_medico' in total_medicos_psicologia_df else 0
 
         atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
 

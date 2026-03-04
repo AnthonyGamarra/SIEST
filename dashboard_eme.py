@@ -471,8 +471,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     import time
                     engine = create_engine(
                         'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=3,
-                        max_overflow=2,
+                        pool_size=20,
+                        max_overflow=10,
                         pool_pre_ping=True,
                         pool_recycle=1800,
                         pool_timeout=30,

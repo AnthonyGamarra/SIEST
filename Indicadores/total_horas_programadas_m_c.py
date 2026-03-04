@@ -357,6 +357,7 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
             OR ce.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
         )
     AND ce.cod_servicio= 'A91'
+    AND ce.cod_actividad ='91'
     """
 
 # Registrar la página con el layout explícito para evitar NoLayoutException

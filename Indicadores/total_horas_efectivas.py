@@ -365,7 +365,8 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
         LEFT JOIN dwsge.dim_agrupador AS ag ON ce.cod_agrupador = ag.cod_agrupador
         WHERE ce.cod_centro = '{codcas}'
         AND ce.cod_actividad = '91'
-        AND ce.cod_variable = '001';
+        AND ce.cod_variable = '001'
+        AND ce.ate > 0;
 """
 
 # Registrar la página con el layout explícito para evitar NoLayoutException

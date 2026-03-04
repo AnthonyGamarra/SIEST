@@ -372,6 +372,7 @@ def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown, tipo
         WHERE ce.cod_centro = '{codcas}'
           AND ce.clasificacion in (2,4,6)
           AND ce.cod_servicio= 'A91'
+          AND ce.cod_actividad ='91'
           AND (
                             CASE 
                                 WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -484,6 +485,7 @@ def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown, tip
         WHERE ce.cod_centro = '{codcas}'
           AND ce.clasificacion in (2,4,6)
           AND ce.cod_servicio= 'A91'
+          AND ce.cod_actividad ='91'
           AND (
                             CASE 
                                 WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -643,6 +645,7 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown
         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
         WHERE ce.cod_centro = '{codcas}'
           AND cod_servicio= 'A91'
+          AND cod_actividad ='91'
           AND ce.clasificacion in (2,4,6)
           AND (
                             CASE 

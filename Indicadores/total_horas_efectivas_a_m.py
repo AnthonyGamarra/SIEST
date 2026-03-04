@@ -331,7 +331,14 @@ layout = html.Div([
 # Conexión DB
 def create_connection():
     try:
-        engine = create_engine('postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA')
+        engine = create_engine(
+            'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+            pool_size=20,
+            max_overflow=10,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            pool_timeout=30
+        )
         with engine.connect():
             pass
         return engine
@@ -365,6 +372,7 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
         LEFT JOIN dwsge.dim_agrupador AS ag ON ce.cod_agrupador = ag.cod_agrupador
         WHERE ce.cod_centro = '{codcas}'
           AND a.actespcod = '002' 
+          AND ce.ate>0
 """
 
 # Registrar la página con el layout explícito para evitar NoLayoutException
@@ -380,12 +388,10 @@ register_page(
     Output("he-store-data_a_m", "data"),
     Input("he-page-url_a_m", "pathname"),
     Input("he-page-url_a_m", "search"),
-    State("filter-periodo", "value"),
-    State("filter-anio", "value"),
     prevent_initial_call=True
 )
-def load_data(pathname, search, periodo_dropdown, anio_dropdown):
-    codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)
+def load_data(pathname, search):
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, None, None)
     if not codcas or not periodo or not anio:
         return None
     engine = create_connection()
@@ -662,3 +668,24 @@ def update_grid(data):
     }]
 
     return df.to_dict("records"), column_defs, pinned
+
+# Callback de descarga CSV
+@callback(
+    Output("he-download_a_m", "data"),
+    Input("he-download-btn_a_m", "n_clicks"),
+    State("he-store-data_a_m", "data"),
+    State("he-page-url_a_m", "pathname"),
+    State("he-page-url_a_m", "search"),
+    prevent_initial_call=True
+)
+def download_csv(n_clicks, data, pathname, search):
+    if not data or not pathname:
+        return None
+    
+    codcas, periodo, anio = get_codcas_periodo(pathname, search, None, None)
+    if not codcas or not periodo or not anio:
+        return None
+    
+    df = pd.DataFrame(data)
+    filename = f"horas_efectivas_a_m_{codcas}_{anio}_{periodo}.csv"
+    return dcc.send_data_frame(df.to_csv, filename, index=False, encoding="utf-8-sig", sep="|")

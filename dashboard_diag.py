@@ -215,7 +215,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         try:
             engine = create_engine(
                 "postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA",
-                pool_size=10,
+                pool_size=20,
                 max_overflow=20,
                 pool_pre_ping=True,
                 pool_recycle=3600,
