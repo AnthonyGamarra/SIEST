@@ -3,6 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from flask import current_app
 from bi import get_bi_url
 from backend.models import dashboard_code_for_user
@@ -11,6 +12,13 @@ from backend.centro_asistencial import get_centro_asistencial
 from backend.centro_asistencial import get_centro_asistencial_by_code_red
 from backend.centro_asistencial import getNombreCentroAsistencial
 from backend.centro_asistencial import get_redes_asistenciales
+from backend.models import (
+	SurveyResponse,
+	SurveyModule,
+	SurveyCategory,
+	SurveySubcategory,
+	SurveyVariable,
+)
 
 
 def _format_select_options(df, code_key, label_key):
@@ -33,6 +41,92 @@ def _format_select_options(df, code_key, label_key):
 		if code_str and label_str:
 			formatted.append({'code': code_str, 'label': label_str})
 	return formatted
+
+
+def _get_center_name_by_code(code):
+	if not code:
+		return ''
+	try:
+		df = get_centro_asistencial()
+		matches = df[df['cenasicod'].astype(str) == str(code)]
+		if not matches.empty:
+			return str(matches.iloc[0]['cenasides'])
+	except Exception as exc:
+		current_app.logger.warning('No se pudo obtener el nombre del centro %s: %s', code, exc)
+	return ''
+
+
+def _load_survey_structure():
+	modules = (
+		SurveyModule.query.options(
+			joinedload(SurveyModule.categorias)
+			.joinedload(SurveyCategory.subcategorias)
+			.joinedload(SurveySubcategory.variables)
+		)
+		.order_by(SurveyModule.nombre.asc())
+		.all()
+	)
+	structure = {}
+	for module in modules:
+		module_key = str(module.id)
+		module_entry = {
+			'id': module.id,
+			'label': (module.nombre or f'Módulo {module.id}').strip(),
+			'areas': {}
+		}
+		for category in module.categorias or []:
+			if getattr(category, 'active', 1) != 1:
+				# Skip inactive categories so they don't appear in the survey
+				continue
+			area_key = str(category.id)
+			area_entry = {
+				'id': category.id,
+				'label': (category.nombre or f'Categoría {category.id}').strip(),
+				'description': 'Complete la encuesta para esta categoría.',
+				'categories': []
+			}
+			for subcat in category.subcategorias or []:
+				if not subcat:
+					continue
+				if getattr(subcat, 'active', 1) != 1:
+					# Skip inactive subcategories
+					continue
+				subcat_key = str(subcat.id)
+				variables = []
+				for variable in subcat.variables or []:
+					if getattr(variable, 'active', 1) != 1:
+						# Skip inactive variables
+						continue
+					variables.append({
+						'id': str(variable.id),
+						'label': (variable.nombre or f'Variable {variable.id}').strip() or f'Variable {variable.id}'
+					})
+				if variables:
+					area_entry['categories'].append({
+						'id': subcat_key,
+						'label': (subcat.nombre or f'Subcategoría {subcat.id}').strip(),
+						'variables': variables,
+					})
+			if area_entry['categories']:
+				module_entry['areas'][area_key] = area_entry
+		if module_entry['areas']:
+			structure[module_key] = module_entry
+	return structure
+
+
+def _build_survey_defaults(structure):
+	section_defaults = {}
+	area_defaults = {}
+	for section_key, section in structure.items():
+		areas = section.get('areas', {}) or {}
+		if areas:
+			first_area = next(iter(areas.keys()))
+			section_defaults[section_key] = first_area
+			area_defaults[section_key] = {}
+			for area_key, area in areas.items():
+				categories = area.get('categories', []) or []
+				area_defaults[section_key][area_key] = categories[0]['id'] if categories else ''
+	return section_defaults, area_defaults
 
 
 def register_routes(app):
@@ -76,6 +170,103 @@ def register_routes(app):
 			red_options=red_options,
 			selected_codcas=selected_codcas,
 			selected_code_red=selected_code_red,
+		)
+
+	@bp.route('/encuestas/', methods=['GET', 'POST'])
+	@login_required
+	def survey_module():
+		survey_structure = _load_survey_structure()
+		if not survey_structure:
+			flash('No hay módulos configurados para la encuesta.', 'warning')
+			return redirect(url_for('main.index'))
+
+		section_defaults, area_defaults = _build_survey_defaults(survey_structure)
+		selected_section = request.values.get('section') or next(iter(survey_structure.keys()))
+		if selected_section not in survey_structure:
+			selected_section = next(iter(survey_structure.keys()))
+		section_data = survey_structure[selected_section]
+
+		areas = section_data.get('areas', {})
+		if not areas:
+			flash('El módulo seleccionado no tiene categorías configuradas.', 'warning')
+			return redirect(url_for('main.index'))
+		section_default_area = section_defaults.get(selected_section, next(iter(areas)))
+		selected_area = request.values.get('area') or section_default_area
+		if selected_area not in areas:
+			selected_area = section_default_area
+		area_data = areas[selected_area]
+
+		categories = area_data.get('categories', [])
+		if not categories:
+			flash('No hay subcategorías configuradas para esta categoría.', 'warning')
+			return redirect(url_for('main.index'))
+
+		default_category = area_defaults.get(selected_section, {}).get(selected_area, categories[0]['id'])
+		selected_category = request.values.get('category') or default_category
+		category_data = next((c for c in categories if c['id'] == selected_category), None)
+		if not category_data:
+			category_data = categories[0]
+			selected_category = category_data['id']
+
+		center_code = (request.values.get('codcas') or getattr(current_user, 'codcas', '') or '').strip()
+		center_label = _get_center_name_by_code(center_code)
+
+		def _build_response_entries():
+			entries = []
+			for variable in category_data.get('variables', []):
+				status_field = f"status__{variable['id']}"
+				status_value = request.form.get(status_field)
+				if status_value not in ('valid', 'invalid'):
+					continue
+				comment = (request.form.get(f"comment__{variable['id']}") or '').strip()
+				entry = SurveyResponse(
+					user_id=current_user.id,
+					user_username=current_user.username,
+					user_fullname=f"{current_user.name or ''} {current_user.lastname or ''}".strip() or current_user.username,
+					user_role=current_user.role or 'user',
+					codcas=center_code or current_user.codcas,
+					section=selected_section,
+					area=selected_area,
+					category_id=category_data['id'],
+					category_label=category_data['label'],
+					variable_id=variable['id'],
+					variable_label=variable['label'],
+					status=status_value,
+					comment=comment,
+				)
+				entries.append(entry)
+			return entries
+
+		if request.method == 'POST':
+			entries = _build_response_entries()
+			if not entries:
+				flash('Selecciona al menos una variable y marca Válido o No válido.', 'warning')
+			else:
+				db.session.add_all(entries)
+				db.session.commit()
+				flash('Respuestas registradas correctamente.', 'success')
+				return redirect(url_for(
+					'main.survey_module',
+					section=selected_section,
+					area=selected_area,
+					category=selected_category,
+					codcas=center_code,
+				))
+
+		return render_template(
+			'survey_module.html',
+			survey_structure=survey_structure,
+			section_defaults=section_defaults,
+			area_defaults=area_defaults,
+			selected_section=selected_section,
+			selected_area=selected_area,
+			selected_category=selected_category,
+			section_data=section_data,
+			area_data=area_data,
+			category_data=category_data,
+			center_code=center_code,
+			center_label=center_label,
+			show_modules=False,
 		)
 
 
@@ -408,18 +599,6 @@ def register_routes(app):
 		flash(warning_msg, 'warning')
 		return redirect(url_for('main.index'))
 
-	def get_center_name_by_code(code):
-		if not code:
-			return ''
-		try:
-			df = get_centro_asistencial()
-			matches = df[df['cenasicod'].astype(str) == str(code)]
-			if not matches.empty:
-				return matches.iloc[0]['cenasides']
-		except Exception as exc:
-			current_app.logger.warning('No se pudo obtener el nombre del centro %s: %s', code, exc)
-		return ''
-
 	@bp.route('/ce/', methods=['GET'])
 	@login_required
 	def ce_index():
@@ -437,7 +616,7 @@ def register_routes(app):
 		if not code:
 			flash('El código seleccionado es inválido o expiró.', 'warning')
 			return redirect(url_for('main.index'))
-		center_name = get_center_name_by_code(code)
+		center_name = _get_center_name_by_code(code)
 		medical_url = f'/dashboard/{token}/'
 		non_medical_url = f'/dashboard_nm/{token}/'
 		odo_medical_url = f'/dashboard_odo/{token}/'

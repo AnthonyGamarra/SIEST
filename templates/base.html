@@ -276,6 +276,19 @@
           </a>
           {% endif %}
 
+
+          {% set survey_codcas = request.args.get('codcas') or selected_codcas|default('') %}
+          <a
+            href="{{ url_for('main.survey_module') }}{% if survey_codcas %}?codcas={{ survey_codcas }}{% endif %}"
+            class="module"
+          >
+            <img
+              src="{{ url_for('static', filename='Documento.png') }}"
+              alt="Encuestas"
+            />
+            <span>Encuestas de conformidad</span>
+          </a>
+
           <!-- Módulo 6: reportes LOGS - ADMIN -->
           {% if current_user.role == 'admin' %}
           <a href="{{ url_for('logs.view_logs') }}" class="module">

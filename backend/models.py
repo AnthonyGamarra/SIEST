@@ -121,3 +121,92 @@ class User(UserMixin, db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+class SurveyResponse(db.Model):
+    """Stores the validation outcome for each survey variable a user reviews."""
+
+    __tablename__ = 'survey_responses'
+    __table_args__ = {'schema': 'public'}
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('public.users.id'), nullable=False)
+    user_username = db.Column(db.String(50), nullable=False)
+    user_fullname = db.Column(db.String(120), nullable=False)
+    user_role = db.Column(db.String(20), nullable=False)
+    codcas = db.Column(db.String(50), nullable=True)
+    section = db.Column(db.String(40), nullable=False)
+    area = db.Column(db.String(40), nullable=False)
+    category_id = db.Column(db.String(80), nullable=False)
+    category_label = db.Column(db.String(160), nullable=False)
+    variable_id = db.Column(db.String(80), nullable=False)
+    variable_label = db.Column(db.String(160), nullable=False)
+    status = db.Column(db.String(10), nullable=False)
+    comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    user = db.relationship('User', backref=db.backref('survey_responses', lazy=True))
+
+
+class SurveyModule(db.Model):
+    __tablename__ = 'modulo'
+    __table_args__ = {'schema': 'public'}
+
+    id = db.Column('id_modulo', db.Integer, primary_key=True)
+    nombre = db.Column('nombre_modulo', db.String(100), nullable=False)
+    active = db.Column(db.Integer, nullable=False, server_default='1', default=1)
+
+    categorias = db.relationship(
+        'SurveyCategory',
+        back_populates='modulo',
+        order_by='SurveyCategory.nombre',
+        lazy='selectin'
+    )
+
+
+class SurveyCategory(db.Model):
+    __tablename__ = 'categoria'
+    __table_args__ = {'schema': 'public'}
+
+    id = db.Column('id_categoria', db.Integer, primary_key=True)
+    modulo_id = db.Column('id_modulo', db.Integer, db.ForeignKey('public.modulo.id_modulo'), nullable=False)
+    nombre = db.Column('nombre_categoria', db.String(100), nullable=False)
+    active = db.Column(db.Integer, nullable=False, server_default='1', default=1)
+
+    modulo = db.relationship('SurveyModule', back_populates='categorias')
+    subcategorias = db.relationship(
+        'SurveySubcategory',
+        back_populates='categoria',
+        order_by='SurveySubcategory.nombre',
+        lazy='selectin'
+    )
+
+
+class SurveySubcategory(db.Model):
+    __tablename__ = 'subcategoria'
+    __table_args__ = {'schema': 'public'}
+
+    id = db.Column('id_subcategoria', db.Integer, primary_key=True)
+    categoria_id = db.Column('id_categoria', db.Integer, db.ForeignKey('public.categoria.id_categoria'), nullable=False)
+    nombre = db.Column('nombre_subcategoria', db.String(150), nullable=True)
+    active = db.Column(db.Integer, nullable=False, server_default='1', default=1)
+
+    categoria = db.relationship('SurveyCategory', back_populates='subcategorias')
+    variables = db.relationship(
+        'SurveyVariable',
+        back_populates='subcategoria',
+        order_by='SurveyVariable.nombre',
+        lazy='selectin'
+    )
+
+
+class SurveyVariable(db.Model):
+    __tablename__ = 'variable'
+    __table_args__ = {'schema': 'public'}
+
+    id = db.Column('id_variable', db.Integer, primary_key=True)
+    subcategoria_id = db.Column('id_subcategoria', db.Integer, db.ForeignKey('public.subcategoria.id_subcategoria'), nullable=False)
+    nombre = db.Column('nombre_variable', db.Text, nullable=True)
+    active = db.Column(db.Integer, nullable=False, server_default='1', default=1)
+
+    subcategoria = db.relationship('SurveySubcategory', back_populates='variables')
