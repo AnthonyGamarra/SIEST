@@ -11,7 +11,7 @@ def encode_code(code: str) -> str:
     s = get_serializer()
     return s.dumps(code)
 
-def decode_code(token: str, max_age=3600):
+def decode_code(token: str, max_age=8*3600):
     s = get_serializer()
     try:
         return s.loads(token, max_age=max_age)

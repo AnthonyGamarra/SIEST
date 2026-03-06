@@ -1178,13 +1178,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                     html.Div([
                         html.Div([
                             html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
-                            html.H2(
-                                "Consulta externa - Odontológicas (En desarrollo- Por validar)",
-                                style={
-                                    'color': BRAND,
-                                    'fontFamily': FONT_FAMILY,
-                                    'fontSize': '26px',
-                                    'fontWeight': 800,
+                            html.H2([
+                                "Consulta externa - Odontológicas",
+                                html.Span(
+                                    " (En desarrollo- Por validar)",
+                                    style={'color': '#dc3545'}
+                                )
+                            ], style={
+                                'color': BRAND,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '26px',
+                                'fontWeight': 800,
                                     'margin': '0'
                                 }
                             ),

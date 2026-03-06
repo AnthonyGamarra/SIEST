@@ -2181,6 +2181,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
         total_horas_efectivas = float(horas_efectivas_df['horas_efec_def'].sum()) if 'horas_efec_def' in horas_efectivas_df else 0
         total_horas_programadas = float(horas_programadas_df['total_horas'].sum()) if 'total_horas' in horas_programadas_df else 0
 
+
         horas_programadas_por_agrupador = (
             horas_programadas_df.groupby('agrupador', dropna=False)['total_horas']
             .sum()
@@ -2188,6 +2189,29 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             .sort_values('counts', ascending=False)
             if 'agrupador' in horas_programadas_df else pd.DataFrame(columns=['agrupador', 'counts'])
         )
+
+        if total_horas_efectivas > total_horas_programadas:
+            total_horas_efectivas = total_horas_programadas
+        
+        # Limitar horas efectivas por agrupador para que no superen las programadas
+        if not horas_efectivas_df_agru.empty and not horas_programadas_por_agrupador.empty:
+            # Merge para obtener ambas columnas
+            merged = horas_efectivas_df_agru.merge(
+                horas_programadas_por_agrupador[['agrupador', 'counts']], 
+                on='agrupador', 
+                how='left', 
+                suffixes=('_efectivas', '_programadas')
+            )
+            # Aplicar clip: las horas efectivas no pueden superar las programadas
+            merged['counts_efectivas'] = merged.apply(
+                lambda row: min(row['counts_efectivas'], row['counts_programadas']) 
+                if pd.notna(row['counts_programadas']) else row['counts_efectivas'], 
+                axis=1
+            )
+            # Actualizar el DataFrame original
+            horas_efectivas_df_agru = merged[['agrupador', 'counts_efectivas']].rename(
+                columns={'counts_efectivas': 'counts'}
+            ).sort_values('counts', ascending=False)
 
         total_citados = len(citados_df)
         total_desercion_citas = len(desercion_df)

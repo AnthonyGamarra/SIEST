@@ -2180,16 +2180,19 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     html.Div([
                         html.Div([
                             html.I(className="bi bi-hospital", style={'fontSize': '30px', 'color': BRAND, 'marginRight': '10px'}),
-                            html.H2(
-                                "Consulta externa - No médicas (En proceso de validación)",
-                                style={
-                                    'color': BRAND,
-                                    'fontFamily': FONT_FAMILY,
-                                    'fontSize': '26px',
-                                    'fontWeight': 800,
-                                    'margin': '0'
-                                }
-                            ),
+                            html.H2([
+                                "Consulta externa - No médicas ",
+                                html.Span(
+                                    "(En proceso de validación)",
+                                    style={'color': '#dc3545'}
+                                )
+                            ], style={
+                                'color': BRAND,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '26px',
+                                'fontWeight': 800,
+                                'margin': '0'
+                            }),
                         ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8px'}),
                         dbc.Button(
                             [html.I(className="bi bi-file-earmark-arrow-down me-2"), "Ficha técnica"],

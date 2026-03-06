@@ -500,5 +500,15 @@ def register_routes(app):
 		bi_url = get_bi_url()
 		back_url = url_for('main.index')
 		return render_template('reportes_gerenciales.html', bi_url=bi_url, show_modules=False, back_url=back_url)
+
+	@bp.route('/reportes_gerenciales/historico/', endpoint='historico_ce')
+	@login_required
+	def historico_ce():
+		back_url = url_for('main.reportes_gerenciales')
+		return render_template(
+			'historico_ce.html',
+			back_url=back_url,
+			show_modules=False,
+		)
 	
 	app.register_blueprint(bp)

@@ -1,7 +1,6 @@
 {% extends 'base.html' %}
 {% block body %}
 <style>
-  /* Variables de diseño */
   :root {
     --primary: #0064AF;
     --primary-dark: #004d8c;
@@ -14,14 +13,12 @@
     --border: #e5e7eb;
   }
 
-  /* Asegurar que nada tenga márgenes y que ocupen el alto completo */
   html, body {
     margin: 0 !important;
     padding: 0 !important;
     min-height: 100vh;
   }
 
-  /* Fondo con imagen */
   body, .main {
     background: url('{{ url_for("static", filename="76824.jpg") }}')
                 center center / cover no-repeat fixed !important;
@@ -32,15 +29,18 @@
     padding-top: 20px;
   }
 
-  /* Header con título y botón */
   .rg-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     padding: 0 20px 30px 20px;
     background: transparent;
     flex-wrap: wrap;
     gap: 15px;
+  }
+
+  .rg-heading {
+    max-width: 640px;
   }
 
   .rg-title {
@@ -48,7 +48,13 @@
     font-weight: 700;
     color: #ffffff;
     text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    margin: 0 0 8px 0;
+  }
+
+  .rg-subtitle {
     margin: 0;
+    font-size: 16px;
+    color: rgba(255,255,255,0.9);
   }
 
   .btn-back {
@@ -81,7 +87,6 @@
     transform: translateY(0);
   }
 
-  /* Contenedor de módulos */
   .modules-menu {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -92,7 +97,6 @@
     background: transparent;
   }
 
-  /* Módulos (tarjetas) */
   .modules-menu .module {
     background: rgba(255, 255, 255, 0.95);
     border: 2px solid transparent;
@@ -105,7 +109,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 15px;
+    gap: 10px;
     position: relative;
     overflow: hidden;
   }
@@ -142,15 +146,15 @@
   }
 
   .modules-menu .module img {
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     object-fit: contain;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
     transition: transform 0.3s ease;
   }
 
   .modules-menu .module-link:hover img {
-    transform: scale(1.1) rotate(-5deg);
+    transform: scale(1.08) rotate(-3deg);
   }
 
   .modules-menu .module span {
@@ -158,13 +162,18 @@
     font-weight: 600;
     color: var(--dark);
     transition: color 0.3s ease;
+    text-align: center;
+  }
+
+  .modules-menu .module small {
+    font-size: 13px;
+    color: #6b7280;
   }
 
   .modules-menu .module-link:hover span {
     color: var(--primary);
   }
 
-  /* Módulo inactivo */
   .modules-menu .module.inactive {
     background: rgba(255, 255, 255, 0.65);
     backdrop-filter: blur(8px);
@@ -194,7 +203,6 @@
     font-weight: 600;
   }
 
-  /* Visor de reportes */
   #rg-viewer {
     margin: 0 auto;
     max-width: 2000px;
@@ -254,7 +262,6 @@
     background: #f8f9fb;
   }
 
-  /* Responsive */
   @media (max-width: 768px) {
     .rg-header {
       flex-direction: column;
@@ -264,6 +271,10 @@
 
     .rg-title {
       font-size: 24px;
+    }
+
+    .rg-subtitle {
+      font-size: 14px;
     }
 
     .btn-back {
@@ -307,91 +318,55 @@
   }
 </style>
 
-<!-- Wrapper permite crecer sin tapar el header -->
-<div class="rg-wrapper position-relative d-flex flex-column"
-  style="min-height:100vh; background:transparent;">
-
-  <!-- Header -->
+<div class="rg-wrapper position-relative d-flex flex-column" style="min-height:100vh; background:transparent;">
   <div class="rg-header">
-    <h1 class="rg-title">Reportes Gerenciales</h1>
+    <div class="rg-heading">
+      <h1 class="rg-title">Histórico CE</h1>
+    </div>
     {% if back_url %}
-      <a href="{{ back_url }}" class="btn-back">← Volver a Módulos</a>
+      <a href="{{ back_url }}" class="btn-back">← Volver a Reportes</a>
     {% endif %}
   </div>
 
-  <!-- Módulos principales -->
   <div class="modules-menu">
-    <a href="{{ bi_url }}" class="module-link" data-url="{{ bi_url }}" data-title="Atenciones - CE">
+    <!-- Duplica estos bloques para agregar más módulos históricos -->
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiMjNkMTQ0MjMtMTIyYi00NjhkLThlMmMtZTg1ZDk5ZTYxM2QzIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMjNkMTQ0MjMtMTIyYi00NjhkLThlMmMtZTg1ZDk5ZTYxM2QzIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Atenciones - CE">
       <div class="module">
-        <img src="{{ url_for('static', filename='order_1420037.png') }}" alt="Atenciones">
-        <span>Atenciones - CE</span>
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Atenciones - CE">
+        <span>Resumen - CE - 2023</span>
       </div>
     </a>
 
-    <a href="https://app.powerbi.com/view?r=eyJrIjoiZDU3ODFkZjMtMDlkMi00YjgxLWE2MGYtNWRhMzA2ZWI2NmRjIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiZDU3ODFkZjMtMDlkMi00YjgxLWE2MGYtNWRhMzA2ZWI2NmRjIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Atendidos - CE">
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiMjg4MDMzNmMtMjhhZS00ODlkLWI0YjMtOWYxYTc1NWE1NzY1IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMjg4MDMzNmMtMjhhZS00ODlkLWI0YjMtOWYxYTc1NWE1NzY1IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Personal Médico">
       <div class="module">
-        <img src="{{ url_for('static', filename='shortlist_8915786.png') }}" alt="Atendidos">
-        <span>Atendidos - CE</span>
-      </div>
-    </a>
-    
-
-    <a href="https://app.powerbi.com/view?r=eyJrIjoiMTRjZjQ3ZjQtMjg2NC00YzI2LWE5YzktYmMyMmNhZDQwODhhIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMTRjZjQ3ZjQtMjg2NC00YzI2LWE5YzktYmMyMmNhZDQwODhhIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Atenciones por tópico - EME">
-      <div class="module">  
-        <img src="{{ url_for('static', filename='ambulance_3441448.png') }}" alt="Atenciones por tópico - EME">
-        <span>Atenciones por tópico - EME</span>
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Personal Médico">
+        <span>Resumen - CE - 2024</span>
       </div>
     </a>
 
-    <a href="{{ url_for('main.historico_ce') }}" class="module-link" data-open="page">
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiN2Q3OTk3YjEtOTVkYy00MjJkLWI4ZGYtNmNlODM3YTc2ZTg5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiN2Q3OTk3YjEtOTVkYy00MjJkLWI4ZGYtNmNlODM3YTc2ZTg5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Horas Programadas">
       <div class="module">
-        <img src="{{ url_for('static', filename='analytics.png') }}" alt="Histórico CE">
-        <span>Histórico CE</span>
-      </div>
-    </a>
-    
-    <a style="display: none;" href="https://app.powerbi.com/view?r=eyJrIjoiZGU0YTAxMzktMDdiMi00NDEyLThjMmYtMTQ3ZGIwMmQ0MTIyIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiZGU0YTAxMzktMDdiMi00NDEyLThjMmYtMTQ3ZGIwMmQ0MTIyIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Accidentes">
-      <div class="module">
-        <img src="{{ url_for('static', filename='work-injury_13301328.png') }}" alt="Accidentes">
-        <span>Accidentes</span>
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Horas Programadas">
+        <span>Resumen - CE - 2025</span>
       </div>
     </a>
 
     <div class="module inactive">
-      <img src="{{ url_for('static', filename='work-injury_13301328.png') }}" alt="Reportes">
-      <span>Accidentes</span>
-    </div>
-
-    <a style="display: none;"href="https://app.powerbi.com/view?r=eyJrIjoiZjJlZjk2NDgtMjdlMS00ZGRjLWJlMWMtN2QyYjJkNjNiOGU4IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link"  data-url="https://app.powerbi.com/view?r=eyJrIjoiZjJlZjk2NDgtMjdlMS00ZGRjLWJlMWMtN2QyYjJkNjNiOGU4IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Diferimiento de citas - CE">
-      <div class="module">  
-        <img src="{{ url_for('static', filename='opportunity_1610611.png') }}" alt="Diferimiento de citas">
-        <span>Diferimiento de citas - CE</span>
-      </div> 
-    </a>
-    <div class="module inactive">
-      <img src="{{ url_for('static', filename='opportunity_1610611.png') }}" alt="Diferimiento de citas">
-      <span>Diferimiento de citas - CE</span>
-    </div>
-
-
-
-    <div class="module inactive">
-      <img src="{{ url_for('static', filename='analytics.png') }}" alt="Reportes">
+      <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Reportes Adicionales">
       <span>Reportes Adicionales</span>
+      <small>Define aquí tus próximos módulos</small>
     </div>
   </div>
 
-  <!-- Visor embebido para abrir el reporte en la misma página -->
   <div id="rg-viewer" style="display:none;">
     <div class="viewer-container">
       <div class="viewer-header">
-        <span class="viewer-title">Reporte seleccionado</span>
+        <span class="viewer-title">Reporte histórico seleccionado</span>
         <button class="btn-close-viewer" onclick="closeViewer()">✕</button>
       </div>
-      <iframe id="rg-iframe" title="Reporte"></iframe>
+      <iframe id="rg-iframe" title="Reporte histórico"></iframe>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -410,9 +385,6 @@
 
     links.forEach(link => {
       link.addEventListener('click', function(evt) {
-        if (this.dataset.open === 'page') {
-          return;
-        }
         const url = this.dataset.url || this.href;
         if (!url) return;
         evt.preventDefault();
@@ -420,13 +392,12 @@
         iframe.src = url;
         viewer.style.display = 'block';
         if (viewerTitle) {
-          viewerTitle.textContent = this.dataset.title || 'Reporte seleccionado';
+          viewerTitle.textContent = this.dataset.title || 'Reporte histórico seleccionado';
         }
         viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
 
-    // Cerrar con ESC
     document.addEventListener('keydown', function(evt) {
       if (evt.key === 'Escape' && viewer.style.display !== 'none') {
         closeViewer();
