@@ -367,7 +367,7 @@ def update_tabla_medicos(pathname, search, periodo_dropdown, anio_dropdown, tipo
          SELECT c.servhosdes AS descripcion_servicio,
              ce.dni_medico,
              ce.fecha_atencion
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         WHERE ce.cod_centro = '{codcas}'
           AND ce.clasificacion in (2,4,6)
@@ -481,7 +481,7 @@ def update_matriz_medicos(pathname, search, periodo_dropdown, anio_dropdown, tip
     query = f"""
          SELECT ce.dni_medico,
              ce.fecha_atencion
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         WHERE ce.cod_centro = '{codcas}'
           AND ce.clasificacion in (2,4,6)
                         AND ce.cod_actividad = '91'
@@ -634,7 +634,7 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod

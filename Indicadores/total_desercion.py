@@ -398,7 +398,7 @@ def actualizar_deserciones(pathname, search, periodo_dropdown, anio_dropdown, ti
                 am.actdes,
                 ca.cenasides,
                 ce.acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} ce
+            FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} ce
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -619,7 +619,7 @@ def cargar_tabla_deserciones(pathname, search, periodo_dropdown, anio_dropdown, 
                 am.actdes,
                 ca.cenasides,
                 ce.acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} ce
+            FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} ce
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e
@@ -733,7 +733,7 @@ def tm_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown
                 am.actdes,
                 ca.cenasides,
                 ce.acto_med
-            FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} ce
+            FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} ce
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
                 ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.dim_especialidad AS e

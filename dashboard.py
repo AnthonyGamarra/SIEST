@@ -817,7 +817,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     sexo,
                     fecha_atencion,
                     acto_med
-                FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -954,7 +954,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     ag.agrupador,
                     ca.cenasides,
                     CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente   
-                FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} ce
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1034,7 +1034,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     a.periodo,
                                     CASE WHEN a.cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                     count(*) AS cantidad_medicos
-                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                 LEFT JOIN dwsge.dim_agrupador ag 
                                 ON a.cod_agrupador = ag.cod_agrupador
                                 WHERE a.cod_centro=:codcas
@@ -1116,7 +1116,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     fecha_atencion,
                     acto_med,
                     CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
-                FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                 LEFT JOIN dwsge.sgss_cmsho10 AS c 
                     ON ce.cod_servicio = c.servhoscod
                 LEFT JOIN dwsge.dim_especialidad AS e
@@ -1226,7 +1226,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                     a.periodo,
                                     CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
                                     count(*) AS cantidad_medicos
-                                FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                 LEFT JOIN dwsge.dim_agrupador ag 
                                 ON a.cod_agrupador = ag.cod_agrupador
                                 WHERE a.cod_centro=:codcas
@@ -1310,7 +1310,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             fecha_atencion,
                             acto_med,
                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
-                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                         LEFT JOIN dwsge.sgss_cmsho10 AS c 
                             ON ce.cod_servicio = c.servhoscod
                         LEFT JOIN dwsge.dim_especialidad AS e
@@ -1420,7 +1420,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                             a.periodo,
                                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
                                             count(*) AS cantidad_medicos
-                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                         LEFT JOIN dwsge.dim_agrupador ag 
                                         ON a.cod_agrupador = ag.cod_agrupador
                                         WHERE a.cod_centro=:codcas
@@ -1505,7 +1505,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             fecha_atencion,
                             acto_med,
                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
-                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                         LEFT JOIN dwsge.sgss_cmsho10 AS c 
                             ON ce.cod_servicio = c.servhoscod
                         LEFT JOIN dwsge.dim_especialidad AS e
@@ -1615,7 +1615,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                             a.periodo,
                                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
                                             count(*) AS cantidad_medicos
-                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                         LEFT JOIN dwsge.dim_agrupador ag 
                                         ON a.cod_agrupador = ag.cod_agrupador
                                         WHERE a.cod_centro=:codcas
@@ -1700,7 +1700,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             fecha_atencion,
                             acto_med,
                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
-                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                         LEFT JOIN dwsge.sgss_cmsho10 AS c 
                             ON ce.cod_servicio = c.servhoscod
                         LEFT JOIN dwsge.dim_especialidad AS e
@@ -1813,7 +1813,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                             a.periodo,
                                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
                                             count(*) AS cantidad_medicos
-                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                         LEFT JOIN dwsge.dim_agrupador ag 
                                         ON a.cod_agrupador = ag.cod_agrupador
                                         WHERE a.cod_centro=:codcas
@@ -1901,7 +1901,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                             fecha_atencion,
                             acto_med,
                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente
-                        FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
+                        FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str} AS ce
                         LEFT JOIN dwsge.sgss_cmsho10 AS c 
                             ON ce.cod_servicio = c.servhoscod
                         LEFT JOIN dwsge.dim_especialidad AS e
@@ -2014,7 +2014,7 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                                             a.periodo,
                                             CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,                
                                             count(*) AS cantidad_medicos
-                                        FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
+                                        FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_{anio_str}_{periodo_str}) a
                                         LEFT JOIN dwsge.dim_agrupador ag 
                                         ON a.cod_agrupador = ag.cod_agrupador
                                         WHERE a.cod_centro=:codcas

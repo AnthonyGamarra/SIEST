@@ -266,7 +266,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown):
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -333,7 +333,7 @@ def render_atendidos_por_servicio(pathname, search):
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod

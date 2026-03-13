@@ -77,7 +77,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
     ]
     valores = [f"{i:02d}" for i in range(1, 13)]
     df_period = pd.DataFrame({"mes": meses, "periodo": valores})
-    anios = ["2025", "2026"]
+    anios = ["2023","2024","2025", "2026"]
     anio_options = [{"label": year, "value": year} for year in anios]
 
     dim_queries = {
@@ -87,7 +87,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
             "value": "redasiscod",
         },
         "centro": {
-            "sql": """SELECT cenasicod, cenasides FROM dwsge.sgss_cmcas10 ORDER BY cenasides""",
+            "sql": """SELECT cenasicod, cenasides,redasiscod FROM dwsge.sgss_cmcas10 ORDER BY cenasides""",
             "label": "cenasides",
             "value": "cenasicod",
         },
@@ -115,6 +115,11 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
             "label": "edxcapdes",
             "value": "edxcapdes",
         },
+        "variable": {
+            "sql": """SELECT cod_variable, variable FROM dwsge.dim_variable ORDER BY variable""",
+            "label": "variable",
+            "value": "cod_variable",
+        },
     }
 
     sexo_options = [
@@ -132,6 +137,8 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         ("anio", "Año"),
         ("cod_servicio", "Cód. servicio"),
         ("servicio", "Servicio"),
+        ("cod_variable", "Cód. variable"),
+        ("variable", "Variable"),
         ("cod_actividad", "Actividad"),
         ("actividad", "Desc. actividad"),
         ("cod_subactividad", "Subactividad"),
@@ -154,6 +161,8 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                cenasides,
                periodo,
                anio,
+               v.cod_variable,
+               v.variable,
                cod_servicio,
                c.servhosdes AS servicio,
                cod_actividad,
@@ -168,13 +177,15 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                cod_diag,
                d.diagdes,
                d.edxcapdes AS capitulo
-        FROM dwsge.dw_consulta_externa_homologacion_{table_suffix} ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{table_suffix} ce
         LEFT JOIN dwsge.sgss_cmdia10_chapter d ON ce.cod_diag = d.diagcod
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
         LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
         LEFT JOIN dwsge.sgss_cmras10 r ON ca.redasiscod = r.redasiscod
+        LEFT JOIN dwsge.dim_variable v ON v.cod_variable = ce.cod_variable
+        WHERE ce.clasificacion IN (2,4,6)
     """
 
     report_filters = {
@@ -191,12 +202,14 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
 
     MAX_TABLE_ROWS = 100
 
-    def build_table_suffix(anio_value, periodo_value):
+    def build_table_suffix(anio_value, periodo_value=None):
         year = ''.join(ch for ch in str(anio_value) if ch.isdigit())[:4]
-        month_raw = ''.join(ch for ch in str(periodo_value) if ch.isdigit())
-        month = month_raw[-2:].zfill(2) if month_raw else '01'
         if not year:
             return None
+        if not periodo_value:
+            return year
+        month_raw = ''.join(ch for ch in str(periodo_value) if ch.isdigit())
+        month = month_raw[-2:].zfill(2) if month_raw else '01'
         return f"{year}_{month}"
 
     def build_report_base_query(table_suffix):
@@ -237,31 +250,60 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         )
 
     @lru_cache(maxsize=None)
-    def get_dimension_records(name):
+    def load_dimension_df(name):
         cfg = dim_queries.get(name)
         if cfg is None:
-            return tuple()
+            return None
 
         engine = create_connection()
         if engine is None:
-            return tuple()
+            return None
 
         try:
             with engine.connect() as conn:
                 df = pd.read_sql_query(cfg["sql"], conn)
         except Exception as exc:  # pragma: no cover - SQL errors logged
             print(f"[Diag Report] Error cargando dimensión {name}: {exc}")
-            return tuple()
+            return None
 
         if df.empty:
+            return pd.DataFrame()
+
+        return df.fillna("").astype(str)
+
+    def get_dimension_records(name, parent_value=None):
+        cfg = dim_queries.get(name)
+        if cfg is None:
             return tuple()
 
-        df = df.fillna("").astype(str)
+        df = load_dimension_df(name)
+        if df is None or df.empty:
+            return tuple()
+
+        if name == "subactividad" and parent_value:
+            parent_str = str(parent_value)
+            if "actcod" in df.columns:
+                df = df[df["actcod"] == parent_str]
+        if name == "centro" and parent_value:
+            parent_str = str(parent_value)
+            if "redasiscod" in df.columns:
+                df = df[df["redasiscod"] == parent_str]
+
         dedupe_subset = [cfg["value"], cfg["label"]]
         if name == "capitulo":
             dedupe_subset = [cfg["label"]]
+        if name == "subactividad":
+            dedupe_subset = [col for col in ["actcod", cfg["value"], cfg["label"]] if col in df.columns]
+        if name == "centro":
+            dedupe_subset = [col for col in ["redasiscod", cfg["value"], cfg["label"]] if col in df.columns]
+
         df = df.drop_duplicates(subset=dedupe_subset)
-        df = df.sort_values(cfg["label"])
+        if name == "subactividad" and "actcod" in df.columns:
+            df = df.sort_values(["actcod", cfg["label"]])
+        elif name == "centro" and "redasiscod" in df.columns:
+            df = df.sort_values(["redasiscod", cfg["label"]])
+        else:
+            df = df.sort_values(cfg["label"])
 
         records = []
         for _, row in df.iterrows():
@@ -271,8 +313,8 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
             records.append((row[cfg["value"]], label))
         return tuple(records)
 
-    def build_dimension_options(name):
-        return [{"label": label, "value": value} for value, label in get_dimension_records(name)]
+    def build_dimension_options(name, parent_value=None):
+        return [{"label": label, "value": value} for value, label in get_dimension_records(name, parent_value)]
 
     def build_filter_controls():
         periodo_options = [
@@ -280,7 +322,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
             for _, row in df_period.iterrows()
         ]
 
-        dropdown_style = {"width": "100%", "fontFamily": font_family}
+        dropdown_style = {"width": "100%", "fontFamily": font_family, "fontSize": "13px"}
 
         controls = [
             field_wrapper(
@@ -298,8 +340,8 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                 dcc.Dropdown(
                     id="diag-filter-periodo",
                     options=periodo_options,
-                    placeholder="Mes",
-                    clearable=False,
+                    placeholder="Mes (opcional)",
+                    clearable=True,
                     style=dropdown_style,
                 ),
             ),
@@ -333,25 +375,32 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                     style=dropdown_style,
                 ),
             ),
-            field_wrapper(
-                "Actividad",
-                dcc.Dropdown(
-                    id="diag-filter-actividad",
-                    options=build_dimension_options("actividad"),
-                    placeholder="Todas",
-                    clearable=True,
-                    style=dropdown_style,
-                ),
+
+            html.Div(
+                [
+                    html.Small("Actividad", style={"fontWeight": "600", "color": muted, "fontFamily": font_family}),
+                    dcc.Dropdown(
+                        id="diag-filter-actividad",
+                        options=build_dimension_options("actividad"),
+                        placeholder="Todas",
+                        clearable=True,
+                        style=dropdown_style,
+                    ),
+                ],
+                style={"display": "flex", "flexDirection": "column", "gap": "4px", "flex": "2 1 320px", "minWidth": "240px"},
             ),
-            field_wrapper(
-                "Subactividad",
-                dcc.Dropdown(
-                    id="diag-filter-subactividad",
-                    options=build_dimension_options("subactividad"),
-                    placeholder="Todas",
-                    clearable=True,
-                    style=dropdown_style,
-                ),
+            html.Div(
+                [
+                    html.Small("Subactividad", style={"fontWeight": "600", "color": muted, "fontFamily": font_family}),
+                    dcc.Dropdown(
+                        id="diag-filter-subactividad",
+                        options=build_dimension_options("subactividad"),
+                        placeholder="Todas",
+                        clearable=True,
+                        style=dropdown_style,
+                    ),
+                ],
+                style={"display": "flex", "flexDirection": "column", "gap": "4px", "flex": "2 1 320px", "minWidth": "240px"},
             ),
             field_wrapper(
                 "Sexo",
@@ -363,15 +412,39 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                     style=dropdown_style,
                 ),
             ),
-            field_wrapper(
-                "Capítulo CIE",
-                dcc.Dropdown(
-                    id="diag-filter-capitulo",
-                    options=build_dimension_options("capitulo"),
-                    placeholder="Todos",
-                    clearable=True,
-                    style=dropdown_style,
-                ),
+            html.Div(
+                [
+                    html.Small("Variable", style={"fontWeight": "600", "color": muted, "fontFamily": font_family}),
+                    dcc.Dropdown(
+                        id="diag-filter-variable",
+                        options=build_dimension_options("variable"),
+                        placeholder="Todas las variables",
+                        clearable=True,
+                        optionHeight=44,
+                        style=dropdown_style,
+                    ),
+                ],
+                style={"display": "flex", "flexDirection": "column", "gap": "4px", "flex": "1.5 1 260px", "minWidth": "220px"},
+            ),
+            html.Div(
+                [
+                    html.Small("Capítulo CIE", style={"fontWeight": "600", "color": muted, "fontFamily": font_family}),
+                    dcc.Dropdown(
+                        id="diag-filter-capitulo",
+                        options=build_dimension_options("capitulo"),
+                        placeholder="Todos",
+                        clearable=True,
+                        style=dropdown_style,
+                    ),
+                ],
+                style={
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "gap": "4px",
+                    "flex": "0 1 calc(40% - 12px)",
+                    "minWidth": "200px",
+                    "maxWidth": "40%",
+                },
             ),
             html.Div(
                 [
@@ -381,15 +454,27 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                         color="primary",
                         style={"backgroundColor": brand, "borderColor": brand, "fontWeight": 600},
                     ),
-                    dbc.Button(
-                        [html.I(className="bi bi-download me-1"), "Descargar"],
-                        id="diag-report-download-button",
-                        color="secondary",
-                        outline=True,
-                        style={"borderColor": brand, "color": brand},
+                    html.Div(
+                        [
+                            dbc.Button(
+                                [html.I(className="bi bi-download me-1"), "Descargar"],
+                                id="diag-report-download-button",
+                                color="secondary",
+                                outline=True,
+                                style={"borderColor": brand, "color": brand},
+                            ),
+                            dcc.Loading(
+                                id="diag-report-download-spinner",
+                                type="dot",
+                                color=brand,
+                                children=html.Div(id="diag-report-download-spinner-output", style={"width": "18px", "height": "18px"}),
+                                style={"display": "flex", "alignItems": "center", "marginLeft": "14px"},
+                            ),
+                        ],
+                        style={"display": "flex", "alignItems": "center", "gap": "12px"},
                     ),
                 ],
-                style={"display": "flex", "gap": "12px", "minWidth": "200px"},
+                style={"display": "flex", "gap": "12px", "minWidth": "200px", "alignItems": "center"},
             ),
         ]
 
@@ -485,15 +570,6 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                                     ],
                                     style={"display": "flex", "alignItems": "center", "gap": "8px"},
                                 ),
-                                dbc.Button(
-                                    [html.I(className="bi bi-file-earmark-arrow-down me-2"), "Ficha técnica"],
-                                    id="download-ficha-tecnica-button-nm",
-                                    color="light",
-                                    outline=True,
-                                    size="sm",
-                                    style={"borderColor": brand, "color": brand, "fontFamily": font_family, "fontWeight": "600", "borderRadius": "8px", "padding": "4px 12px"},
-                                ),
-                                dcc.Download(id="download-ficha-tecnica-nm"),
                             ],
                             style={"display": "flex", "alignItems": "center", "gap": "12px", "flexWrap": "wrap"},
                         ),
@@ -588,6 +664,22 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
     dash_app.layout = serve_layout
 
     @dash_app.callback(
+        Output("diag-filter-centro", "options"),
+        Output("diag-filter-centro", "value"),
+        Input("diag-filter-red", "value"),
+    )
+    def sync_centro_dropdown(red_value):
+        return build_dimension_options("centro", red_value), None
+
+    @dash_app.callback(
+        Output("diag-filter-subactividad", "options"),
+        Output("diag-filter-subactividad", "value"),
+        Input("diag-filter-actividad", "value"),
+    )
+    def sync_subactividad_dropdown(actividad_value):
+        return build_dimension_options("subactividad", actividad_value), None
+
+    @dash_app.callback(
         Output("diag-report-table", "data"),
         Output("diag-report-total", "children"),
         Output("diag-report-feedback", "children"),
@@ -619,11 +711,15 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         if not n_clicks:
             return no_update
 
-        if not anio_value or not periodo_value:
-            message = build_feedback_alert("Selecciona el año y el periodo para continuar.", "warning")
+        if not anio_value:
+            message = build_feedback_alert("Selecciona el año para continuar.", "warning")
             return [], "Sin búsqueda realizada", message, None
 
-        periodo_compuesto = f"{anio_value}{periodo_value}"
+        if not periodo_value and not centro_value:
+            message = build_feedback_alert("Selecciona un periodo o filtra por centro asistencial para consultar el año completo.", "warning")
+            return [], "Sin búsqueda realizada", message, None
+
+        periodo_compuesto = f"{anio_value}{periodo_value}" if periodo_value else None
         table_suffix = build_table_suffix(anio_value, periodo_value)
         if not table_suffix:
             message = build_feedback_alert("El periodo seleccionado no es válido.", "danger")
@@ -631,7 +727,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
 
         filters = {
             "anio": str(anio_value),
-            "periodo": periodo_compuesto,
+            "periodo": periodo_compuesto if periodo_compuesto else None,
             "red": str(red_value) if red_value else None,
             "centro": str(centro_value) if centro_value else None,
             "servicio": str(servicio_value) if servicio_value else None,
@@ -659,27 +755,80 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
 
     @dash_app.callback(
         Output("diag-report-download", "data"),
+        Output("diag-report-download-spinner-output", "children"),
         Input("diag-report-download-button", "n_clicks"),
         State("diag-report-store", "data"),
+        State("diag-filter-anio", "value"),
+        State("diag-filter-periodo", "value"),
+        State("diag-filter-red", "value"),
+        State("diag-filter-centro", "value"),
+        State("diag-filter-servicio", "value"),
+        State("diag-filter-actividad", "value"),
+        State("diag-filter-subactividad", "value"),
+        State("diag-filter-capitulo", "value"),
+        State("diag-filter-sexo", "value"),
         prevent_initial_call=True,
     )
-    def download_report(n_clicks, data_store):
-        if not n_clicks or not data_store:
-            return no_update
-        filters = data_store.get("filters") if isinstance(data_store, dict) else None
-        table_suffix = data_store.get("table_suffix") if isinstance(data_store, dict) else None
+    def download_report(
+        n_clicks,
+        data_store,
+        anio_value,
+        periodo_value,
+        red_value,
+        centro_value,
+        servicio_value,
+        actividad_value,
+        subactividad_value,
+        capitulo_value,
+        sexo_value,
+    ):
+        if not n_clicks:
+            return no_update, ""
+
+        def build_filters_from_inputs():
+            if not anio_value:
+                return None, None
+            if not periodo_value and not centro_value:
+                return None, None
+            suffix = build_table_suffix(anio_value, periodo_value)
+            if not suffix:
+                return None, None
+            periodo_compuesto = f"{anio_value}{periodo_value}" if periodo_value else None
+            filters_local = {
+                "anio": str(anio_value),
+                "periodo": periodo_compuesto if periodo_compuesto else None,
+                "red": str(red_value) if red_value else None,
+                "centro": str(centro_value) if centro_value else None,
+                "servicio": str(servicio_value) if servicio_value else None,
+                "actividad": str(actividad_value) if actividad_value else None,
+                "subactividad": str(subactividad_value) if subactividad_value else None,
+                "sexo": str(sexo_value) if sexo_value else None,
+                "capitulo": str(capitulo_value) if capitulo_value else None,
+            }
+            return filters_local, suffix
+
+        filters, table_suffix = build_filters_from_inputs()
+
+        if filters is None or table_suffix is None:
+            if isinstance(data_store, dict):
+                filters = data_store.get("filters")
+                table_suffix = data_store.get("table_suffix")
+            else:
+                filters = None
+                table_suffix = None
+
         if not filters or not table_suffix:
-            return no_update
+            return no_update, ""
 
         df, error = run_report(filters, table_suffix)
         if error or df is None or df.empty:
-            return no_update
+            return no_update, ""
 
         df = sanitize_dataframe(df)
         buffer = io.StringIO()
         df.to_csv(buffer, index=False)
         buffer.seek(0)
         filename = f"reporte_diag_{datetime.now():%Y%m%d_%H%M%S}.csv"
-        return {"content": buffer.getvalue(), "filename": filename, "type": "text/csv"}
+        return {"content": buffer.getvalue(), "filename": filename, "type": "text/csv"}, ""
 
     return dash_app

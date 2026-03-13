@@ -266,7 +266,7 @@
 #             sexo,
 #             fecha_atencion,
 #             acto_med
-#         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+#         FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo} AS ce
 #         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
 #         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
 #         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -294,7 +294,7 @@
 #             sexo as sexo2,
 #             fecha_atencion as fecha_atencion2,
 #             cl.desc_cl AS desc_cl2
-#         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+#         FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo} AS ce
 #         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
 #         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
 #         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -674,7 +674,7 @@
 #             sexo,
 #             fecha_atencion,
 #             acto_med
-#         FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo} AS ce
+#         FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo} AS ce
 #         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
 #         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
 #         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod

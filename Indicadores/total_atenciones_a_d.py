@@ -461,7 +461,7 @@ def update_barras_inicio(pathname, search, periodo_dropdown, anio_dropdown, tipo
         SELECT 
             c.servhosdes AS descripcion_servicio,
             a.actespnom AS descripcion_subactividad
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
         WHERE ce.cod_centro = '{codcas}'
@@ -623,7 +623,7 @@ def update_total_atenciones_a_d(pathname, search, periodo_dropdown, anio_dropdow
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -656,7 +656,7 @@ def update_total_atenciones_a_d(pathname, search, periodo_dropdown, anio_dropdow
             sexo as sexo2,
             fecha_atencion as fecha_atencion2,
             cl.desc_cl AS desc_cl2
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod
@@ -950,7 +950,7 @@ def update_tornado_atenciones(pathname, search, periodo_dropdown, anio_dropdown,
             ge.grupo_etario,
             ce.sexo,
             COUNT(*) AS atenciones
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.dim_grupo_etario as ge ON ce.anio_edad = ge.edad
         WHERE ce.cod_centro = '{codcas}'
                         AND ce.cod_actividad = '91'
@@ -1238,7 +1238,7 @@ def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown, anio_drop
             sexo,
             fecha_atencion,
             acto_med
-        FROM dwsge.dw_consulta_externa_homologacion_{anio}_{periodo} AS ce
+        FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
         LEFT JOIN dwsge.sgss_cmtco10 AS t ON ce.cod_tipo_consulta = t.tipconcod

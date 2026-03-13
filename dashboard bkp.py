@@ -220,7 +220,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         sexo,
                         fecha_atencion,
                         acto_med
-                    FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} AS ce
+                    FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo_str} AS ce
                     LEFT JOIN dwsge.sgss_cmsho10 AS c 
                         ON ce.cod_servicio = c.servhoscod
                     LEFT JOIN dwsge.dim_especialidad AS e
@@ -348,7 +348,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                         a.actespnom,
                         am.actdes,
                         ca.cenasides
-                    FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str} ce
+                    FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo_str} ce
                     LEFT JOIN dwsge.sgss_cmsho10 AS c 
                         ON ce.cod_servicio = c.servhoscod
                     LEFT JOIN dwsge.dim_especialidad AS e
@@ -414,7 +414,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                                         ag.agrupador,
                                         a.periodo,
                                         count(*) AS cantidad_medicos
-                                    FROM (SELECT * FROM dwsge.dw_consulta_externa_homologacion_2025_{periodo_str}) a
+                                    FROM (SELECT * FROM dwsge.dwe_consulta_externa_homologacion_2025_{periodo_str}) a
                                     LEFT JOIN dwsge.dim_agrupador ag 
                                     ON a.cod_agrupador = ag.cod_agrupador
                                     WHERE a.cod_centro=:codcas
