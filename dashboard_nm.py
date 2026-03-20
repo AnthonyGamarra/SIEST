@@ -1543,9 +1543,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         ON ce.cod_oricentro = ca.oricenasicod
                         AND ce.cod_centro = ca.cenasicod
                         WHERE cod_centro = :codcas
-                        AND cod_servicio ='E21'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('752','760','763','006')
+                        AND ((cod_servicio ='E21'AND cod_actividad ='B1' AND ce.cod_subactividad in ('752','760','763','006'))
+                        or
+                        (cod_servicio ='E21'AND cod_actividad ='A7' AND ce.cod_subactividad in ('005','006','752','760','763')))
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
