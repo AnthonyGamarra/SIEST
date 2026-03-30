@@ -296,7 +296,6 @@
               src="{{ url_for('static', filename='logs.png') }}"
               alt="Reportes LOGS"
             />
-
             <span>Auditoría del Sistema</span>
           </a>
           {% endif %}
@@ -310,6 +309,16 @@
             />
 
             <span>Reporteador</span>
+          </a>
+          {% endif %}
+
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.prediccion_desercion') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='artificial-intelligence_11751499.png') }}"
+              alt="Predicción de deserción"
+            />
+            <span>Predicción de deserción</span>
           </a>
           {% endif %}
 

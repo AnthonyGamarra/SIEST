@@ -1,10 +1,13 @@
+import os
+
+import joblib
+import pandas as pd
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import joinedload
-from flask import current_app
 from bi import get_bi_url
 from backend.models import dashboard_code_for_user
 from secure_code import encode_code, decode_code
@@ -12,6 +15,7 @@ from backend.centro_asistencial import get_centro_asistencial
 from backend.centro_asistencial import get_centro_asistencial_by_code_red
 from backend.centro_asistencial import getNombreCentroAsistencial
 from backend.centro_asistencial import get_redes_asistenciales
+from collections import Counter
 from backend.models import (
 	SurveyResponse,
 	SurveyModule,
@@ -19,6 +23,9 @@ from backend.models import (
 	SurveySubcategory,
 	SurveyVariable,
 )
+
+
+DESERCION_MODEL_FILENAME = 'modelo_desercion.pkl'
 
 
 def _format_select_options(df, code_key, label_key):
@@ -127,6 +134,19 @@ def _build_survey_defaults(structure):
 				categories = area.get('categories', []) or []
 				area_defaults[section_key][area_key] = categories[0]['id'] if categories else ''
 	return section_defaults, area_defaults
+
+
+def _load_desercion_model():
+	model = current_app.config.get('_desercion_model')
+	model_path = current_app.config.get('_desercion_model_path')
+	if model is None:
+		model_path = os.path.join(current_app.root_path, DESERCION_MODEL_FILENAME)
+		if not os.path.exists(model_path):
+			raise FileNotFoundError(f"No se encontró el archivo del modelo en {model_path}.")
+		model = joblib.load(model_path)
+		current_app.config['_desercion_model'] = model
+		current_app.config['_desercion_model_path'] = model_path
+	return model, model_path
 
 
 def register_routes(app):
@@ -267,6 +287,76 @@ def register_routes(app):
 			center_code=center_code,
 			center_label=center_label,
 			show_modules=False,
+		)
+
+	@bp.route('/prediccion_desercion', methods=['GET', 'POST'])
+	@login_required
+	def prediccion_desercion():
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden ejecutar la predicción de deserción.', 'danger')
+			return redirect(url_for('main.index'))
+
+		default_payload = {
+			'anio_edad': '25',
+			'sexo': 'M',
+			'cod_area': '01',
+			'cod_servicio': 'AM13',
+			'dia_semana': '6',
+			'mes': '7',
+			'es_fin_semana': '1',
+			'cod_subactividad': '001',
+		}
+		form_values = default_payload.copy()
+		probability = None
+		probability_percent = None
+		model_path = current_app.config.get('_desercion_model_path')
+
+		if request.method == 'POST':
+			for field in form_values:
+				incoming = (request.form.get(field) or '').strip()
+				if incoming:
+					form_values[field] = incoming
+
+			form_values['sexo'] = (form_values.get('sexo') or 'M').upper()
+			numeric_fields = ('anio_edad', 'dia_semana', 'mes', 'es_fin_semana')
+			try:
+				numeric_values = {name: int(form_values[name]) for name in numeric_fields}
+			except ValueError:
+				flash('Revisa los campos numéricos (edad, día, mes y fin de semana). Deben ser enteros.', 'warning')
+			else:
+				payload = {
+					'anio_edad': [numeric_values['anio_edad']],
+					'sexo': [form_values['sexo']],
+					'cod_area': [form_values['cod_area']],
+					'cod_servicio': [form_values['cod_servicio']],
+					'dia_semana': [numeric_values['dia_semana']],
+					'mes': [numeric_values['mes']],
+					'es_fin_semana': [numeric_values['es_fin_semana']],
+					'cod_subactividad': [form_values['cod_subactividad']],
+				}
+				try:
+					model, model_path = _load_desercion_model()
+					model_input = pd.DataFrame(payload)
+					if hasattr(model, 'predict_proba'):
+						raw_probability = model.predict_proba(model_input)[:, 1][0]
+					else:
+						raw_probability = model.predict(model_input)[0]
+					probability = float(raw_probability)
+					probability_percent = round(probability * 100, 2)
+				except FileNotFoundError as missing:
+					flash(str(missing), 'danger')
+				except Exception as exc:
+					current_app.logger.exception('Error al calcular la predicción de deserción: %s', exc)
+					flash('No fue posible calcular la probabilidad. Revisa el archivo del modelo.', 'danger')
+
+		return render_template(
+			'prediccion_desercion.html',
+			show_modules=False,
+			form_values=form_values,
+			probability=probability,
+			probability_percent=probability_percent,
+			model_filename=DESERCION_MODEL_FILENAME,
+			model_path=model_path,
 		)
 
 
