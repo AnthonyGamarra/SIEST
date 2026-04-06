@@ -1,12 +1,14 @@
 import os
+import csv
+import io
 
 import joblib
 import pandas as pd
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify, Response
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
-from sqlalchemy import func, text
+from sqlalchemy import func, text, create_engine
 from sqlalchemy.orm import joinedload
 from bi import get_bi_url
 from backend.models import dashboard_code_for_user
@@ -26,6 +28,56 @@ from backend.models import (
 
 
 DESERCION_MODEL_FILENAME = 'modelo_desercion.pkl'
+DW_ESTADISTICA_URI = 'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA'
+_dw_engine = None
+
+
+def _get_dw_engine():
+	global _dw_engine
+	if _dw_engine is None:
+		_dw_engine = create_engine(
+			DW_ESTADISTICA_URI,
+			pool_size=20,
+			max_overflow=10,
+			pool_pre_ping=True,
+			pool_recycle=1800,
+			pool_timeout=30,
+			echo_pool=False,
+		)
+	return _dw_engine
+
+
+def _fetch_tabla_homologada_rows(codcas):
+	query = text(
+		"""
+		SELECT
+			h.cod_centro,
+			c.cenasides,
+			h.cod_topico,
+			t.topemedes,
+			h.cod_emergencia,
+			e.desc_emergencia,
+			h.cod_estandar,
+			s.des_estandar
+		FROM dssge.dw_homologacion_enlaces_emergencia h
+		LEFT OUTER JOIN dwsge.sgss_cmcas10 c
+			ON c.cenasicod = h.cod_centro
+		LEFT OUTER JOIN dssge.sgss_mbtoe10 t
+			ON h.cod_topico = t.topemecod
+		LEFT OUTER JOIN dwsge.dim_emergencia e
+			ON e.cod_emergencia = h.cod_emergencia
+		LEFT OUTER JOIN dwsge.dim_estandar s
+			ON s.id_estandar = h.cod_estandar
+		WHERE h.cod_estado = '1'
+			AND h.cod_centro = :codcas
+		ORDER BY h.cod_topico, h.cod_emergencia, h.cod_estandar
+		"""
+	)
+
+	engine = _get_dw_engine()
+	with engine.connect() as conn:
+		result = conn.execute(query, {'codcas': codcas})
+		return [dict(row._mapping) for row in result]
 
 
 def _format_select_options(df, code_key, label_key):
@@ -358,6 +410,72 @@ def register_routes(app):
 			model_filename=DESERCION_MODEL_FILENAME,
 			model_path=model_path,
 		)
+
+	@bp.route('/tabla_homologada/', methods=['GET'])
+	@login_required
+	def tabla_homologada():
+		selected_codcas = (request.args.get('codcas') or '').strip()
+		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
+		codcas = selected_codcas or fallback_codcas
+
+		if not codcas:
+			flash('Selecciona un centro asistencial para visualizar la tabla homologada.', 'warning')
+			return redirect(url_for('main.index'))
+
+		try:
+			rows = _fetch_tabla_homologada_rows(codcas)
+		except Exception as exc:
+			current_app.logger.exception('Error al consultar la tabla homologada para codcas=%s: %s', codcas, exc)
+			flash('No se pudo cargar la tabla homologada en este momento.', 'danger')
+			return redirect(url_for('main.index'))
+
+		return render_template(
+			'tabla_homologada.html',
+			show_modules=False,
+			rows=rows,
+			codcas=codcas,
+			center_name=_get_center_name_by_code(codcas),
+		)
+
+	@bp.route('/tabla_homologada/csv', methods=['GET'])
+	@login_required
+	def tabla_homologada_csv():
+		selected_codcas = (request.args.get('codcas') or '').strip()
+		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
+		codcas = selected_codcas or fallback_codcas
+
+		if not codcas:
+			flash('Selecciona un centro asistencial para descargar la tabla homologada.', 'warning')
+			return redirect(url_for('main.index'))
+
+		try:
+			rows = _fetch_tabla_homologada_rows(codcas)
+		except Exception as exc:
+			current_app.logger.exception('Error al exportar tabla homologada para codcas=%s: %s', codcas, exc)
+			flash('No se pudo generar el archivo CSV en este momento.', 'danger')
+			return redirect(url_for('main.tabla_homologada', codcas=codcas))
+
+		output = io.StringIO()
+		fieldnames = [
+			'cod_centro',
+			'cenasides',
+			'cod_topico',
+			'topemedes',
+			'cod_emergencia',
+			'desc_emergencia',
+			'cod_estandar',
+			'des_estandar',
+		]
+		writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+		writer.writeheader()
+		if rows:
+			writer.writerows(rows)
+
+		filename = f'tabla_homologada_emergencia_{codcas}.csv'
+		csv_content = '\ufeff' + output.getvalue()
+		response = Response(csv_content, mimetype='text/csv; charset=utf-8')
+		response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+		return response
 
 
 	@bp.route('/register', methods=['GET', 'POST'])

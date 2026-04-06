@@ -1653,7 +1653,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WITH base AS (
                             SELECT *,
                                 (anio_edad::int * 12 + meses::int) AS edad_meses
-                            FROM dwsge.dwe_consulta_externa_no_medicas_2026_01 ce
+                            FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                             ON ce.cod_oricentro = ca.oricenasicod
                             AND ce.cod_centro = ca.cenasicod

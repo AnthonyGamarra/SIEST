@@ -668,7 +668,7 @@ def update_total_atenciones(pathname, search, periodo_dropdown, anio_dropdown, t
         LEFT JOIN dwsge.dwe_cl10 as cl ON ce.clasificacion = cl.id_cl
         WHERE ce.cod_centro = '{codcas}'
           AND ce.cod_actividad = '91'
-          AND ce.clasificacion in (1,3,5,0)
+          AND ce.clasificacion in (1,3,0)
           AND ce.cod_variable = '001'
           AND (
                     CASE 
@@ -1221,6 +1221,7 @@ def descargar_query1_csv(n_clicks, pathname, search):
             ca.cenasides,
             am.actdes AS actividad,
             ag.agrupador AS agrupador,
+            v.variable,
             a.actespnom AS subactividad,
             ce.cod_tipo_consulta,
             ce.cod_diag,
@@ -1234,7 +1235,11 @@ def descargar_query1_csv(n_clicks, pathname, search):
             cod_tipdoc_paciente,
             sexo,
             fecha_atencion,
-            acto_med
+            acto_med,
+            CASE 
+                WHEN ce.clasificacion IN (2,4,6) THEN 'Atención'
+                WHEN ce.clasificacion IN (0,1,3) THEN 'Deserción'
+                WHEN ce.clasificacion = 5 THEN 'Repetido'  END as clasificacion
         FROM dwsge.dwe_consulta_externa_homologacion_{anio}_{periodo} AS ce
         LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
@@ -1244,9 +1249,9 @@ def descargar_query1_csv(n_clicks, pathname, search):
         LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
         LEFT JOIN dwsge.sgss_cmcas10 AS ca ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
         LEFT JOIN dwsge.dim_agrupador as ag ON ce.cod_agrupador = ag.cod_agrupador
+        LEFT JOIN dwsge.dim_variable as v ON ce.cod_variable = v.cod_variable
         WHERE ce.cod_centro = '{codcas}'
           AND ce.cod_actividad = '91'
-          AND ce.clasificacion in (2,4,6)
           AND ce.cod_variable = '001'
               AND (
                     CASE 
