@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .homologada-wrapper {
+    padding: 2rem 1rem;
+    min-height: calc(100vh - 120px);
+    background-image: url("{{ url_for('static', filename='76824.jpg') }}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .homologada-card {
+    background: #ffffff;
+    border-radius: 1.25rem;
+    border: 1px solid #e4e9f2;
+    box-shadow: 0 20px 45px rgba(15, 43, 70, 0.08);
+    padding: 1.5rem;
+  }
+
+  .homologada-title {
+    color: #0f2b46;
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .homologada-subtitle {
+    color: #556070;
+    margin-bottom: 0;
+  }
+
+  .homologada-meta {
+    margin: 1rem 0 1.25rem;
+    color: #1c3554;
+    font-size: 0.95rem;
+  }
+
+  .homologada-table thead th {
+    background: #0f2b46;
+    color: #ffffff;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.84rem;
+  }
+
+  .homologada-table td {
+    vertical-align: middle;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.82rem;
+  }
+
+  .homologada-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .csv-action {
+    margin-left: auto;
+  }
+
+  .empty-state {
+    border: 1px dashed #c9d7eb;
+    border-radius: 0.9rem;
+    padding: 1rem;
+    background: #f7fbff;
+    color: #41556e;
+    margin-top: 1rem;
+  }
+
+  .filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .filter-item label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #36506f;
+    margin-bottom: 0.25rem;
+    display: block;
+  }
+
+  .filter-item input {
+    width: 100%;
+    border: 1px solid #d4dfef;
+    border-radius: 0.6rem;
+    min-height: 38px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.85rem;
+  }
+
+  .filters-meta {
+    font-size: 0.82rem;
+    color: #4b617d;
+    margin-bottom: 0.7rem;
+  }
+</style>
+
+<div class="homologada-wrapper">
+  <div class="homologada-card">
+    <h1 class="homologada-title">Tabla homologada de consulta externa</h1>
+    <p class="homologada-subtitle">
+      Relacion homologada de actividades, servicios, especialidades y variables.
+    </p>
+
+    <div class="homologada-meta">
+      <span><strong>Registros:</strong> {{ rows|length }}</span>
+    </div>
+
+    {% if rows %}
+    <div class="filters-grid">
+      <div class="filter-item">
+        <label for="filter-servicio">Filtrar por servicio</label>
+        <input id="filter-servicio" type="text" placeholder="Codigo o descripcion de servicio" />
+      </div>
+      <div class="filter-item">
+        <label for="filter-especialidad">Filtrar por especialidad</label>
+        <input id="filter-especialidad" type="text" placeholder="Codigo o descripcion de especialidad" />
+      </div>
+    </div>
+    <div class="table-responsive" style="max-height: 52vh;">
+      <table id="tabla-homologada-ce" class="table table-striped table-hover homologada-table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>GPO_OCUP</th>
+            <th>COD_AREA</th>
+            <th>AREA</th>
+            <th>COD_ACTIVIDAD</th>
+            <th>ACTIVIDAD</th>
+            <th>COD_SUBACTIVIDAD</th>
+            <th>SUBACTIVIDAD</th>
+            <th>COD_SERVICIO</th>
+            <th>SERVICIO</th>
+            <th>COD_ESPECIALIDAD</th>
+            <th>ESPECIALIDAD</th>
+            <th>COD_SUBESPECIALIDAD</th>
+            <th>SUBESPECIALIDAD</th>
+            <th>COD_AGRUPADOR</th>
+            <th>AGRUPADOR</th>
+            <th>COD_VARIABLE</th>
+            <th>VARIABLE</th>
+            <th>ANIO</th>
+            <th>ANIO_USO</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row.desc_gpo_ocup }}</td>
+            <td>{{ row.cod_area }}</td>
+            <td>{{ row.desc_area }}</td>
+            <td>{{ row.cod_actividad }}</td>
+            <td>{{ row.desc_actividad }}</td>
+            <td>{{ row.cod_subactividad }}</td>
+            <td>{{ row.desc_subactividad }}</td>
+            <td>{{ row.cod_servicio }}</td>
+            <td>{{ row.desc_servicio }}</td>
+            <td>{{ row.cod_especialidad }}</td>
+            <td>{{ row.especialidad }}</td>
+            <td>{{ row.cod_subespecialidad }}</td>
+            <td>{{ row.subespecialidad }}</td>
+            <td>{{ row.cod_agrupador }}</td>
+            <td>{{ row.agrupador }}</td>
+            <td>{{ row.cod_variable }}</td>
+            <td>{{ row.variable }}</td>
+            <td>{{ row.anio }}</td>
+            <td>{{ row.anio_uso }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      No se encontraron registros para consulta externa.
+    </div>
+    {% endif %}
+
+    <div class="homologada-actions">
+      <a class="pill-btn pill-btn--ghost" href="{{ url_for('main.tablas_homologadas', codcas=codcas) if codcas else url_for('main.tablas_homologadas') }}">Volver a tablas homologadas</a>
+      <a class="pill-btn pill-btn--ghost" href="{{ url_for('main.index', codcas=codcas) if codcas else url_for('main.index') }}">Volver al inicio</a>
+      <a class="pill-btn pill-btn--primary csv-action" href="{{ url_for('main.tabla_homologada_ce_csv') }}">Descargar CSV</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var table = document.getElementById('tabla-homologada-ce');
+    if (!table) {
+      return;
+    }
+
+    var tbodyRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+    var serviceInput = document.getElementById('filter-servicio');
+    var specialtyInput = document.getElementById('filter-especialidad');
+    var visibleCount = document.getElementById('visible-count');
+
+    function normalize(value) {
+      return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+    }
+
+    function rowText(row, indexes) {
+      var cells = row.cells;
+      var merged = '';
+      for (var i = 0; i < indexes.length; i += 1) {
+        var idx = indexes[i];
+        merged += ' ' + (cells[idx] ? cells[idx].textContent : '');
+      }
+      return normalize(merged);
+    }
+
+    function applyFilters() {
+      var serviceTerm = normalize(serviceInput && serviceInput.value);
+      var specialtyTerm = normalize(specialtyInput && specialtyInput.value);
+      var visible = 0;
+
+      tbodyRows.forEach(function (row) {
+        var serviceText = rowText(row, [7, 8]);
+        var specialtyText = rowText(row, [9, 10]);
+
+        var matches = true;
+        if (matches && serviceTerm && serviceText.indexOf(serviceTerm) === -1) {
+          matches = false;
+        }
+        if (matches && specialtyTerm && specialtyText.indexOf(specialtyTerm) === -1) {
+          matches = false;
+        }
+
+        row.style.display = matches ? '' : 'none';
+        if (matches) {
+          visible += 1;
+        }
+      });
+
+      if (visibleCount) {
+        visibleCount.textContent = String(visible);
+      }
+    }
+
+    [serviceInput, specialtyInput].forEach(function (input) {
+      if (input) {
+        input.addEventListener('input', applyFilters);
+      }
+    });
+  })();
+</script>
+{% endblock %}

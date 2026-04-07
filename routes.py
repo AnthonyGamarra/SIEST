@@ -80,6 +80,40 @@ def _fetch_tabla_homologada_rows(codcas):
 		return [dict(row._mapping) for row in result]
 
 
+def _fetch_tabla_homologada_ce_rows():
+	query = text(
+		"""
+		SELECT
+			desc_gpo_ocup,
+			cod_area,
+			desc_area,
+			cod_actividad,
+			desc_actividad,
+			cod_subactividad,
+			desc_subactividad,
+			cod_servicio,
+			desc_servicio,
+			cod_especialidad,
+			especialidad,
+			cod_subespecialidad,
+			subespecialidad,
+			cod_agrupador,
+			agrupador,
+			cod_variable,
+			variable,
+			anio,
+			anio_uso
+		FROM dssge.dw_homologacion_enlaces
+		ORDER BY desc_gpo_ocup, cod_area, cod_actividad, cod_subactividad, cod_servicio
+		"""
+	)
+
+	engine = _get_dw_engine()
+	with engine.connect() as conn:
+		result = conn.execute(query)
+		return [dict(row._mapping) for row in result]
+
+
 def _format_select_options(df, code_key, label_key):
 	if df is None:
 		return []
@@ -411,6 +445,7 @@ def register_routes(app):
 			model_path=model_path,
 		)
 
+	@bp.route('/tabla_homologada/', methods=['GET'], endpoint='tabla_homologada_eme')
 	@bp.route('/tabla_homologada/', methods=['GET'])
 	@login_required
 	def tabla_homologada():
@@ -430,12 +465,88 @@ def register_routes(app):
 			return redirect(url_for('main.index'))
 
 		return render_template(
-			'tabla_homologada.html',
+			'tabla_homologada_eme.html',
 			show_modules=False,
 			rows=rows,
 			codcas=codcas,
 			center_name=_get_center_name_by_code(codcas),
 		)
+
+	@bp.route('/tablas_homologadas/', methods=['GET'])
+	@login_required
+	def tablas_homologadas():
+		selected_codcas = (request.args.get('codcas') or '').strip()
+		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
+		codcas = selected_codcas or fallback_codcas
+		return render_template(
+			'tablas_homologadas.html',
+			show_modules=False,
+			codcas=codcas,
+			center_name=_get_center_name_by_code(codcas),
+		)
+
+	@bp.route('/tabla_homologada/consulta-externa/', methods=['GET'])
+	@login_required
+	def tabla_homologada_ce():
+		try:
+			rows = _fetch_tabla_homologada_ce_rows()
+		except Exception as exc:
+			current_app.logger.exception('Error al consultar la tabla homologada de consulta externa: %s', exc)
+			flash('No se pudo cargar la tabla homologada de consulta externa en este momento.', 'danger')
+			return redirect(url_for('main.tablas_homologadas'))
+
+		selected_codcas = (request.args.get('codcas') or '').strip()
+		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
+		codcas = selected_codcas or fallback_codcas
+		return render_template(
+			'tabla_homologada_ce.html',
+			show_modules=False,
+			rows=rows,
+			codcas=codcas,
+		)
+
+	@bp.route('/tabla_homologada/consulta-externa/csv', methods=['GET'])
+	@login_required
+	def tabla_homologada_ce_csv():
+		try:
+			rows = _fetch_tabla_homologada_ce_rows()
+		except Exception as exc:
+			current_app.logger.exception('Error al exportar tabla homologada de consulta externa: %s', exc)
+			flash('No se pudo generar el CSV de consulta externa en este momento.', 'danger')
+			return redirect(url_for('main.tabla_homologada_ce'))
+
+		output = io.StringIO()
+		fieldnames = [
+			'desc_gpo_ocup',
+			'cod_area',
+			'desc_area',
+			'cod_actividad',
+			'desc_actividad',
+			'cod_subactividad',
+			'desc_subactividad',
+			'cod_servicio',
+			'desc_servicio',
+			'cod_especialidad',
+			'especialidad',
+			'cod_subespecialidad',
+			'subespecialidad',
+			'cod_agrupador',
+			'agrupador',
+			'cod_variable',
+			'variable',
+			'anio',
+			'anio_uso',
+		]
+		writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+		writer.writeheader()
+		if rows:
+			writer.writerows(rows)
+
+		filename = 'tabla_homologada_consulta_externa.csv'
+		csv_content = '\ufeff' + output.getvalue()
+		response = Response(csv_content, mimetype='text/csv; charset=utf-8')
+		response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+		return response
 
 	@bp.route('/tabla_homologada/csv', methods=['GET'])
 	@login_required

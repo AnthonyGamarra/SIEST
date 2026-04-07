@@ -264,17 +264,17 @@
             <span>Procedimientos</span>
           </div>
 
-          <!-- Módulo 4: Tabla homologada -->
+          <!-- Módulo 4: Tablas homologadas -->
           {% set homologada_codcas = request.args.get('codcas') or selected_codcas|default('') or current_user.codcas|default('') %}
           <a
-            href="{{ url_for('main.tabla_homologada') }}{% if homologada_codcas %}?codcas={{ homologada_codcas }}{% endif %}"
+            href="{{ url_for('main.tablas_homologadas') }}{% if homologada_codcas %}?codcas={{ homologada_codcas }}{% endif %}"
             class="module"
           >
             <img
               src="{{ url_for('static', filename='schedules_192194.png') }}"
               alt="tabla_homologada_emer"
             />
-            <span>Tabla homologada - emergencia</span>
+            <span>Tablas homologadas</span>
           </a>
 
           <!-- Módulo 5: reportes gerenciales -->
@@ -327,7 +327,7 @@
           {% if current_user.role == 'admin' %}
           <a href="{{ url_for('main.prediccion_desercion') }}" class="module">
             <img
-              src="{{ url_for('static', filename='artificial-intelligence_11751499.png') }}"
+              src="{{ url_for('static', filename='analytics.png') }}"
               alt="Predicción de deserción"
             />
             <span>Predicción de deserción</span>

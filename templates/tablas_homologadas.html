@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+	.hub-wrapper {
+		padding: 2rem 1rem;
+		min-height: calc(100vh - 120px);
+		background-image: url("{{ url_for('static', filename='76824.jpg') }}");
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+	}
+
+	.hub-card {
+		background: #ffffff;
+		border-radius: 1.25rem;
+		border: 1px solid #e4e9f2;
+		box-shadow: 0 20px 45px rgba(15, 43, 70, 0.08);
+		padding: 1.5rem;
+	}
+
+	.hub-title {
+		color: #0f2b46;
+		font-size: 1.55rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.hub-subtitle {
+		color: #556070;
+		margin-bottom: 1.2rem;
+	}
+
+	.hub-meta {
+		color: #1c3554;
+		font-size: 0.95rem;
+		margin-bottom: 1rem;
+	}
+
+	.hub-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+		gap: 1rem;
+	}
+
+	.hub-module {
+		display: block;
+		text-decoration: none;
+		color: inherit;
+		background: #f8fbff;
+		border: 1px solid #d8e4f4;
+		border-radius: 1rem;
+		padding: 1rem;
+		transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+	}
+
+	.hub-module:hover {
+		transform: translateY(-2px);
+		border-color: #93b6df;
+		box-shadow: 0 12px 25px rgba(15, 43, 70, 0.12);
+	}
+
+	.hub-module h3 {
+		font-size: 1.05rem;
+		color: #0f2b46;
+		margin-bottom: 0.4rem;
+	}
+
+	.hub-module p {
+		margin: 0;
+		color: #5f6f84;
+		font-size: 0.92rem;
+	}
+
+	.hub-actions {
+		margin-top: 1.2rem;
+	}
+</style>
+
+<div class="hub-wrapper">
+	<div class="hub-card">
+		<h1 class="hub-title">Tablas homologadas</h1>
+		<p class="hub-subtitle">Seleccione el tipo de tabla que desea consultar.</p>
+
+		{% if codcas %}
+		<div class="hub-meta">
+			<strong>Centro actual:</strong> {{ center_name or 'Sin descripción' }}
+			<span class="ms-2"><strong>Código:</strong> {{ codcas }}</span>
+		</div>
+		{% endif %}
+
+		<div class="hub-grid">
+			<a class="hub-module" href="{{ url_for('main.tabla_homologada_eme', codcas=codcas) if codcas else url_for('main.tabla_homologada_eme') }}">
+				<h3>Tabla homologada - Emergencia</h3>
+				<p>Relación de tópicos, emergencias y estándares por centro asistencial.</p>
+			</a>
+
+			<a class="hub-module" href="{{ url_for('main.tabla_homologada_ce', codcas=codcas) if codcas else url_for('main.tabla_homologada_ce') }}">
+				<h3>Tabla homologada - Consulta externa</h3>
+				<p>Relación homologada de grupo ocupacional, actividad, servicio, especialidad y variables.</p>
+			</a>
+		</div>
+
+		<div class="hub-actions">
+			<a class="pill-btn pill-btn--ghost" href="{{ url_for('main.index', codcas=codcas) if codcas else url_for('main.index') }}">Volver al inicio</a>
+		</div>
+	</div>
+</div>
+{% endblock %}
