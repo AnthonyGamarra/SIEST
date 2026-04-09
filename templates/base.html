@@ -246,14 +246,29 @@
           </div>
           {% endif %}
 
-          <!-- Módulo 4: Laboratorio (desactivado) -->
-          <div class="module inactive">
+          <!-- Módulo 4: Centro quirúrgico -->
+          {% set code_cq = current_user.dashboard_code() if current_user else '' %}
+          {% if current_user.role == 'admin' and code_cq %} <!-----------{# cambiar por: if code_cq — al entrar en producción #}--->
+          <a
+            href="{{ '/dashboard_cq/' + dashboard_code_for_user() + '/' }}"
+            class="module"
+          >
             <img
               src="{{ url_for('static', filename='cirugia.png') }}"
               alt="Centro quirúrgico"
             />
             <span>Centro quirúrgico</span>
+          </a>
+          {% else %}
+          <div class="module inactive" title="En desarrollo">
+            <img
+              src="{{ url_for('static', filename='cirugia.png') }}"
+              alt="Centro quirúrgico"
+            />
+            <span>Centro quirúrgico</span>
+            <small style="font-size:10px; color:#aaa; display:block; margin-top:2px;">En desarrollo</small>
           </div>
+          {% endif %}
 
           <!-- Módulo 3: Hospitalización (desactivado) -->
           <div class="module inactive">

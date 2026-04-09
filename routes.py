@@ -870,7 +870,33 @@ def register_routes(app):
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
 
+	@bp.route('/dashboard_cq', endpoint='dashboard_cq_redirect')
+	@login_required
+	def dashboard_cq_redirect():
+		code = ""
+		if current_user.role == 'admin':
+			code = request.args.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
 
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_cq/{token}/')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_cq/')
+	@login_required
+	def dashboard_cq_index():
+		code = ""
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_cq/{token}/')
+		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
+		return redirect(url_for('main.index'))
 
 
 
