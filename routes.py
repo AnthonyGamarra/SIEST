@@ -898,6 +898,62 @@ def register_routes(app):
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
 
+	@bp.route('/cq/')
+	@login_required
+	def cq_index():
+		token = dashboard_code_for_user(current_user, request)
+		if token:
+			return redirect(url_for('main.cq_menu', token=token))
+		flash('No hay código asociado al usuario para mostrar el menú de Centro Quirúrgico.', 'warning')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/cq/<token>', methods=['GET'])
+	@bp.route('/cq/<token>/', methods=['GET'])
+	@login_required
+	def cq_menu(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		center_name = _get_center_name_by_code(code)
+		intervenciones_url = f'/dashboard_cq/{token}/'
+		transplantes_url = f'/dashboard_cq_trans/{token}/'
+		return render_template(
+			'cq.html',
+			show_modules=False,
+			dashboard_token=token,
+			codcas=code,
+			center_name=center_name,
+			intervenciones_url=intervenciones_url,
+			transplantes_url=transplantes_url,
+		)
+
+	@bp.route('/dashboard_cq_trans', endpoint='dashboard_cq_trans_redirect')
+	@login_required
+	def dashboard_cq_trans_redirect():
+		code = ''
+		if current_user.role == 'admin':
+			code = request.args.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_cq_trans/{token}/')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_cq_trans/')
+	@login_required
+	def dashboard_cq_trans_index():
+		code = ''
+		if current_user.role == 'admin':
+			code = request.form.get('codcas', '')
+		elif current_user.role == 'user':
+			code = getattr(current_user, 'dashboard_code', lambda: '')()
+		if code:
+			token = encode_code(code)
+			return redirect(f'/dashboard_cq_trans/{token}/')
+		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
+		return redirect(url_for('main.index'))
 
 
 	@bp.route('/diag_cap_admin')

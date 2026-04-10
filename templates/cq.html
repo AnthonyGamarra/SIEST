@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="main ce-main">
+	<div class="modules-container">
+		<div class="modules-header" style="color: #ffffff">
+			{% if center_name %}
+			<h1 class="modules-titles">Centro seleccionado: {{ center_name }}</h1>
+			{% elif codcas %}
+			<h1 class="modules-titles">Centro seleccionado: {{ codcas }}</h1>
+			{% endif %}
+			<h1 class="modules-title">Centro quirúrgico</h1>
+			<p class="modules-subtitle">
+				Elige el módulo que deseas explorar para ver los indicadores disponibles.
+			</p>
+		</div>
+		<div class="modules-menu">
+			<a href="{{ intervenciones_url }}" class="module">
+				<img src="{{ url_for('static', filename='cirugia.png') }}" alt="Intervenciones quirúrgicas" />
+				<span>Intervenciones quirúrgicas por complejidad</span>
+			</a>
+
+			<a href="{{ transplantes_url }}" class="module">
+				<img src="{{ url_for('static', filename='transplant_15169600.png') }}" alt="Transplantes" />
+				<span>Transplantes</span>
+			</a>
+		</div>
+		<div class="modules-footer" style="margin-top: 2rem; text-align: center">
+			<a class="pill-btn pill-btn--ghost" href="javascript:history.back();">Volver al inicio</a>
+		</div>
+	</div>
+</div>
+{% endblock %}

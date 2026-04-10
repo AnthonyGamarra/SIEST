@@ -12,6 +12,7 @@ from dashboard_nm import create_dash_app as create_dash_nm
 from dashboard_diag import create_dash_app as create_dash_diag
 from dashboard_odo import create_dash_app as create_dash_odo
 from dashboard_cq import create_dash_app as create_dash_cq
+from dashboard_cq_trans import create_dash_app as create_dash_cq_trans
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -75,6 +76,7 @@ def create_app():
     create_dash_diag(app, url_base_pathname='/diag_cap/')
     create_dash_odo(app, url_base_pathname='/dashboard_odo/')
     create_dash_cq(app, url_base_pathname='/dashboard_cq/')
+    create_dash_cq_trans(app, url_base_pathname='/dashboard_cq_trans/')
 
     # =============================
     # HELPER DE PASSWORD

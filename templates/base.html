@@ -248,9 +248,9 @@
 
           <!-- Módulo 4: Centro quirúrgico -->
           {% set code_cq = current_user.dashboard_code() if current_user else '' %}
-          {% if current_user.role == 'admin' and code_cq %} <!-----------{# cambiar por: if code_cq — al entrar en producción #}--->
+          {% if current_user.role == 'admin' and code_cq %} {# cambiar por: if code_cq — al entrar en producción #}
           <a
-            href="{{ '/dashboard_cq/' + dashboard_code_for_user() + '/' }}"
+            href="{{ '/cq/' + dashboard_code_for_user() + '/' }}"
             class="module"
           >
             <img

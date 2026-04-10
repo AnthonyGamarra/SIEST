@@ -19,7 +19,7 @@ from Indicadores import ate_topicos_4
 from Indicadores import ate_topicos_5
 
 
-def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
+def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
     external_stylesheets = [
         dbc.themes.BOOTSTRAP,
         "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css",
@@ -171,7 +171,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
     
     def render_priority_table(dataframe):
         table_title = html.H6(
-            "Área",
+            "Código de sala",
             className="mb-2",
             style={
                 'fontFamily': FONT_FAMILY,
@@ -238,7 +238,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             if not fecha_act_value:
                 fecha_act_value = "Sin informacion disponible"
             return dbc.Container([
-                dcc.Location(id='url-cq', refresh=False),
+                dcc.Location(id='url-cq-trans', refresh=False),
 
                 html.Div([
                 # ENCABEZADO
@@ -261,7 +261,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                                     'marginRight': '12px'
                                 }),
                                 html.H2(
-                                    "Centro Quirúrgico - Intervenciones Quirúrgicas por grado de Complejidad",
+                                    "Centro Quirúrgico - Transplantes",
                                     style={
                                         'color': BRAND,
                                         'fontFamily': FONT_FAMILY,
@@ -307,7 +307,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                         'marginRight': '10px'
                     }),
                     dcc.Dropdown(
-                        id='filter-anio-cq',
+                        id='filter-anio-cq-trans',
                         options=anio_options,
                         placeholder='Año',
                         clearable=True,
@@ -319,7 +319,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                         }
                     ),
                     dcc.Dropdown(
-                        id='filter-periodo-cq',
+                        id='filter-periodo-cq-trans',
                         options=[{'label': row['mes'], 'value': row['periodo']} for _, row in df_period.iterrows()],
                         placeholder='Periodo',
                         clearable=True,
@@ -329,7 +329,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                         }
                     ),
                     dcc.Dropdown(
-                        id='filter-tipo-asegurado-cq',
+                        id='filter-tipo-asegurado-cq-trans',
                         options=tipo_asegurado_options,
                         value=DEFAULT_TIPO_ASEGURADO,
                         clearable=False,
@@ -340,7 +340,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                     ),
                     dbc.Button(
                         [html.I(className="bi bi-search me-2"), "Buscar"],
-                        id='search-button-cq',
+                        id='search-button-cq-trans',
                         color='primary',
                         className='dashboard-control-btn',
                         style={
@@ -354,7 +354,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                     ),
                     dbc.Button(
                         [html.I(className="bi bi-download me-2"), "Exportar CSV"],
-                        id='download-button-cq',
+                        id='download-button-cq-trans',
                         color='success',
                         className='dashboard-control-btn',
                         style={
@@ -366,10 +366,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                             'padding': '8px 20px'
                         }
                     ),
-                    dcc.Download(id="download-dataframe-csv-cq"),
+                    dcc.Download(id="download-dataframe-csv-cq-trans"),
                     dbc.Button(
                         [html.I(className="bi bi-arrow-left me-1"), "Volver"],
-                        id="btn-volver-eme-cq",
+                        id="btn-volver-eme-cq-trans",
                         color='secondary',
                         outline=True,
                         className='dashboard-control-btn dashboard-control-btn-back',
@@ -390,7 +390,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                     'borderRadius': '14px',
                     'boxShadow': '0 8px 20px rgba(0,0,0,0.08)'
                 }),
-                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme-cq', placement='bottom'),
+                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme-cq-trans', placement='bottom'),
 
                 # CONTENEDORES
                 dbc.Row([
@@ -402,7 +402,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                                 parent_style={'width': '100%'},
                                 type='default',
                                 style={'width': '100%'},
-                                children=html.Div(id='summary-container-cq')
+                                children=html.Div(id='summary-container-cq-trans')
                             ),
                             className='dashboard-loading-shell'
                         ),
@@ -419,17 +419,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                                 parent_style={'width': '100%'},
                                 type='default',
                                 style={'width': '100%'},
-                                children=html.Div(id='charts-container-cq')
+                                children=html.Div(id='charts-container-cq-trans')
                             ),
                             className='dashboard-loading-shell'
                         ),
                         width=12
                     )
                 ]),
-                ], id='main-eme-content-cq'),
+                ], id='main-eme-content-cq-trans'),
 
                 # Contenedor para páginas de detalle
-                html.Div(id='page-eme-container-cq', style={'display': 'none'})
+                html.Div(id='page-eme-container-cq-trans', style={'display': 'none'})
 
             ], fluid=True, style={
                 'backgroundImage': "url('/static/76824.jpg')",
@@ -447,7 +447,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             html.P('Debes iniciar sesión para ver el dashboard.'),
             dbc.Button(
                 'Volver',
-                id='unauth-back-button-eme-cq',
+                id='unauth-back-button-eme-cq-trans',
                 color='primary',
                 href='javascript:history.back();',
                 external_link=True,
@@ -507,10 +507,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
 
     # Callback de Enrutamiento Manual (Reemplaza a Dash Pages)
     @dash_app.callback(
-        Output('main-eme-content-cq', 'style'),
-        Output('page-eme-container-cq', 'children'),
-        Output('page-eme-container-cq', 'style'),
-        Input('url-cq', 'pathname')
+        Output('main-eme-content-cq-trans', 'style'),
+        Output('page-eme-container-cq-trans', 'children'),
+        Output('page-eme-container-cq-trans', 'style'),
+        Input('url-cq-trans', 'pathname')
     )
     def router(pathname):
         # Estilos por defecto
@@ -532,38 +532,38 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         if not clean_path:
             return show_dash, html.Div(), hide_page
 
-        # # Lógica de enrutamiento
-        # if clean_path.startswith('complejidad_'):
-        #     try:
-        #         parts = clean_path.split('/')
-        #         # parts[0] -> "complejidad_A", parts[1] -> "001" (codcas)
-        #         complejidad_num = parts[0].split('_')[1]
-        #         codcas = parts[1] if len(parts) > 1 else "000"
+        # Lógica de enrutamiento
+        if clean_path.startswith('complejidad_'):
+            try:
+                parts = clean_path.split('/')
+                # parts[0] -> "complejidad_A", parts[1] -> "001" (codcas)
+                complejidad_num = parts[0].split('_')[1]
+                codcas = parts[1] if len(parts) > 1 else "000"
                 
-        #         content = None
-        #         if complejidad_num == 'A': content = ate_cq_1.layout(codcas=codcas)
-        #         elif complejidad_num == 'B': content = ate_cq_2.layout(codcas=codcas)
-        #         elif complejidad_num == 'C': content = ate_cq_3.layout(codcas=codcas)
-        #         elif complejidad_num == 'D': content = ate_cq_4.layout(codcas=codcas)
-        #         elif complejidad_num == 'E': content = ate_cq_5.layout(codcas=codcas)
+                content = None
+                if complejidad_num == 'A': content = ate_cq_1.layout(codcas=codcas)
+                elif complejidad_num == 'B': content = ate_cq_2.layout(codcas=codcas)
+                elif complejidad_num == 'C': content = ate_cq_3.layout(codcas=codcas)
+                elif complejidad_num == 'D': content = ate_cq_4.layout(codcas=codcas)
+                elif complejidad_num == 'E': content = ate_cq_5.layout(codcas=codcas)
                 
-        #         if content:
-        #             return hide_dash, content, show_page
-        #     except Exception:
-        #         pass # Si falla el parsing, vuelve al dashboard
+                if content:
+                    return hide_dash, content, show_page
+            except Exception:
+                pass # Si falla el parsing, vuelve al dashboard
         
         # Si no coincide con ninguna ruta conocida, mostrar dashboard
         return show_dash, html.Div(), hide_page
 
     # ========== CALLBACK PRINCIPAL ==========
     @dash_app.callback(
-        [Output('summary-container-cq', 'children'),
-         Output('charts-container-cq', 'children')],
-        Input('search-button-cq', 'n_clicks'),
-        State('filter-periodo-cq', 'value'),
-        State('filter-anio-cq', 'value'),
-        State('filter-tipo-asegurado-cq', 'value'),
-        State('url-cq', 'pathname')
+        [Output('summary-container-cq-trans', 'children'),
+         Output('charts-container-cq-trans', 'children')],
+        Input('search-button-cq-trans', 'n_clicks'),
+        State('filter-periodo-cq-trans', 'value'),
+        State('filter-anio-cq-trans', 'value'),
+        State('filter-tipo-asegurado-cq-trans', 'value'),
+        State('url-cq-trans', 'pathname')
     )
     def on_search(n_clicks, periodo, anio, tipo_asegurado, pathname):
         if not n_clicks:
@@ -605,54 +605,95 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             return html.Div("Error de conexión a la base de datos."), html.Div()
 
         query = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
-                cq.cod_oricentro,
-                cq.cod_centro,
+            SELECT cod_oricentro,
+                cod_centro,
                 ca.cenasides AS cenasides,
-                cq.periodo,
-                cq.anio,
-                cq.cod_area,
-                h.arehosdes AS area,
-                cq.cod_servicio,
+                periodo,
+                anio,
+                cod_area,
+                cod_servicio,
                 c.servhosdes AS servicio,
-                cq.cod_cpms,
+                cod_cpms,
                 cp.cpsdes AS cpms,
-                cq.cod_tipdoc_paciente,
-                cq.doc_paciente,
-                cq.anio_edad,
-                cq.meses,
-                cq.sexo,
-                cq.cod_sala,
-                cq.acto_med,
-                cq.cod_complejidad,
-                cq.cod_anest,
-                cq.cod_tipo_programacion,
-                cq.num_solicitud,
-                cq.cod_quirof,
-                q.salopedes,
-                cq.fec_oper
+                cod_tip_cirujano,
+                cod_tipdoc_medico,
+                dni_medico,
+                fec_oper,
+                autogenerado,
+                cmame_pacsecnum,
+                cod_tipdoc_paciente,
+                doc_paciente,
+                anio_edad,
+                meses,
+                sexo,
+                cod_tip_seguro,
+                cod_tipo_parentesco,
+                cod_tipo_paciente,
+                cod_sala,
+                hor_ini_sala,
+                hor_fin_sala,
+                duracion_sala,
+                hor_ini_anest,
+                hor_fin_anest,
+                duracion_anest,
+                hor_ini_operac,
+                hor_fin_operac,
+                duracion_operac,
+                acto_med,
+                cod_complejidad,
+                cod_anest,
+                cod_tipo_programacion,
+                num_solicitud,
+                cod_quirof,
+                fecsolicsalaoperac,
+                fecsolicitadaoperac,
+                fecprogram,
+                cas_adscripcion,
+                h_c,
+                salopedes,
+                cod_destegreso,
+                fechcreasolicitud,
+                horcreasolic,
+                fecaptitud
             FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON cq.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                ON cq.cod_oricentro = ca.oricenasicod 
-            AND cq.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-                ON q.cenasicod = cq.cod_centro 
-            AND q.salopecod = cq.cod_sala_operacion 
-            AND cq.cod_quirof = q.cenquicod
-            LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-                ON cp.cpscod = cq.cod_cpms
-            LEFT JOIN dwsge.sgss_cmaho10 as h
-                ON h.arehoscod = cq.cod_area
-            WHERE cq.cod_centro = '{codcas}'
-                        AND (
-                                CASE
-                                    WHEN cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                            ) IN {codasegu_clause}
-            ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
+                LEFT JOIN dwsge.sgss_cmsho10 AS c ON cq.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca ON cq.cod_oricentro = ca.oricenasicod AND cq.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.sgss_qmcqs10 AS q ON q.cenasicod = cq.cod_centro AND q.salopecod= cq.cod_sala_operacion AND cq.COD_QUIROF = q.cenquicod
+                LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = cq.cod_cpms
+            WHERE cod_centro='{codcas}'
+              AND cod_cpms IN (
+                '38241',
+                '38240',
+                '48551',
+                '48552',
+                '33945',
+                '33935',
+                '65730',
+                '65710',
+                '65750',
+                '65755',
+                '65712',
+                '65714',
+                '65732',
+                '65752',
+                '65756',
+                '65757',
+                '50250',
+                '47135',
+                '47163',
+                '32851',
+                '32852',
+                '32854',
+                '50360',
+                '50365',
+                '50380'
+                )
+              AND (
+                    CASE
+                        WHEN cod_tipo_paciente = '4' THEN '2'
+                        ELSE '1'
+                    END
+                  ) IN {codasegu_clause}
         """
 
         if not query.strip():
@@ -696,54 +737,78 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         # === TARJETAS RESUMEN POR PRIORIDAD ===
         # Query base para obtener datos con cod_prioridad_n
         query_base = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
-                cq.cod_oricentro,
-                cq.cod_centro,
-                ca.cenasides AS cenasides,
-                cq.periodo,
-                cq.anio,
-                cq.cod_area,
-                h.arehosdes AS area,
-                cq.cod_servicio,
-                c.servhosdes AS servicio,
-                cq.cod_cpms,
-                cp.cpsdes AS cpms,
-                cq.cod_tipdoc_paciente,
-                cq.doc_paciente,
-                cq.anio_edad,
-                cq.meses,
-                cq.sexo,
-                cq.cod_sala,
-                cq.acto_med,
-                cq.cod_complejidad,
-                cq.cod_anest,
-                cq.cod_tipo_programacion,
-                cq.num_solicitud,
-                cq.cod_quirof,
-                q.salopedes,
-                cq.fec_oper
-            FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON cq.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                ON cq.cod_oricentro = ca.oricenasicod 
-            AND cq.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-                ON q.cenasicod = cq.cod_centro 
-            AND q.salopecod = cq.cod_sala_operacion 
-            AND cq.cod_quirof = q.cenquicod
-            LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-                ON cp.cpscod = cq.cod_cpms
-            LEFT JOIN dwsge.sgss_cmaho10 as h
-                ON h.arehoscod = cq.cod_area
-            WHERE cq.cod_centro = '{codcas}'
-                        AND (
-                                CASE
-                                    WHEN cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                            ) IN {codasegu_clause}
-            ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
+        SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
+            cq.cod_oricentro,
+            cq.cod_centro,
+            ca.cenasides AS cenasides,
+            cq.periodo,
+            cq.anio,
+            cq.cod_area,
+            cq.cod_servicio,
+            c.servhosdes AS servicio,
+            cq.cod_cpms,
+            cp.cpsdes AS cpms,
+            cq.cod_tipdoc_paciente,
+            cq.doc_paciente,
+            cq.anio_edad,
+            cq.meses,
+            cq.sexo,
+            cq.cod_sala,
+            cq.acto_med,
+            cq.cod_complejidad,
+            cq.cod_anest,
+            cq.cod_tipo_programacion,
+            cq.num_solicitud,
+            cq.cod_quirof,
+            q.salopedes,
+            cq.fec_oper
+        FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
+        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+            ON cq.cod_servicio = c.servhoscod
+        LEFT JOIN dwsge.sgss_cmcas10 AS ca 
+            ON cq.cod_oricentro = ca.oricenasicod 
+        AND cq.cod_centro = ca.cenasicod
+        LEFT JOIN dwsge.sgss_qmcqs10 AS q 
+            ON q.cenasicod = cq.cod_centro 
+        AND q.salopecod = cq.cod_sala_operacion 
+        AND cq.cod_quirof = q.cenquicod
+        LEFT JOIN dwsge.sgss_cmcpp10 as cp 
+            ON cp.cpscod = cq.cod_cpms
+        WHERE cq.cod_centro = '{codcas}'
+                    AND cod_cpms IN (
+                        '38241',
+                        '38240',
+                        '48551',
+                        '48552',
+                        '33945',
+                        '33935',
+                        '65730',
+                        '65710',
+                        '65750',
+                        '65755',
+                        '65712',
+                        '65714',
+                        '65732',
+                        '65752',
+                        '65756',
+                        '65757',
+                        '50250',
+                        '47135',
+                        '47163',
+                        '32851',
+                        '32852',
+                        '32854',
+                        '50360',
+                        '50365',
+                        '50380'
+                        )
+                    AND (
+                            CASE
+                                WHEN cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu_clause}
+        ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
         """
 
         # Ejecutar SOLO UNA VEZ
@@ -757,13 +822,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
 
         prioridad_labels = {
             'A': 'Complejidad A',
-            'B': 'Complejidad B',
-            'C': 'Complejidad C',
-            'D': 'Complejidad D',
-            'E': 'Complejidad E'
         }
 
-        for complejidad in ['A', 'B', 'C', 'D', 'E']:
+        for complejidad in ['A']:
 
             # Filtrar en memoria (no en SQL)
             df_complejidad = df_base[df_base['cod_complejidad'] == complejidad]
@@ -777,14 +838,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
 
             df_prioridad_tabla = (
                 df_complejidad
-                .groupby('area')
+                .groupby('cpms')
                 .size()
                 .reset_index(name='Atenciones')
                 .sort_values(by='Atenciones', ascending=False)
             )
 
             df_prioridad_tabla = df_prioridad_tabla.rename(
-                columns={'area': 'des_estandar'}
+                columns={'cpms': 'des_estandar'}
             )
 
             priority_tables[complejidad] = df_prioridad_tabla
@@ -890,12 +951,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         return summary_row, html.Div()
        # ========== CALLBACK DESCARGA CSV ==========
     @dash_app.callback(
-        Output("download-dataframe-csv-cq", "data"),
-        Input("download-button-cq", "n_clicks"),
-        State('filter-periodo-cq', 'value'),
-        State('filter-anio-cq', 'value'),
-        State('filter-tipo-asegurado-cq', 'value'),
-        State('url-cq', 'pathname'),
+        Output("download-dataframe-csv-cq-trans", "data"),
+        Input("download-button-cq-trans", "n_clicks"),
+        State('filter-periodo-cq-trans', 'value'),
+        State('filter-anio-cq-trans', 'value'),
+        State('filter-tipo-asegurado-cq-trans', 'value'),
+        State('url-cq-trans', 'pathname'),
         prevent_initial_call=True
     )
     def download_csv(n_clicks, periodo, anio, tipo_asegurado, pathname):
@@ -918,54 +979,78 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             return None
 
         query =  f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
-                cq.cod_oricentro,
-                cq.cod_centro,
-                ca.cenasides AS cenasides,
-                cq.periodo,
-                cq.anio,
-                cq.cod_area,
-                h.arehosdes AS area,
-                cq.cod_servicio,
-                c.servhosdes AS servicio,
-                cq.cod_cpms,
-                cp.cpsdes AS cpms,
-                cq.cod_tipdoc_paciente,
-                cq.doc_paciente,
-                cq.anio_edad,
-                cq.meses,
-                cq.sexo,
-                cq.cod_sala,
-                cq.acto_med,
-                cq.cod_complejidad,
-                cq.cod_anest,
-                cq.cod_tipo_programacion,
-                cq.num_solicitud,
-                cq.cod_quirof,
-                q.salopedes,
-                cq.fec_oper
-            FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON cq.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                ON cq.cod_oricentro = ca.oricenasicod 
-            AND cq.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-                ON q.cenasicod = cq.cod_centro 
-            AND q.salopecod = cq.cod_sala_operacion 
-            AND cq.cod_quirof = q.cenquicod
-            LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-                ON cp.cpscod = cq.cod_cpms
-            LEFT JOIN dwsge.sgss_cmaho10 as h
-                ON h.arehoscod = cq.cod_area
-            WHERE cq.cod_centro = '{codcas}'
-                        AND (
-                                CASE
-                                    WHEN cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                            ) IN {codasegu_clause}
-            ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
+        SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
+            cq.cod_oricentro,
+            cq.cod_centro,
+            ca.cenasides AS cenasides,
+            cq.periodo,
+            cq.anio,
+            cq.cod_area,
+            cq.cod_servicio,
+            c.servhosdes AS servicio,
+            cq.cod_cpms,
+            cp.cpsdes AS cpms,
+            cq.cod_tipdoc_paciente,
+            cq.doc_paciente,
+            cq.anio_edad,
+            cq.meses,
+            cq.sexo,
+            cq.cod_sala,
+            cq.acto_med,
+            cq.cod_complejidad,
+            cq.cod_anest,
+            cq.cod_tipo_programacion,
+            cq.num_solicitud,
+            cq.cod_quirof,
+            q.salopedes,
+            cq.fec_oper
+        FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
+        LEFT JOIN dwsge.sgss_cmsho10 AS c 
+            ON cq.cod_servicio = c.servhoscod
+        LEFT JOIN dwsge.sgss_cmcas10 AS ca 
+            ON cq.cod_oricentro = ca.oricenasicod 
+        AND cq.cod_centro = ca.cenasicod
+        LEFT JOIN dwsge.sgss_qmcqs10 AS q 
+            ON q.cenasicod = cq.cod_centro 
+        AND q.salopecod = cq.cod_sala_operacion 
+        AND cq.cod_quirof = q.cenquicod
+        LEFT JOIN dwsge.sgss_cmcpp10 as cp 
+            ON cp.cpscod = cq.cod_cpms
+        WHERE cq.cod_centro = '{codcas}'
+                    AND cod_cpms IN (
+                        '38241',
+                        '38240',
+                        '48551',
+                        '48552',
+                        '33945',
+                        '33935',
+                        '65730',
+                        '65710',
+                        '65750',
+                        '65755',
+                        '65712',
+                        '65714',
+                        '65732',
+                        '65752',
+                        '65756',
+                        '65757',
+                        '50250',
+                        '47135',
+                        '47163',
+                        '32851',
+                        '32852',
+                        '32854',
+                        '50360',
+                        '50365',
+                        '50380'
+                        )
+                    AND (
+                            CASE
+                                WHEN cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu_clause}
+        ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
         """
         df = pd.read_sql(query, engine)
         if df.empty:
