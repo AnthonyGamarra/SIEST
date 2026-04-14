@@ -230,15 +230,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 # ENCABEZADO
                 html.Div([
                     html.Div([
-                        html.Img(
-                            src=dash_app.get_asset_url('logo.png'),
-                            style={
-                                'width': '120px',
-                                'height': '60px',
-                                'objectFit': 'contain',
-                                'marginRight': '20px'
-                            }
-                        ),
+                        # html.Img(
+                        #     src=dash_app.get_asset_url('logo.png'),
+                        #     style={
+                        #         'width': '120px',
+                        #         'height': '60px',
+                        #         'objectFit': 'contain',
+                        #         'marginRight': '20px'
+                        #     }
+                        # ),
                         html.Div([
                             html.Div([
                                 html.I(className="bi bi-hospital", style={

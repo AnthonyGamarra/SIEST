@@ -1165,15 +1165,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
             if not fecha_act_value:
                 fecha_act_value = "Sin informacion disponible"
             header = html.Div([
-                html.Img(
-                    src=dash_app.get_asset_url('logo.png'),
-                    style={
-                        'width': '120px',
-                        'height': '60px',
-                        'objectFit': 'contain',
-                        'marginRight': '16px'
-                    }
-                ),
+                # html.Img(
+                #     src=dash_app.get_asset_url('logo.png'),
+                #     style={
+                #         'width': '120px',
+                #         'height': '60px',
+                #         'objectFit': 'contain',
+                #         'marginRight': '16px'
+                #     }
+                # ),
                 html.Div([
                     html.Div([
                         html.Div([

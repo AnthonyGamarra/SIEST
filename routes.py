@@ -812,6 +812,22 @@ def register_routes(app):
 			return redirect(f'/dashboard/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard/<token>', methods=['GET'])
+	@bp.route('/dashboard/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
 	
 	@bp.route('/dashboard_nm', endpoint='dashboard_nm_redirect')
 	@login_required
@@ -840,6 +856,22 @@ def register_routes(app):
 			return redirect(f'/dashboard_nm/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_nm/<token>', methods=['GET'])
+	@bp.route('/dashboard_nm/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_nm_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_nm_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
 	
 
 	@bp.route('/dashboard_odo', endpoint='dashboard_odo_redirect')
@@ -869,6 +901,22 @@ def register_routes(app):
 			return redirect(f'/dashboard_odo/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_odo/<token>', methods=['GET'])
+	@bp.route('/dashboard_odo/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_odo_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_odo_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
 
 	@bp.route('/dashboard_cq', endpoint='dashboard_cq_redirect')
 	@login_required
@@ -928,6 +976,22 @@ def register_routes(app):
 			transplantes_url=transplantes_url,
 		)
 
+	@bp.route('/dashboard_cq/<token>', methods=['GET'])
+	@bp.route('/dashboard_cq/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_cq_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_cq_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
 	@bp.route('/dashboard_cq_trans', endpoint='dashboard_cq_trans_redirect')
 	@login_required
 	def dashboard_cq_trans_redirect():
@@ -955,6 +1019,22 @@ def register_routes(app):
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
 
+	@bp.route('/dashboard_cq_trans/<token>', methods=['GET'])
+	@bp.route('/dashboard_cq_trans/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_cq_trans_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_cq_trans_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
 
 	@bp.route('/diag_cap_admin')
 	@login_required
@@ -964,16 +1044,27 @@ def register_routes(app):
 			return redirect(url_for('main.index'))
 		return redirect('/diag_cap/')
 
+	@bp.route('/diag_cap/')
+	@login_required
+	def diag_cap_wrapper():
+		dashboard_url = '/diag_cap_embed/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+		)
+
 	@bp.route('/dashboard_alt', endpoint='dashboard_alt_redirect')
 	@login_required
 	def dashboard_alt_redirect():
 		code = ""
 		if current_user.role == 'admin':
-			code = request.form.get('codcas', '') 
+			code = request.form.get('codcas', '') or request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
 		if code:
-			return redirect(f'/dashboard_alt/{code}/')
+			token = encode_code(code)
+			return redirect(f'/dashboard_alt/{token}/')
 		return redirect(url_for('main.index'))
 
 	@bp.route('/dashboard_alt/')
@@ -981,13 +1072,30 @@ def register_routes(app):
 	def dashboard_alt_index():
 		code = ""
 		if current_user.role == 'admin':
-			code = request.form.get('codcas', '') 
+			code = request.form.get('codcas', '') or request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
 		if code:
-			return redirect(f'/dashboard_alt/{code}/')
+			token = encode_code(code)
+			return redirect(f'/dashboard_alt/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard alternativo.', 'warning')
 		return redirect(url_for('main.index'))
+
+	@bp.route('/dashboard_alt/<token>', methods=['GET'])
+	@bp.route('/dashboard_alt/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_alt_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_alt_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
 	
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
 		code = ""
@@ -1036,7 +1144,17 @@ def register_routes(app):
 	@login_required
 	def dashboard_eme_prioridad_redirect(prioridad, codcas):
 		qs = request.query_string.decode()
-		return redirect(f"/dashboard_alt/prioridad_{prioridad}/{codcas}?{qs}")
+		resolved_code = decode_code(codcas) or codcas
+		token = encode_code(resolved_code)
+		dashboard_url = f'/dashboard_alt_embed/prioridad_{prioridad}/{token}/'
+		if qs:
+			dashboard_url = f'{dashboard_url}?{qs}'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=resolved_code,
+		)
 
 	@bp.route('/total_atenciones/')
 	@login_required

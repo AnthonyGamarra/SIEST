@@ -203,61 +203,38 @@
     font-weight: 600;
   }
 
-  #rg-viewer {
-    margin: 0 auto;
-    max-width: 2000px;
-    width: calc(100% - 10px);
-    padding: 0 5px 40px 5px;
+  #rgModal .modal-dialog {
+    max-width: 95vw;
   }
 
-  .viewer-container {
-    background: rgba(255, 255, 255, 0.97);
-    border-radius: 12px;
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.15);
-    padding: 16px;
+  #rgModal .modal-content {
+    border: none;
+    border-radius: 14px;
     overflow: hidden;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
   }
 
-  .viewer-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
+  #rgModal .modal-header {
     border-bottom: 1px solid var(--border);
-    margin-bottom: 12px;
+    background: #ffffff;
+    padding: 14px 18px;
   }
 
-  .viewer-title {
+  #rgModal .modal-title {
     font-size: 18px;
     font-weight: 600;
     color: var(--dark);
   }
 
-  .btn-close-viewer {
-    background: none;
-    border: none;
-    font-size: 24px;
-    color: #9ca3af;
-    cursor: pointer;
-    transition: color 0.2s ease;
-    padding: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 6px;
+  #rgModal .modal-body {
+    padding: 10px;
+    background: #f8f9fb;
   }
 
-  .btn-close-viewer:hover {
-    background: var(--light);
-    color: var(--dark);
-  }
-
-  #rg-iframe {
+  #rg-modal-iframe {
     border: none;
     width: 100%;
-    height: 80vh;
+    height: min(82vh, 900px);
     border-radius: 10px;
     background: #f8f9fb;
   }
@@ -291,16 +268,7 @@
       padding: 24px 16px;
     }
 
-    #rg-viewer {
-      width: calc(100% - 32px);
-      padding: 0 16px 32px 16px;
-    }
-
-    .viewer-container {
-      padding: 12px;
-    }
-
-    #rg-iframe {
+    #rg-modal-iframe {
       height: 50vh;
     }
   }
@@ -330,30 +298,30 @@
 
   <div class="modules-menu">
     <!-- Duplica estos bloques para agregar más módulos históricos -->
-    <a href="https://app.powerbi.com/view?r=eyJrIjoiMjNkMTQ0MjMtMTIyYi00NjhkLThlMmMtZTg1ZDk5ZTYxM2QzIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMjNkMTQ0MjMtMTIyYi00NjhkLThlMmMtZTg1ZDk5ZTYxM2QzIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Atenciones - CE">
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiMjNkMTQ0MjMtMTIyYi00NjhkLThlMmMtZTg1ZDk5ZTYxM2QzIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMjNkMTQ0MjMtMTIyYi00NjhkLThlMmMtZTg1ZDk5ZTYxM2QzIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Atenciones - CE - 2023">
       <div class="module">
-        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Atenciones - CE">
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Atenciones - CE - 2023">
         <span>Resumen - CE - 2023</span>
       </div>
     </a>
 
-    <a href="https://app.powerbi.com/view?r=eyJrIjoiMjg4MDMzNmMtMjhhZS00ODlkLWI0YjMtOWYxYTc1NWE1NzY1IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMjg4MDMzNmMtMjhhZS00ODlkLWI0YjMtOWYxYTc1NWE1NzY1IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Personal Médico">
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiMjg4MDMzNmMtMjhhZS00ODlkLWI0YjMtOWYxYTc1NWE1NzY1IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiMjg4MDMzNmMtMjhhZS00ODlkLWI0YjMtOWYxYTc1NWE1NzY1IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Atenciones - CE - 2024">
       <div class="module">
-        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Personal Médico">
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Atenciones - CE - 2024">
         <span>Resumen - CE - 2024</span>
       </div>
     </a>
 
-    <a href="https://app.powerbi.com/view?r=eyJrIjoiN2Q3OTk3YjEtOTVkYy00MjJkLWI4ZGYtNmNlODM3YTc2ZTg5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiN2Q3OTk3YjEtOTVkYy00MjJkLWI4ZGYtNmNlODM3YTc2ZTg5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Horas Programadas">
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiN2Q3OTk3YjEtOTVkYy00MjJkLWI4ZGYtNmNlODM3YTc2ZTg5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiN2Q3OTk3YjEtOTVkYy00MjJkLWI4ZGYtNmNlODM3YTc2ZTg5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Atenciones - CE - 2025">
       <div class="module">
-        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Horas Programadas">
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Atenciones - CE - 2025">
         <span>Resumen - CE - 2025</span>
       </div>
     </a>
 
-    <a href="https://app.powerbi.com/view?r=eyJrIjoiM2Y5YmNjNmYtNWExMy00YzQxLWI4YmMtMmE1NzAwYTkyMzE5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiM2Y5YmNjNmYtNWExMy00YzQxLWI4YmMtMmE1NzAwYTkyMzE5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Horas Programadas">
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiM2Y5YmNjNmYtNWExMy00YzQxLWI4YmMtMmE1NzAwYTkyMzE5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiM2Y5YmNjNmYtNWExMy00YzQxLWI4YmMtMmE1NzAwYTkyMzE5IiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Histórico de Atenciones - CE - 2026">
       <div class="module">
-        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Horas Programadas">
+        <img src="{{ url_for('static', filename='clipboard_2554234.png') }}" alt="Histórico de Atenciones - CE - 2026">
         <span>Resumen - CE - 2026</span>
       </div>
     </a>
@@ -365,50 +333,47 @@
     </div>
   </div>
 
-  <div id="rg-viewer" style="display:none;">
-    <div class="viewer-container">
-      <div class="viewer-header">
-        <span class="viewer-title">Reporte histórico seleccionado</span>
-        <button class="btn-close-viewer" onclick="closeViewer()">✕</button>
+  <div class="modal fade" id="rgModal" tabindex="-1" aria-labelledby="rgModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="rgModalTitle">Reporte histórico seleccionado</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <iframe id="rg-modal-iframe" title="Reporte histórico"></iframe>
+        </div>
       </div>
-      <iframe id="rg-iframe" title="Reporte histórico"></iframe>
     </div>
   </div>
 </div>
 
 <script>
-  function closeViewer() {
-    const viewer = document.getElementById('rg-viewer');
-    const iframe = document.getElementById('rg-iframe');
-    viewer.style.display = 'none';
-    iframe.src = '';
-  }
-
   document.addEventListener('DOMContentLoaded', function() {
     const links = document.querySelectorAll('.module-link');
-    const viewer = document.getElementById('rg-viewer');
-    const iframe = document.getElementById('rg-iframe');
-    const viewerTitle = document.querySelector('#rg-viewer .viewer-title');
+    const modalElement = document.getElementById('rgModal');
+    const iframe = document.getElementById('rg-modal-iframe');
+    const modalTitle = document.getElementById('rgModalTitle');
+    const modalInstance = modalElement ? new bootstrap.Modal(modalElement) : null;
+
+    if (modalElement) {
+      modalElement.addEventListener('hidden.bs.modal', function () {
+        iframe.src = '';
+      });
+    }
 
     links.forEach(link => {
       link.addEventListener('click', function(evt) {
         const url = this.dataset.url || this.href;
-        if (!url) return;
+        if (!url || !modalInstance) return;
         evt.preventDefault();
 
         iframe.src = url;
-        viewer.style.display = 'block';
-        if (viewerTitle) {
-          viewerTitle.textContent = this.dataset.title || 'Reporte histórico seleccionado';
+        if (modalTitle) {
+          modalTitle.textContent = this.dataset.title || 'Reporte histórico seleccionado';
         }
-        viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        modalInstance.show();
       });
-    });
-
-    document.addEventListener('keydown', function(evt) {
-      if (evt.key === 'Escape' && viewer.style.display !== 'none') {
-        closeViewer();
-      }
     });
   });
 </script>

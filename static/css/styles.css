@@ -1,4 +1,5 @@
 /* --- Mejoras visuales y responsive adicionales para módulos y selector --- */
+
 @media (max-width: 1500px) {
   .main {
     min-height: 80vh;
@@ -155,11 +156,11 @@ body {
   top: 0;
   z-index: 100;
   background: linear-gradient(90deg, #f8fbff 0%, #ffffff 100%);
-  padding: 14px 26px;
+  padding: 8px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   border-bottom: 1px solid rgba(0, 100, 175, 0.08);
   box-shadow: 0 10px 30px rgba(0,0,0,0.06);
 }
@@ -168,14 +169,14 @@ body {
 .header__right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .brand-link {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 6px 10px;
   border-radius: 14px;
   background: #ffffff;
   border: 1px solid rgba(0, 100, 175, 0.08);
@@ -191,8 +192,8 @@ body {
 }
 
 .brand-logo {
-  width: 150px;
-  height: 54px;
+  width: 132px;
+  height: 42px;
   background-color: #0064AF;
   display: inline-block;
   -webkit-mask-image: url('/static/Logoes.png');
@@ -214,11 +215,11 @@ body {
 .brand-name {
   font-weight: 700;
   color: #0a2b47;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .brand-sub {
-  font-size: 12px;
+  font-size: 11px;
   color: #6c7a86;
   letter-spacing: 0.02em;
 }
@@ -226,8 +227,8 @@ body {
 .user-chip {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 6px 10px;
   background: #ffffff;
   border-radius: 14px;
   border: 1px solid rgba(0, 100, 175, 0.08);
@@ -236,9 +237,9 @@ body {
 }
 
 .user-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: linear-gradient(135deg, #0064AF 0%, #0091da 100%);
   color: #ffffff;
   font-weight: 800;
@@ -256,38 +257,38 @@ body {
 .user-name {
   font-weight: 600;
   color: #0f2f4f;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .user-id {
-  font-size: 12px;
+  font-size: 11px;
   color: #63707c;
 }
 
 .role-chip {
-  padding: 6px 10px;
+  padding: 5px 8px;
   border-radius: 999px;
   background: rgba(0, 100, 175, 0.12);
   color: #0f2f4f;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.02em;
 }
 
 .header__actions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .pill-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 12px 20px;
+  padding: 10px 16px;
   border-radius: 12px;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
   text-decoration: none;
   border: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

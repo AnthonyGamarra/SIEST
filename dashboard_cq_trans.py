@@ -261,7 +261,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                                     'marginRight': '12px'
                                 }),
                                 html.H2(
-                                    "Centro Quirúrgico - Transplantes",
+                                    [
+                                        "Centro Quirúrgico - Transplantes",
+                                        html.Span(
+                                            " (En proceso de validación)",
+                                            style={
+                                                'color': '#dc3545',
+                                                'fontWeight': '700'
+                                            }
+                                        )
+                                    ],
                                     style={
                                         'color': BRAND,
                                         'fontFamily': FONT_FAMILY,
@@ -437,7 +446,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                 'backgroundPosition': 'center center',
                 'backgroundRepeat': 'no-repeat',
                 'backgroundAttachment': 'fixed',
-                'minHeight': '100vh',
+                'minHeight': '100%',
                 'paddingTop': '20px',
                 'paddingBottom': '20px'
             })
@@ -737,78 +746,78 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
         # === TARJETAS RESUMEN POR PRIORIDAD ===
         # Query base para obtener datos con cod_prioridad_n
         query_base = f"""
-        SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
-            cq.cod_oricentro,
-            cq.cod_centro,
-            ca.cenasides AS cenasides,
-            cq.periodo,
-            cq.anio,
-            cq.cod_area,
-            cq.cod_servicio,
-            c.servhosdes AS servicio,
-            cq.cod_cpms,
-            cp.cpsdes AS cpms,
-            cq.cod_tipdoc_paciente,
-            cq.doc_paciente,
-            cq.anio_edad,
-            cq.meses,
-            cq.sexo,
-            cq.cod_sala,
-            cq.acto_med,
-            cq.cod_complejidad,
-            cq.cod_anest,
-            cq.cod_tipo_programacion,
-            cq.num_solicitud,
-            cq.cod_quirof,
-            q.salopedes,
-            cq.fec_oper
-        FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-        LEFT JOIN dwsge.sgss_cmsho10 AS c 
-            ON cq.cod_servicio = c.servhoscod
-        LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-            ON cq.cod_oricentro = ca.oricenasicod 
-        AND cq.cod_centro = ca.cenasicod
-        LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-            ON q.cenasicod = cq.cod_centro 
-        AND q.salopecod = cq.cod_sala_operacion 
-        AND cq.cod_quirof = q.cenquicod
-        LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-            ON cp.cpscod = cq.cod_cpms
-        WHERE cq.cod_centro = '{codcas}'
-                    AND cod_cpms IN (
-                        '38241',
-                        '38240',
-                        '48551',
-                        '48552',
-                        '33945',
-                        '33935',
-                        '65730',
-                        '65710',
-                        '65750',
-                        '65755',
-                        '65712',
-                        '65714',
-                        '65732',
-                        '65752',
-                        '65756',
-                        '65757',
-                        '50250',
-                        '47135',
-                        '47163',
-                        '32851',
-                        '32852',
-                        '32854',
-                        '50360',
-                        '50365',
-                        '50380'
-                        )
-                    AND (
-                            CASE
-                                WHEN cod_tipo_paciente = '4' THEN '2'
-                                ELSE '1'
-                            END
-                        ) IN {codasegu_clause}
-        ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
+SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
+    cq.cod_oricentro,
+    cq.cod_centro,
+    ca.cenasides AS cenasides,
+    cq.periodo,
+    cq.anio,
+    cq.cod_area,
+    cq.cod_servicio,
+    c.servhosdes AS servicio,
+    cq.cod_cpms,
+    cp.cpsdes AS cpms,
+    cq.cod_tipdoc_paciente,
+    cq.doc_paciente,
+    cq.anio_edad,
+    cq.meses,
+    cq.sexo,
+    cq.cod_sala,
+    cq.acto_med,
+    cq.cod_complejidad,
+    cq.cod_anest,
+    cq.cod_tipo_programacion,
+    cq.num_solicitud,
+    cq.cod_quirof,
+    q.salopedes,
+    cq.fec_oper
+FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
+LEFT JOIN dwsge.sgss_cmsho10 AS c 
+    ON cq.cod_servicio = c.servhoscod
+LEFT JOIN dwsge.sgss_cmcas10 AS ca 
+    ON cq.cod_oricentro = ca.oricenasicod 
+   AND cq.cod_centro = ca.cenasicod
+LEFT JOIN dwsge.sgss_qmcqs10 AS q 
+    ON q.cenasicod = cq.cod_centro 
+   AND q.salopecod = cq.cod_sala_operacion 
+   AND cq.cod_quirof = q.cenquicod
+LEFT JOIN dwsge.sgss_cmcpp10 as cp 
+    ON cp.cpscod = cq.cod_cpms
+WHERE cq.cod_centro = '{codcas}'
+              AND cod_cpms IN (
+                '38241',
+                '38240',
+                '48551',
+                '48552',
+                '33945',
+                '33935',
+                '65730',
+                '65710',
+                '65750',
+                '65755',
+                '65712',
+                '65714',
+                '65732',
+                '65752',
+                '65756',
+                '65757',
+                '50250',
+                '47135',
+                '47163',
+                '32851',
+                '32852',
+                '32854',
+                '50360',
+                '50365',
+                '50380'
+                )
+              AND (
+                    CASE
+                        WHEN cod_tipo_paciente = '4' THEN '2'
+                        ELSE '1'
+                    END
+                  ) IN {codasegu_clause}
+ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
         """
 
         # Ejecutar SOLO UNA VEZ
@@ -864,8 +873,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                 "title": label,
                 "value": f"{prioridades_data.get(prioridad, 0):,.0f}",
                 "border_color": PRIORIDAD_COLORS.get(prioridad, BRAND),
-                # "href": f"{url_base_pathname}complejidad_{prioridad}/{codcas_url}{detail_query}",
-                "href": None,
+                "href": f"{url_base_pathname}complejidad_{prioridad}/{codcas_url}{detail_query}",
                 "subtitle": f"Año {anio_str} | Periodo {periodo} | {nombre_centro}",
                 "side_component": render_priority_table(
                     prioridad_table
@@ -979,78 +987,95 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
             return None
 
         query =  f"""
-        SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
-            cq.cod_oricentro,
-            cq.cod_centro,
-            ca.cenasides AS cenasides,
-            cq.periodo,
-            cq.anio,
-            cq.cod_area,
-            cq.cod_servicio,
-            c.servhosdes AS servicio,
-            cq.cod_cpms,
-            cp.cpsdes AS cpms,
-            cq.cod_tipdoc_paciente,
-            cq.doc_paciente,
-            cq.anio_edad,
-            cq.meses,
-            cq.sexo,
-            cq.cod_sala,
-            cq.acto_med,
-            cq.cod_complejidad,
-            cq.cod_anest,
-            cq.cod_tipo_programacion,
-            cq.num_solicitud,
-            cq.cod_quirof,
-            q.salopedes,
-            cq.fec_oper
-        FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-        LEFT JOIN dwsge.sgss_cmsho10 AS c 
-            ON cq.cod_servicio = c.servhoscod
-        LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-            ON cq.cod_oricentro = ca.oricenasicod 
-        AND cq.cod_centro = ca.cenasicod
-        LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-            ON q.cenasicod = cq.cod_centro 
-        AND q.salopecod = cq.cod_sala_operacion 
-        AND cq.cod_quirof = q.cenquicod
-        LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-            ON cp.cpscod = cq.cod_cpms
-        WHERE cq.cod_centro = '{codcas}'
-                    AND cod_cpms IN (
-                        '38241',
-                        '38240',
-                        '48551',
-                        '48552',
-                        '33945',
-                        '33935',
-                        '65730',
-                        '65710',
-                        '65750',
-                        '65755',
-                        '65712',
-                        '65714',
-                        '65732',
-                        '65752',
-                        '65756',
-                        '65757',
-                        '50250',
-                        '47135',
-                        '47163',
-                        '32851',
-                        '32852',
-                        '32854',
-                        '50360',
-                        '50365',
-                        '50380'
-                        )
-                    AND (
-                            CASE
-                                WHEN cod_tipo_paciente = '4' THEN '2'
-                                ELSE '1'
-                            END
-                        ) IN {codasegu_clause}
-        ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
+            SELECT cod_oricentro,
+                cod_centro,
+                ca.cenasides AS cenasides,
+                periodo,
+                anio,
+                cod_area,
+                cod_servicio,
+                c.servhosdes AS servicio,
+                cod_cpms,
+                cp.cpsdes AS cpms,
+                cod_tip_cirujano,
+                cod_tipdoc_medico,
+                dni_medico,
+                fec_oper,
+                autogenerado,
+                cmame_pacsecnum,
+                cod_tipdoc_paciente,
+                doc_paciente,
+                anio_edad,
+                meses,
+                sexo,
+                cod_tip_seguro,
+                cod_tipo_parentesco,
+                cod_tipo_paciente,
+                cod_sala,
+                hor_ini_sala,
+                hor_fin_sala,
+                duracion_sala,
+                hor_ini_anest,
+                hor_fin_anest,
+                duracion_anest,
+                hor_ini_operac,
+                hor_fin_operac,
+                duracion_operac,
+                acto_med,
+                cod_complejidad,
+                cod_anest,
+                cod_tipo_programacion,
+                num_solicitud,
+                cod_quirof,
+                fecsolicsalaoperac,
+                fecsolicitadaoperac,
+                fecprogram,
+                cas_adscripcion,
+                h_c,
+                salopedes,
+                cod_destegreso,
+                fechcreasolicitud,
+                horcreasolic,
+                fecaptitud
+            FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
+                LEFT JOIN dwsge.sgss_cmsho10 AS c ON cq.cod_servicio = c.servhoscod
+                LEFT JOIN dwsge.sgss_cmcas10 AS ca ON cq.cod_oricentro = ca.oricenasicod AND cq.cod_centro = ca.cenasicod
+                LEFT JOIN dwsge.sgss_qmcqs10 AS q ON q.cenasicod = cq.cod_centro AND q.salopecod= cq.cod_sala_operacion AND cq.COD_QUIROF = q.cenquicod
+                LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = cq.cod_cpms
+            WHERE cod_centro='{codcas}'
+              AND cod_cpms IN (
+                '38241',
+                '38240',
+                '48551',
+                '48552',
+                '33945',
+                '33935',
+                '65730',
+                '65710',
+                '65750',
+                '65755',
+                '65712',
+                '65714',
+                '65732',
+                '65752',
+                '65756',
+                '65757',
+                '50250',
+                '47135',
+                '47163',
+                '32851',
+                '32852',
+                '32854',
+                '50360',
+                '50365',
+                '50380'
+                )
+              AND (
+                    CASE
+                        WHEN cod_tipo_paciente = '4' THEN '2'
+                        ELSE '1'
+                    END
+                  ) IN {codasegu_clause}
         """
         df = pd.read_sql(query, engine)
         if df.empty:

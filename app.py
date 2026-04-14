@@ -70,13 +70,13 @@ def create_app():
     # =============================
     # DASHBOARDS
     # =============================
-    create_dash_main(app, url_base_pathname='/dashboard/')
-    create_dash_eme(app, url_base_pathname='/dashboard_alt/')
-    create_dash_nm(app, url_base_pathname='/dashboard_nm/')
-    create_dash_diag(app, url_base_pathname='/diag_cap/')
-    create_dash_odo(app, url_base_pathname='/dashboard_odo/')
-    create_dash_cq(app, url_base_pathname='/dashboard_cq/')
-    create_dash_cq_trans(app, url_base_pathname='/dashboard_cq_trans/')
+    create_dash_main(app, url_base_pathname='/dashboard_embed/')
+    create_dash_eme(app, url_base_pathname='/dashboard_alt_embed/')
+    create_dash_nm(app, url_base_pathname='/dashboard_nm_embed/')
+    create_dash_diag(app, url_base_pathname='/diag_cap_embed/')
+    create_dash_odo(app, url_base_pathname='/dashboard_odo_embed/')
+    create_dash_cq(app, url_base_pathname='/dashboard_cq_embed/')
+    create_dash_cq_trans(app, url_base_pathname='/dashboard_cq_trans_embed/')
 
     # =============================
     # HELPER DE PASSWORD

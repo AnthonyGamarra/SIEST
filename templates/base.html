@@ -54,24 +54,40 @@
 
         <div class="header__actions">
           <a class="pill-btn pill-btn--primary" href="/">Inicio</a>
-          <a
-            class="pill-btn pill-btn--ghost"
-            href="{{ url_for('main.change_password') }}"
-            >Cambiar contraseña</a
-          >
-          {% if current_user.role == 'admin' %}
-          <a
-            class="pill-btn pill-btn--ghost"
-            href="{{ url_for('main.register') }}"
-            >Agregar usuario</a
-          >
-          <a
-            class="pill-btn pill-btn--ghost"
-            href="{{ url_for('main.manage_users') }}"
-            >Gestión de usuarios</a
-          >
-          {% endif %}
-          <a class="pill-btn pill-btn--ghost" href="/logout">Cerrar sesión</a>
+          <div class="dropdown">
+            <button
+              class="pill-btn pill-btn--ghost dropdown-toggle"
+              type="button"
+              id="headerOptionsMenu"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+              aria-label="Opciones"
+              title="Opciones"
+            >
+              <span style="font-size: 1.35rem; line-height: 1" aria-hidden="true">&#9881;</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="headerOptionsMenu">
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.change_password') }}"
+                  >Cambiar contraseña</a
+                >
+              </li>
+              {% if current_user.role == 'admin' %}
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.register') }}"
+                  >Agregar usuario</a
+                >
+              </li>
+              <li>
+                <a class="dropdown-item" href="{{ url_for('main.manage_users') }}"
+                  >Gestión de usuarios</a
+                >
+              </li>
+              <li><hr class="dropdown-divider" /></li>
+              {% endif %}
+              <li><a class="dropdown-item" href="/logout">Cerrar sesión</a></li>
+            </ul>
+          </div>
         </div>
       </div>
       {% endif %}
