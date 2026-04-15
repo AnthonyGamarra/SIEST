@@ -37,8 +37,8 @@ def _get_dw_engine():
 	if _dw_engine is None:
 		_dw_engine = create_engine(
 			DW_ESTADISTICA_URI,
-			pool_size=20,
-			max_overflow=10,
+			pool_size=5,
+			max_overflow=5,
 			pool_pre_ping=True,
 			pool_recycle=1800,
 			pool_timeout=30,

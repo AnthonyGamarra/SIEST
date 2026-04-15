@@ -29,15 +29,25 @@
 
   .rg-wrapper {
     background: transparent;
-    padding-top: 20px;
+    min-height: calc(100vh - 74px);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 110px 20px 40px;
   }
 
   /* Header con título y botón */
   .rg-header {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 3;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px 30px 20px;
+    padding: 0;
     background: transparent;
     flex-wrap: wrap;
     gap: 15px;
@@ -83,13 +93,19 @@
 
   /* Contenedor de módulos */
   .modules-menu {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 20px;
-    padding: 0 20px;
-    max-width: 1200px;
-    margin: 0 auto 40px;
+    width: min(1200px, 100%);
+    padding: 0;
+    margin: 0;
     background: transparent;
+  }
+
+  .modules-menu .module-link,
+  .modules-menu .module.inactive {
+    width: min(260px, 100%);
   }
 
   /* Módulos (tarjetas) */
@@ -233,10 +249,17 @@
 
   /* Responsive */
   @media (max-width: 768px) {
+    .rg-wrapper {
+      align-items: stretch;
+      justify-content: flex-start;
+      padding: 20px 16px 30px;
+    }
+
     .rg-header {
+      position: static;
       flex-direction: column;
       align-items: flex-start;
-      padding: 0 16px 20px 16px;
+      padding: 0 0 20px 0;
     }
 
     .rg-title {
@@ -248,9 +271,8 @@
     }
 
     .modules-menu {
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 15px;
-      padding: 0 16px;
+      width: 100%;
     }
 
     .modules-menu .module {
@@ -264,9 +286,12 @@
 
   @media (max-width: 480px) {
     .modules-menu {
-      grid-template-columns: 1fr;
       gap: 12px;
-      padding: 0 12px;
+    }
+
+    .modules-menu .module-link,
+    .modules-menu .module.inactive {
+      width: 100%;
     }
 
     .rg-title {
@@ -277,7 +302,7 @@
 
 <!-- Wrapper permite crecer sin tapar el header -->
 <div class="rg-wrapper position-relative d-flex flex-column"
-  style="min-height:100vh; background:transparent;">
+  style="background:transparent;">
 
   <!-- Header -->
   <div class="rg-header">

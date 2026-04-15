@@ -311,7 +311,14 @@ register_page(
 # Conexión DB
 def create_connection():
     try:
-        engine = create_engine('postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA')
+        engine = create_engine(
+            'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+            pool_size=5,
+            max_overflow=5,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            pool_timeout=30
+        )
         with engine.connect():
             pass
         return engine
