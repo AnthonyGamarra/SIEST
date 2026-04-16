@@ -17,6 +17,12 @@ from Indicadores import ate_topicos_2
 from Indicadores import ate_topicos_3
 from Indicadores import ate_topicos_4
 from Indicadores import ate_topicos_5
+from Indicadores import ate_cq_1
+from Indicadores import ate_cq_2
+from Indicadores import ate_cq_3
+from Indicadores import ate_cq_4
+from Indicadores import ate_cq_5
+from Indicadores import ate_cq_6
 
 
 def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
@@ -91,6 +97,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
     ate_topicos_3.register_callbacks(dash_app)
     ate_topicos_4.register_callbacks(dash_app)
     ate_topicos_5.register_callbacks(dash_app)
+    ate_cq_1.register_callbacks(dash_app)
+    ate_cq_2.register_callbacks(dash_app)
+    ate_cq_3.register_callbacks(dash_app)
+    ate_cq_4.register_callbacks(dash_app)
+    ate_cq_5.register_callbacks(dash_app)
+    ate_cq_6.register_callbacks(dash_app)
 
     meses = [
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -535,35 +547,39 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         if not pathname:
             return show_dash, html.Div(), hide_page
 
-        # Limpiar la ruta base para obtener la ruta relativa
+        # Limpiar la ruta para obtener la ruta relativa
         # Ejemplo: /dashboard_cq/complejidad_A/001 -> complejidad_A/001
-        prefix = url_base_pathname.rstrip('/')
-        clean_path = pathname
-        if clean_path.startswith(prefix):
-            clean_path = clean_path[len(prefix):].strip('/')
+        clean_path = pathname.strip('/')
+        if clean_path.startswith('dashboard_cq_embed/'):
+            clean_path = clean_path[len('dashboard_cq_embed/'):].strip('/')
+        elif clean_path.startswith('dashboard_cq/'):
+            clean_path = clean_path[len('dashboard_cq/'):].strip('/')
         
         if not clean_path:
             return show_dash, html.Div(), hide_page
 
-        # # Lógica de enrutamiento
-        # if clean_path.startswith('complejidad_'):
-        #     try:
-        #         parts = clean_path.split('/')
-        #         # parts[0] -> "complejidad_A", parts[1] -> "001" (codcas)
-        #         complejidad_num = parts[0].split('_')[1]
-        #         codcas = parts[1] if len(parts) > 1 else "000"
-                
-        #         content = None
-        #         if complejidad_num == 'A': content = ate_cq_1.layout(codcas=codcas)
-        #         elif complejidad_num == 'B': content = ate_cq_2.layout(codcas=codcas)
-        #         elif complejidad_num == 'C': content = ate_cq_3.layout(codcas=codcas)
-        #         elif complejidad_num == 'D': content = ate_cq_4.layout(codcas=codcas)
-        #         elif complejidad_num == 'E': content = ate_cq_5.layout(codcas=codcas)
-                
-        #         if content:
-        #             return hide_dash, content, show_page
-        #     except Exception:
-        #         pass # Si falla el parsing, vuelve al dashboard
+        # Lógica de enrutamiento
+        if clean_path.startswith('complejidad_'):
+            try:
+                parts = clean_path.split('/')
+                ruta_comp = parts[0]
+                codcas_enc = parts[1] if len(parts) > 1 else None
+
+                route_map = {
+                    'complejidad_A': ate_cq_1,
+                    'complejidad_B': ate_cq_2,
+                    'complejidad_C': ate_cq_3,
+                    'complejidad_D': ate_cq_4,
+                    'complejidad_E': ate_cq_5,
+                    'complejidad_SC': ate_cq_6,
+                }
+
+                module = route_map.get(ruta_comp)
+                if module:
+                    content = module.layout(codcas=codcas_enc)
+                    return hide_dash, content, show_page
+            except Exception:
+                pass  # Si falla el parsing, vuelve al dashboard
         
         # Si no coincide con ninguna ruta conocida, mostrar dashboard
         return show_dash, html.Div(), hide_page
@@ -1011,19 +1027,27 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
 
         cards = []
 
+        PRIORIDAD_ROUTE = {
+            'A': 'complejidad_A',
+            'B': 'complejidad_B',
+            'C': 'complejidad_C',
+            'D': 'complejidad_D',
+            'E': 'complejidad_E',
+            'SIN_CODIGO': 'complejidad_SC',
+        }
+
         for prioridad, label in prioridad_labels.items():
             prioridad_table = priority_tables.get(prioridad)
+            ruta = PRIORIDAD_ROUTE.get(prioridad)
+            href = f"/dashboard_cq/{ruta}/{codcas_url}{detail_query}" if ruta else None
 
             cards.append({
                 "title": label,
                 "value": f"{prioridades_data.get(prioridad, 0):,.0f}",
                 "border_color": PRIORIDAD_COLORS.get(prioridad, BRAND),
-                # "href": f"{url_base_pathname}complejidad_{prioridad}/{codcas_url}{detail_query}",
-                "href": None,
+                "href": href,
                 "subtitle": f"Año {anio_str} | Periodo {periodo} | {nombre_centro}",
-                "side_component": render_priority_table(
-                    prioridad_table
-                )           
+                "side_component": render_priority_table(prioridad_table),
             })
 
         cards.append({

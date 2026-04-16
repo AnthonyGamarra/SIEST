@@ -37,8 +37,8 @@ def _get_dw_engine():
 	if _dw_engine is None:
 		_dw_engine = create_engine(
 			DW_ESTADISTICA_URI,
-			pool_size=5,
-			max_overflow=5,
+			pool_size=20,
+			max_overflow=10,
 			pool_pre_ping=True,
 			pool_recycle=1800,
 			pool_timeout=30,
@@ -985,6 +985,25 @@ def register_routes(app):
 			flash('El código seleccionado es inválido o expiró.', 'warning')
 			return redirect(url_for('main.index'))
 		dashboard_url = f'/dashboard_cq_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
+	@bp.route('/dashboard_cq/complejidad_<complejidad>/<token>', methods=['GET'])
+	@bp.route('/dashboard_cq/complejidad_<complejidad>/<token>/', methods=['GET'])
+	@login_required
+	def dashboard_cq_complejidad_wrapper(complejidad, token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		qs = request.query_string.decode()
+		dashboard_url = f'/dashboard_cq_embed/complejidad_{complejidad}/{token}/'
+		if qs:
+			dashboard_url = f'{dashboard_url}?{qs}'
 		return render_template(
 			'wrappers/dashboard_wrapper.html',
 			show_modules=False,
