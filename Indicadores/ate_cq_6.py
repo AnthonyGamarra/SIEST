@@ -103,8 +103,6 @@ def layout(codcas=None, **kwargs):
         html.Div([
             html.Div([
                 html.Div([
-                    html.I(className="bi bi-scissors",
-                           style={"fontSize": "30px", "color": COMPLEJIDAD_COLOR, "marginRight": "12px"}),
                     html.H2(f"Detalle IQ - {COMPLEJIDAD_LABEL}", style={
                         "color": BRAND, "fontFamily": FONT_FAMILY,
                         "fontSize": "22px", "margin": "0", "fontWeight": "700"
@@ -214,6 +212,15 @@ def register_callbacks(app):
             ], style={"padding": "60px"})
 
         total = len(df)
+        pacientes_operados = (
+            df["doc_paciente"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .nunique()
+        )
         nombre_centro = (df["cenasides"].dropna().iloc[0]
                          if not df["cenasides"].dropna().empty else codcas)
 
@@ -260,17 +267,29 @@ def register_callbacks(app):
         rows = df[cols_table].astype(str).replace("nan", "").to_dict("records")
 
         return html.Div([
-            # Tarjeta resumen
-            html.Div([
-                html.H5(f"{COMPLEJIDAD_LABEL} - {nombre_centro}",
-                        style={"color": BRAND, "fontFamily": FONT_FAMILY, "marginBottom": "6px"}),
-                html.H2(f"{total:,.0f}",
-                        style={"fontWeight": "800", "fontSize": "34px", "color": TEXT,
-                               "fontFamily": FONT_FAMILY, "margin": "0"}),
-                html.P(f"Anio {anio_str} | Periodo {periodo}",
-                       style={"color": MUTED, "fontSize": "12px", "fontFamily": FONT_FAMILY,
-                               "margin": "6px 0 0 0"}),
-            ], style={**CARD_STYLE, "borderLeft": f"5px solid {COMPLEJIDAD_COLOR}"}),
+            # Tarjetas resumen
+            dbc.Row([
+                dbc.Col(html.Div([
+                    html.H5(f"{COMPLEJIDAD_LABEL} - {nombre_centro}",
+                            style={"color": BRAND, "fontFamily": FONT_FAMILY, "marginBottom": "6px"}),
+                    html.H2(f"{total:,.0f}",
+                            style={"fontWeight": "800", "fontSize": "34px", "color": TEXT,
+                                   "fontFamily": FONT_FAMILY, "margin": "0"}),
+                    html.P(f"Anio {anio_str} | Periodo {periodo}",
+                           style={"color": MUTED, "fontSize": "12px", "fontFamily": FONT_FAMILY,
+                                   "margin": "6px 0 0 0"}),
+                ], style={**CARD_STYLE, "borderLeft": f"5px solid {COMPLEJIDAD_COLOR}"}), width=12, lg=6),
+                dbc.Col(html.Div([
+                    html.H5("Pacientes operados",
+                            style={"color": BRAND, "fontFamily": FONT_FAMILY, "marginBottom": "6px"}),
+                    html.H2(f"{pacientes_operados:,.0f}",
+                            style={"fontWeight": "800", "fontSize": "34px", "color": TEXT,
+                                   "fontFamily": FONT_FAMILY, "margin": "0"}),
+                    html.P("Conteo distintivo por doc_paciente",
+                           style={"color": MUTED, "fontSize": "12px", "fontFamily": FONT_FAMILY,
+                                   "margin": "6px 0 0 0"}),
+                ], style={**CARD_STYLE, "borderLeft": "5px solid #198754"}), width=12, lg=6),
+            ]),
 
             dbc.Row([
                 dbc.Col(html.Div([dcc.Graph(figure=fig_svc)],  style=CARD_STYLE), width=12, lg=6),

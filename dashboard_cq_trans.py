@@ -11,13 +11,6 @@ import os  # agregado
 import dash
 from urllib.parse import quote_plus
 
-# Importar páginas de detalle
-from Indicadores import ate_topicos_1
-from Indicadores import ate_topicos_2
-from Indicadores import ate_topicos_3
-from Indicadores import ate_topicos_4
-from Indicadores import ate_topicos_5
-
 
 def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
     external_stylesheets = [
@@ -80,13 +73,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
 
     dash_app.title = "SIEST"
 
-    # Registrar callbacks de páginas de detalle
-    from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
-    ate_topicos_1.register_callbacks(dash_app)
-    ate_topicos_2.register_callbacks(dash_app)
-    ate_topicos_3.register_callbacks(dash_app)
-    ate_topicos_4.register_callbacks(dash_app)
-    ate_topicos_5.register_callbacks(dash_app)
 
     meses = [
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -541,25 +527,25 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
         if not clean_path:
             return show_dash, html.Div(), hide_page
 
-        # Lógica de enrutamiento
-        if clean_path.startswith('complejidad_'):
-            try:
-                parts = clean_path.split('/')
-                # parts[0] -> "complejidad_A", parts[1] -> "001" (codcas)
-                complejidad_num = parts[0].split('_')[1]
-                codcas = parts[1] if len(parts) > 1 else "000"
+        # # Lógica de enrutamiento
+        # if clean_path.startswith('complejidad_'):
+        #     try:
+        #         parts = clean_path.split('/')
+        #         # parts[0] -> "complejidad_A", parts[1] -> "001" (codcas)
+        #         complejidad_num = parts[0].split('_')[1]
+        #         codcas = parts[1] if len(parts) > 1 else "000"
                 
-                content = None
-                if complejidad_num == 'A': content = ate_cq_1.layout(codcas=codcas)
-                elif complejidad_num == 'B': content = ate_cq_2.layout(codcas=codcas)
-                elif complejidad_num == 'C': content = ate_cq_3.layout(codcas=codcas)
-                elif complejidad_num == 'D': content = ate_cq_4.layout(codcas=codcas)
-                elif complejidad_num == 'E': content = ate_cq_5.layout(codcas=codcas)
+        #         content = None
+        #         if complejidad_num == 'A': content = ate_cq_1.layout(codcas=codcas)
+        #         elif complejidad_num == 'B': content = ate_cq_2.layout(codcas=codcas)
+        #         elif complejidad_num == 'C': content = ate_cq_3.layout(codcas=codcas)
+        #         elif complejidad_num == 'D': content = ate_cq_4.layout(codcas=codcas)
+        #         elif complejidad_num == 'E': content = ate_cq_5.layout(codcas=codcas)
                 
-                if content:
-                    return hide_dash, content, show_page
-            except Exception:
-                pass # Si falla el parsing, vuelve al dashboard
+        #         if content:
+        #             return hide_dash, content, show_page
+        #     except Exception:
+        #         pass # Si falla el parsing, vuelve al dashboard
         
         # Si no coincide con ninguna ruta conocida, mostrar dashboard
         return show_dash, html.Div(), hide_page

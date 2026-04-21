@@ -12,11 +12,6 @@ import dash
 from urllib.parse import quote_plus
 
 # Importar páginas de detalle
-from Indicadores import ate_topicos_1
-from Indicadores import ate_topicos_2
-from Indicadores import ate_topicos_3
-from Indicadores import ate_topicos_4
-from Indicadores import ate_topicos_5
 from Indicadores import ate_cq_1
 from Indicadores import ate_cq_2
 from Indicadores import ate_cq_3
@@ -90,13 +85,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
 
     dash_app.title = "SIEST"
 
-    # Registrar callbacks de páginas de detalle
-    from Indicadores import ate_topicos_1, ate_topicos_2, ate_topicos_3, ate_topicos_4, ate_topicos_5
-    ate_topicos_1.register_callbacks(dash_app)
-    ate_topicos_2.register_callbacks(dash_app)
-    ate_topicos_3.register_callbacks(dash_app)
-    ate_topicos_4.register_callbacks(dash_app)
-    ate_topicos_5.register_callbacks(dash_app)
     ate_cq_1.register_callbacks(dash_app)
     ate_cq_2.register_callbacks(dash_app)
     ate_cq_3.register_callbacks(dash_app)
@@ -836,7 +824,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                         + SPLIT_PART(t.duracion_sala, ':', 2)::numeric / 60
                     ) AS horas_quirurgicas_realizadas_iq_electivas
                 FROM (
-                    SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms)
+                    SELECT DISTINCT ON (cq.acto_med, cq.fec_oper)
                         cq.cod_oricentro,
                         cq.cod_centro,
                         ca.cenasides AS cenasides,
@@ -883,7 +871,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                     WHERE cq.cod_centro = '{codcas}'
                     AND (CASE WHEN cq.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
                     AND cq.cod_tipo_programacion = '1'
-                    ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC
+                    ORDER BY cq.acto_med, cq.fec_oper DESC
                 ) t;
         """
 
@@ -894,7 +882,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                             + SPLIT_PART(t.duracion_sala, ':', 2)::numeric / 60
                         ) AS horas_quirurgicas_realizadas_iq_emergencia
                     FROM (
-                        SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms)
+                        SELECT DISTINCT ON (cq.acto_med, cq.fec_oper)
                             cq.cod_oricentro,
                             cq.cod_centro,
                             ca.cenasides AS cenasides,
@@ -941,7 +929,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                         WHERE cq.cod_centro = '{codcas}'
                         AND (CASE WHEN cq.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
                         AND cq.cod_tipo_programacion = '2'
-                        ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC
+                        ORDER BY cq.acto_med, cq.fec_oper DESC
                     ) t;
         """
         # Ejecutar consultas
