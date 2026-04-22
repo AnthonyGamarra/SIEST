@@ -4,6 +4,7 @@ from flask_login import current_user
 from sqlalchemy import create_engine,text
 import pandas as pd
 import dash_bootstrap_components as dbc
+from typing import Callable, Optional
 import plotly.express as px
 from datetime import date
 import dash_ag_grid as dag
@@ -173,6 +174,38 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
 
         return fecha_col_value
     
+    FICHA_TECNICA_ID = 16
+
+    def _build_safe_pdf_name(raw_name: Optional[str]) -> str:
+        base = (raw_name or "ficha_tecnica").strip()
+        safe_chars = [ch if ch.isalnum() or ch in (" ", "-", "_") else "_" for ch in base]
+        normalized = ''.join(safe_chars).strip().replace(' ', '_').lower()
+        normalized = normalized or "ficha_tecnica"
+        return normalized if normalized.endswith('.pdf') else f"{normalized}.pdf"
+
+    def fetch_ficha_tecnica(engine, ficha_id: int = FICHA_TECNICA_ID):
+        if engine is None:
+            return None
+
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
+                    {"id": ficha_id}
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch ficha tecnica {ficha_id}: {exc}")
+            return None
+
+        if not row or not row.get('archivo_pdf'):
+            return None
+
+        filename = _build_safe_pdf_name(row.get('nombre'))
+        pdf_bytes = bytes(row['archivo_pdf'])
+        return filename, pdf_bytes
+    
+
+
     def render_priority_table(dataframe):
         table_title = html.H6(
             "Área",
@@ -282,7 +315,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                                         'margin': '0',
                                         'fontWeight': '700'
                                     }
-                                )
+                                ),
+                                dbc.Button(
+                                    [html.I(className="bi bi-file-earmark-arrow-down me-2"), "Ficha técnica"],
+                                    id='download-ficha-btn-cq',
+                                    color='light',
+                                    outline=True,
+                                    size='sm',
+                                    style={
+                                        'borderColor': BRAND,
+                                        'color': BRAND,
+                                        'backgroundColor': '#F7FBFF',
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontWeight': '600',
+                                        'borderRadius': '10px',
+                                        'padding': '4px 14px',
+                                        'marginLeft': '8px',
+                                        'whiteSpace': 'nowrap'
+                                    }
+                                ),
+                                dcc.Download(id="download-ficha-tecnica-cq"),
                             ], style={'display': 'flex', 'alignItems': 'center'}),
                             html.P(
                                 f"📅 Información actualizada al {fecha_act_value} | Sistema de Gestión Estadístico",
@@ -1197,7 +1249,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                 b.conopedes as des_tipo_programacion,
                 cq.num_solicitud,
                 cq.cod_quirof,
-                q.salopedes,
+                --q.salopedes,
                 cq.fec_oper
             FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -1205,10 +1257,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             LEFT JOIN dwsge.sgss_cmcas10 AS ca 
                 ON cq.cod_oricentro = ca.oricenasicod 
             AND cq.cod_centro = ca.cenasicod
-            LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-                ON q.cenasicod = cq.cod_centro 
-            AND q.salopecod = cq.cod_sala_operacion 
-            AND cq.cod_quirof = q.cenquicod
+            --LEFT JOIN dwsge.sgss_qmcqs10 AS q 
+            --    ON q.cenasicod = cq.cod_centro 
+            --AND q.salopecod = cq.cod_sala_operacion 
+            --AND cq.cod_quirof = q.cenquicod
             LEFT JOIN dwsge.sgss_cmcpp10 as cp 
                 ON cp.cpscod = cq.cod_cpms
             LEFT JOIN dwsge.sgss_cmaho10 as h
@@ -1226,9 +1278,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         df = pd.read_sql(query, engine)
         if df.empty:
             return None
-        df = df.astype(str)
-        filename = f"atenciones_por_complejidad_{codcas}_{anio_str}_{periodo}.csv"
-        return dcc.send_data_frame(df.to_csv, filename, index=False)
+        filename = f"atenciones_por_complejidad_{codcas}_{anio_str}_{periodo}.xlsx"
+        return dcc.send_data_frame(df.to_excel, filename, index=False, sheet_name='Atenciones')   
+
+    # ========== CALLBACK DESCARGA FICHA TÉCNICA ==========
+    @dash_app.callback(
+        Output("download-ficha-tecnica-cq", "data"),
+        Input("download-ficha-btn-cq", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def download_ficha_tecnica(n_clicks):
+        if not n_clicks:
+            return None
+
+        engine = create_connection()
+        ficha = fetch_ficha_tecnica(engine)
+        if not ficha:
+            return None
+
+        filename, pdf_bytes = ficha
+        return dcc.send_bytes(lambda buffer: buffer.write(pdf_bytes), filename)
 
     dash_app.layout = serve_layout
     return dash_app
