@@ -23,7 +23,7 @@ def create_app():
     # =============================
     # CONFIGURACIÓN GENERAL
     # =============================
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a9138ac6be9864d1cd0a258389f87cd7921ba598a5b2876436daaa4532858e3a')
 
     app.config['SQLALCHEMY_DATABASE_URI'] = (
         'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/Flask_Prueba'
