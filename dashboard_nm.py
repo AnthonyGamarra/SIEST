@@ -100,8 +100,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         for module in pkgutil.iter_modules(pkg.__path__):
             mod_name = f"{pkg_name}.{module.name}"
             try:
-                importlib.import_module(mod_name)
+                mod = importlib.import_module(mod_name)
                 print(f"[Dash Pages] Página importada: {mod_name}")
+                if hasattr(mod, 'register_callbacks'):
+                    mod.register_callbacks(dash_app)
+                    print(f"[Dash Pages] register_callbacks llamado: {mod_name}")
             except Exception as exc:
                 print(f"[Dash Pages] Error importando {mod_name}: {exc}")
 
@@ -351,9 +354,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     width=12
                 )
             ]),
-            html.Br(),
-            dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
-            html.Br(),
+            dbc.Row(
+                [dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)],
+                style={'marginTop': '16px', 'marginBottom': '24px'}
+            ),
         ], id=f'tab-{tab_config.key}-content', className='dashboard-tab-section', style=section_style)
 
     def build_required_params_message(message=None):
@@ -461,7 +465,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de atenciones Obstétricas",
             "stat_key": "total_atenciones",
             "border_color": ACCENT,
-            "link_target": "/dashboard/dash/total_atenciones_nm_ob/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ob/{codcas}"
         },
         {
             "title": "Atenciones prenatales",
@@ -498,7 +502,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de atenciones preventivo promocional",
             "stat_key": "total_atenciones_p",
             "border_color": BRAND,
-            "link_target": "/dashboard/dash/total_atenciones_nm_pp/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_pp/{codcas}"
         },
         {
             "title": "Visitas domiciliarias",
@@ -539,7 +543,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": BRAND,
             "table_key": "nutricion_individual_por_sub_act",
             "table_title": "Atenciones por subactividad",
-            "link_target": "/dashboard/dash/total_atenciones_nm_nu/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_nu/{codcas}"
         },
         # {
         #     "title": "Total de atenciones integral Anemia",
@@ -558,7 +562,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de enfermería",
             "stat_key": "total_enfermeria_atenciones",
             "border_color": BRAND,
-            "link_target": "/dashboard/dash/total_atenciones_nm_en/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_en/{codcas}"
         },
         {
             "title": "Atenciones en tuberculosis",
@@ -612,7 +616,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de consultas de psicología",
             "stat_key": "total_psicologia_atenciones",
             "border_color": BRAND,
-            "link_target": "/dashboard/dash/total_atenciones_nm_ps/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ps/{codcas}"
         },
 
         {
@@ -649,7 +653,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de trabajo social",
             "stat_key": "total_trasocial_atenciones",
             "border_color": BRAND,
-            "link_target": "/dashboard/dash/total_atenciones_nm_ts/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ts/{codcas}"
         },
     ]
     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
@@ -2217,15 +2221,31 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         placement='bottom',
                         style={'zIndex': 9999}
                     ),
-                    html.P(
-                        f"Informacion actualizada al {fecha_act_value} | Sistema de Gestion Estadística",
-                        style={
-                            'color': MUTED,
-                            'fontFamily': FONT_FAMILY,
-                            'fontSize': '13px',
-                            'margin': '6px 0 0 0'
-                        }
-                    )
+                    html.Div([
+                        html.Span(
+                            [html.I(className="bi bi-clock me-1"), f"Actualizado: {fecha_act_value}"],
+                            style={
+                                'backgroundColor': BRAND_SOFT,
+                                'color': BRAND,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '11px',
+                                'fontWeight': '600',
+                                'padding': '3px 10px',
+                                'borderRadius': '999px',
+                                'display': 'inline-flex',
+                                'alignItems': 'center',
+                                'gap': '4px',
+                            }
+                        ),
+                        html.Span(
+                            "Sistema de Gestión Estadística",
+                            style={
+                                'color': MUTED,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '12px',
+                            }
+                        ),
+                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginTop': '6px'})
                 ], style={
                     'display': 'flex',
                     'flexDirection': 'column',

@@ -2,6 +2,7 @@ import io
 import importlib
 import json
 import pkgutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
@@ -357,9 +358,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                     width=12
                 )
             ]),
-            html.Br(),
-            dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
-            html.Br(),
+            dbc.Row(
+                [dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)],
+                style={'marginTop': '16px', 'marginBottom': '24px'}
+            ),
         ], id=f'tab-{tab_config.key}-content_odo', className='dashboard-tab-section', style=section_style)
 
     def build_required_params_message(message=None):
@@ -758,8 +760,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                     import time
                     engine = create_engine(
                         'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=5,
-                        max_overflow=5,
+                        pool_size=20,
+                        max_overflow=10,
                         pool_pre_ping=True,
                         pool_recycle=1800,
                         pool_timeout=30,
@@ -1165,15 +1167,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
             if not fecha_act_value:
                 fecha_act_value = "Sin informacion disponible"
             header = html.Div([
-                # html.Img(
-                #     src=dash_app.get_asset_url('logo.png'),
-                #     style={
-                #         'width': '120px',
-                #         'height': '60px',
-                #         'objectFit': 'contain',
-                #         'marginRight': '16px'
-                #     }
-                # ),
+                html.Img(
+                    src=dash_app.get_asset_url('logo.png'),
+                    style={
+                        'width': '120px',
+                        'height': '60px',
+                        'objectFit': 'contain',
+                        'marginRight': '16px'
+                    }
+                ),
                 html.Div([
                     html.Div([
                         html.Div([
@@ -1216,15 +1218,31 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                         placement='bottom',
                         style={'zIndex': 9999}
                     ),
-                    html.P(
-                        f"Informacion actualizada al {fecha_act_value} | Sistema de Gestion Estadística",
-                        style={
-                            'color': MUTED,
-                            'fontFamily': FONT_FAMILY,
-                            'fontSize': '13px',
-                            'margin': '6px 0 0 0'
-                        }
-                    )
+                    html.Div([
+                        html.Span(
+                            [html.I(className="bi bi-clock me-1"), f"Actualizado: {fecha_act_value}"],
+                            style={
+                                'backgroundColor': BRAND_SOFT,
+                                'color': BRAND,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '11px',
+                                'fontWeight': '600',
+                                'padding': '3px 10px',
+                                'borderRadius': '999px',
+                                'display': 'inline-flex',
+                                'alignItems': 'center',
+                                'gap': '4px',
+                            }
+                        ),
+                        html.Span(
+                            "Sistema de Gestión Estadística",
+                            style={
+                                'color': MUTED,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '12px',
+                            }
+                        ),
+                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginTop': '6px'})
                 ], style={
                     'display': 'flex',
                     'flexDirection': 'column',

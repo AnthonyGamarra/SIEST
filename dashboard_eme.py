@@ -9,6 +9,7 @@ from datetime import date
 import dash_ag_grid as dag
 import os  # agregado
 import dash
+import threading
 from urllib.parse import quote_plus
 
 # Importar páginas de detalle
@@ -58,6 +59,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
         "padding": "18px",
         "background": "linear-gradient(180deg, #ffffff 0%, #f9fbff 100%)",
         "borderRadius": "12px",
+    }
+    CONTROL_BAR_STYLE = {
+        "display": "flex",
+        "alignItems": "center",
+        "gap": "12px",
+        "marginBottom": "18px",
+        "backgroundColor": CARD_BG,
+        "border": f"1px solid {BORDER}",
+        "padding": "14px 16px",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+        "boxShadow": "0 4px 10px rgba(0,0,0,0.05)",
+        "backdropFilter": "blur(3px)",
+        "overflow": "visible",
+        "position": "relative",
+        "zIndex": 1100,
     }
 
     # Use a unique name for the Dash instance to avoid conflicts when mounting multiple apps on the same Flask server
@@ -230,15 +249,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                 # ENCABEZADO
                 html.Div([
                     html.Div([
-                        # html.Img(
-                        #     src=dash_app.get_asset_url('logo.png'),
-                        #     style={
-                        #         'width': '120px',
-                        #         'height': '60px',
-                        #         'objectFit': 'contain',
-                        #         'marginRight': '20px'
-                        #     }
-                        # ),
+                        html.Img(
+                            src=dash_app.get_asset_url('logo.png'),
+                            style={
+                                'width': '120px',
+                                'height': '60px',
+                                'objectFit': 'contain',
+                                'marginRight': '20px'
+                            }
+                        ),
                         html.Div([
                             html.Div([
                                 html.I(className="bi bi-hospital", style={
@@ -257,15 +276,31 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                                     }
                                 )
                             ], style={'display': 'flex', 'alignItems': 'center'}),
-                            html.P(
-                                f"📅 Información actualizada al {fecha_act_value} | Sistema de Gestión Estadístico",
-                                style={
-                                    'color': MUTED,
-                                    'fontFamily': FONT_FAMILY,
-                                    'fontSize': '13px',
-                                    'margin': '8px 0 0 0'
-                                }
-                            )
+                            html.Div([
+                                html.Span(
+                                    [html.I(className="bi bi-clock me-1"), f"Actualizado: {fecha_act_value}"],
+                                    style={
+                                        'backgroundColor': BRAND_SOFT,
+                                        'color': BRAND,
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontSize': '11px',
+                                        'fontWeight': '600',
+                                        'padding': '3px 10px',
+                                        'borderRadius': '999px',
+                                        'display': 'inline-flex',
+                                        'alignItems': 'center',
+                                        'gap': '4px',
+                                    }
+                                ),
+                                html.Span(
+                                    "Sistema de Gestión Estadística",
+                                    style={
+                                        'color': MUTED,
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontSize': '12px',
+                                    }
+                                ),
+                            ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginTop': '6px'})
                         ], style={
                             'display': 'flex',
                             'flexDirection': 'column',
@@ -311,7 +346,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         clearable=True,
                         style={
                             'width': '240px',
-                            'fontFamily': FONT_FAMILY
+                            'fontFamily': FONT_FAMILY,
+                            'position': 'relative',
+                            'zIndex': 1200
                         }
                     ),
                     dcc.Dropdown(
@@ -321,7 +358,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         clearable=False,
                         style={
                             'width': '200px',
-                            'fontFamily': FONT_FAMILY
+                            'fontFamily': FONT_FAMILY,
+                            'position': 'relative',
+                            'zIndex': 1200
                         }
                     ),
                     dbc.Button(
@@ -332,10 +371,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         style={
                             'backgroundColor': BRAND,
                             'borderColor': BRAND,
+                            'padding': '8px 12px',
+                            'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
                             'fontFamily': FONT_FAMILY,
                             'fontWeight': '600',
-                            'borderRadius': '8px',
-                            'padding': '8px 20px'
+                            'borderRadius': '8px'
                         }
                     ),
                     dbc.Button(
@@ -346,10 +386,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         style={
                             'backgroundColor': '#28a745',
                             'borderColor': '#28a745',
+                            'padding': '8px 12px',
+                            'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
                             'fontFamily': FONT_FAMILY,
                             'fontWeight': '600',
-                            'borderRadius': '8px',
-                            'padding': '8px 20px'
+                            'borderRadius': '8px'
                         }
                     ),
                     dcc.Download(id="download-dataframe-csv"),
@@ -366,17 +407,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                             'padding': '8px 12px'
                         }
                     ),
-                ], className='dashboard-control-bar', style={
-                    'display': 'flex',
-                    'alignItems': 'center',
-                    'gap': '16px',
-                    'marginBottom': '30px',
-                    'padding': '20px',
-                    'backgroundColor': CARD_BG,
-                    'borderRadius': '14px',
-                    'boxShadow': '0 8px 20px rgba(0,0,0,0.08)'
-                }),
-                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme', placement='bottom'),
+                ], className='dashboard-control-bar', style={**CONTROL_BAR_STYLE}),
+                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme', placement='bottom', style={'zIndex': 9999}),
+                dbc.Tooltip("Buscar datos", target='search-button', placement='bottom', style={'zIndex': 9999}),
+                dbc.Tooltip("Descargar Excel", target='download-button', placement='bottom', style={'zIndex': 9999}),
 
                 # CONTENEDORES
                 dbc.Row([
@@ -395,7 +429,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         width=12
                     )
                 ]),
-                html.Br(),
                 dbc.Row([
                     dbc.Col(
                         html.Div(
@@ -411,7 +444,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         ),
                         width=12
                     )
-                ]),
+                ], style={'marginTop': '16px', 'marginBottom': '24px'}),
                 ], id='main-eme-content'),
 
                 # Contenedor para páginas de detalle
@@ -471,8 +504,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     import time
                     engine = create_engine(
                         'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=5,
-                        max_overflow=5,
+                        pool_size=20,
+                        max_overflow=10,
                         pool_pre_ping=True,
                         pool_recycle=1800,
                         pool_timeout=30,

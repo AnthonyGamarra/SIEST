@@ -2,6 +2,7 @@ import io
 import importlib
 import json
 import pkgutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
@@ -357,9 +358,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
                     width=12
                 )
             ]),
-            html.Br(),
-            dbc.Row([dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)]),
-            html.Br(),
+            dbc.Row(
+                [dbc.Col(html.Div(id=tab_config.charts_container_id), width=12)],
+                style={'marginTop': '16px', 'marginBottom': '24px'}
+            ),
         ], id=f'tab-{tab_config.key}-content', className='dashboard-tab-section', style=section_style)
 
     def build_required_params_message(message=None):
@@ -746,36 +748,29 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
         )
 
     _engine = None
-    _engine_lock = None
-    
+    _engine_lock = threading.Lock()
+
     def create_connection():
         """Crea o retorna una instancia singleton del engine de base de datos con reintentos."""
-        nonlocal _engine, _engine_lock
-        
-        if _engine_lock is None:
-            import threading
-            _engine_lock = threading.Lock()
-        
+        nonlocal _engine
+
         with _engine_lock:
             if _engine is not None:
                 try:
-                    # Verificar si la conexión sigue válida
                     with _engine.connect() as conn:
                         pass
                     return _engine
                 except Exception:
-                    # Si falla, recrear el engine
                     _engine = None
-            
-            # Intentar crear nueva conexión con reintentos
+
             max_retries = 3
             for attempt in range(max_retries):
                 try:
                     import time
                     engine = create_engine(
                         'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=5,
-                        max_overflow=5,
+                        pool_size=20,
+                        max_overflow=10,
                         pool_pre_ping=True,
                         pool_recycle=1800,
                         pool_timeout=30,
@@ -2459,15 +2454,15 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
             if not fecha_act_value:
                 fecha_act_value = "Sin informacion disponible"
             header = html.Div([
-                # html.Img(
-                #     src=dash_app.get_asset_url('logo.png'),
-                #     style={
-                #         'width': '120px',
-                #         'height': '60px',
-                #         'objectFit': 'contain',
-                #         'marginRight': '16px'
-                #     }
-                # ),
+                html.Img(
+                    src=dash_app.get_asset_url('logo.png'),
+                    style={
+                        'width': '120px',
+                        'height': '60px',
+                        'objectFit': 'contain',
+                        'marginRight': '16px'
+                    }
+                ),
                 html.Div([
                     html.Div([
                         html.Div([
@@ -2506,15 +2501,31 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                         placement='bottom',
                         style={'zIndex': 9999}
                     ),
-                    html.P(
-                        f"Informacion actualizada al {fecha_act_value} | Sistema de Gestion Estadística",
-                        style={
-                            'color': MUTED,
-                            'fontFamily': FONT_FAMILY,
-                            'fontSize': '13px',
-                            'margin': '6px 0 0 0'
-                        }
-                    )
+                    html.Div([
+                        html.Span(
+                            [html.I(className="bi bi-clock me-1"), f"Actualizado: {fecha_act_value}"],
+                            style={
+                                'backgroundColor': BRAND_SOFT,
+                                'color': BRAND,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '11px',
+                                'fontWeight': '600',
+                                'padding': '3px 10px',
+                                'borderRadius': '999px',
+                                'display': 'inline-flex',
+                                'alignItems': 'center',
+                                'gap': '4px',
+                            }
+                        ),
+                        html.Span(
+                            "Sistema de Gestión Estadística",
+                            style={
+                                'color': MUTED,
+                                'fontFamily': FONT_FAMILY,
+                                'fontSize': '12px',
+                            }
+                        ),
+                    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginTop': '6px'})
                 ], style={
                     'display': 'flex',
                     'flexDirection': 'column',
@@ -2577,18 +2588,52 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
                 'fontFamily': FONT_FAMILY
             })
 
-        return html.Div([
-            html.H3('No autenticado'),
-            html.P('Debes iniciar sesion para ver el dashboard.'),
-            dbc.Button(
-                'Volver',
-                id='unauth-back-button',
-                color='primary',
-                href='javascript:history.back();',
-                external_link=True,
-                style={'marginTop': '12px'}
-            )
-        ])
+        return html.Div(
+            dbc.Card(
+                dbc.CardBody([
+                    html.I(
+                        className="bi bi-shield-lock",
+                        style={'fontSize': '48px', 'color': BRAND, 'display': 'block', 'marginBottom': '16px'}
+                    ),
+                    html.H4(
+                        "Acceso restringido",
+                        style={'color': TEXT, 'fontFamily': FONT_FAMILY, 'fontWeight': '700', 'marginBottom': '8px'}
+                    ),
+                    html.P(
+                        "Debes iniciar sesión para ver el dashboard.",
+                        style={'color': MUTED, 'fontFamily': FONT_FAMILY, 'marginBottom': '20px'}
+                    ),
+                    dbc.Button(
+                        [html.I(className="bi bi-arrow-left me-2"), "Volver"],
+                        id='unauth-back-button',
+                        color='primary',
+                        href='javascript:history.back();',
+                        external_link=True,
+                        style={
+                            'backgroundColor': BRAND,
+                            'borderColor': BRAND,
+                            'fontFamily': FONT_FAMILY,
+                            'fontWeight': '600',
+                            'borderRadius': '8px',
+                            'padding': '8px 20px',
+                        }
+                    ),
+                ], style={'textAlign': 'center', 'padding': '48px 32px'}),
+                style={
+                    'borderRadius': '16px',
+                    'border': f'1px solid {BORDER}',
+                    'boxShadow': '0 10px 30px rgba(0,0,0,0.08)',
+                    'maxWidth': '420px',
+                }
+            ),
+            style={
+                'minHeight': '100vh',
+                'display': 'flex',
+                'alignItems': 'center',
+                'justifyContent': 'center',
+                'fontFamily': FONT_FAMILY,
+            }
+        )
 
     def register_summary_callback(tab_config):
         @dash_app.callback(

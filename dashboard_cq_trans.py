@@ -4,11 +4,13 @@ from flask_login import current_user
 from sqlalchemy import create_engine,text
 import pandas as pd
 import dash_bootstrap_components as dbc
+from typing import Callable, Optional
 import plotly.express as px
 from datetime import date
 import dash_ag_grid as dag
 import os  # agregado
 import dash
+import threading
 from urllib.parse import quote_plus
 
 
@@ -51,6 +53,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
         "padding": "18px",
         "background": "linear-gradient(180deg, #ffffff 0%, #f9fbff 100%)",
         "borderRadius": "12px",
+    }
+    CONTROL_BAR_STYLE = {
+        "display": "flex",
+        "alignItems": "center",
+        "gap": "12px",
+        "marginBottom": "18px",
+        "backgroundColor": CARD_BG,
+        "border": f"1px solid {BORDER}",
+        "padding": "14px 16px",
+        "borderTopLeftRadius": "14px",
+        "borderTopRightRadius": "14px",
+        "borderBottomLeftRadius": "14px",
+        "borderBottomRightRadius": "14px",
+        "boxShadow": "0 4px 10px rgba(0,0,0,0.05)",
+        "backdropFilter": "blur(3px)",
+        "overflow": "visible",
+        "position": "relative",
+        "zIndex": 1100,
     }
 
     # Use a unique name for the Dash instance to avoid conflicts when mounting multiple apps on the same Flask server
@@ -155,6 +175,36 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
 
         return fecha_col_value
     
+    FICHA_TECNICA_ID = 14
+
+    def _build_safe_pdf_name(raw_name: Optional[str]) -> str:
+        base = (raw_name or "ficha_tecnica").strip()
+        safe_chars = [ch if ch.isalnum() or ch in (" ", "-", "_") else "_" for ch in base]
+        normalized = ''.join(safe_chars).strip().replace(' ', '_').lower()
+        normalized = normalized or "ficha_tecnica"
+        return normalized if normalized.endswith('.pdf') else f"{normalized}.pdf"
+    
+    def fetch_ficha_tecnica(engine, ficha_id: int = FICHA_TECNICA_ID):
+        if engine is None:
+            return None
+
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
+                    {"id": ficha_id}
+                ).mappings().first()
+        except Exception as exc:
+            print(f"Failed to fetch ficha tecnica {ficha_id}: {exc}")
+            return None
+
+        if not row or not row.get('archivo_pdf'):
+            return None
+
+        filename = _build_safe_pdf_name(row.get('nombre'))
+        pdf_bytes = bytes(row['archivo_pdf'])
+        return filename, pdf_bytes
+    
     def render_priority_table(dataframe):
         table_title = html.H6(
             "Código de sala",
@@ -230,51 +280,87 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                 # ENCABEZADO
                 html.Div([
                     html.Div([
-                        html.Img(
-                            src=dash_app.get_asset_url('logo.png'),
-                            style={
-                                'width': '120px',
-                                'height': '60px',
-                                'objectFit': 'contain',
-                                'marginRight': '20px'
-                            }
-                        ),
                         html.Div([
                             html.Div([
-                                html.I(className="bi bi-hospital", style={
-                                    'fontSize': '32px',
-                                    'color': BRAND,
-                                    'marginRight': '12px'
-                                }),
-                                html.H2(
-                                    [
-                                        "Centro Quirúrgico - Transplantes",
-                                        html.Span(
-                                            " (En proceso de validación)",
-                                            style={
-                                                'color': '#dc3545',
-                                                'fontWeight': '700'
-                                            }
-                                        )
-                                    ],
+                                html.Div([
+                                    html.I(className="bi bi-hospital", style={
+                                        'fontSize': '26px',
+                                        'color': BRAND,
+                                        'marginRight': '10px'
+                                    }),
+                                    html.H2(
+                                        [
+                                            "Centro Quirúrgico - Transplantes",
+                                            html.Span(
+                                                " (En proceso de validación)",
+                                                style={
+                                                    'color': '#dc3545',
+                                                    'fontWeight': '700'
+                                                }
+                                            )
+                                        ],
+                                        style={
+                                            'fontFamily': FONT_FAMILY,
+                                            'fontSize': '26px',
+                                            'margin': '0',
+                                            'fontWeight': '700',
+                                            'color': BRAND,
+                                            'lineHeight': '1.1'
+                                        }
+                                    )
+                                ], style={'display': 'flex', 'alignItems': 'center'}),
+                                dbc.Button(
+                                    [html.I(className="bi bi-file-earmark-arrow-down me-2"), "Ficha técnica"],
+                                    id='download-ficha-btn-cq-trans',
+                                    color='light',
+                                    outline=True,
+                                    size='sm',
                                     style={
+                                        'borderColor': BRAND,
+                                        'color': BRAND,
+                                        'backgroundColor': '#F7FBFF',
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontWeight': '600',
+                                        'borderRadius': '10px',
+                                        'padding': '4px 14px',
+                                        'marginLeft': '8px',
+                                        'whiteSpace': 'nowrap'
+                                    }
+                                ),
+                                dcc.Download(id="download-ficha-tecnica-cq-trans"),
+                            ], style={
+                                'display': 'flex',
+                                'alignItems': 'center',
+                                'justifyContent': 'flex-start',
+                                'gap': '12px',
+                                'flexWrap': 'nowrap',
+                                'width': '100%'
+                            }),
+                            html.Div([
+                                html.Span(
+                                    [html.I(className="bi bi-clock me-1"), f"Actualizado: {fecha_act_value}"],
+                                    style={
+                                        'backgroundColor': BRAND_SOFT,
                                         'color': BRAND,
                                         'fontFamily': FONT_FAMILY,
-                                        'fontSize': '26px',
-                                        'margin': '0',
-                                        'fontWeight': '700'
+                                        'fontSize': '11px',
+                                        'fontWeight': '600',
+                                        'padding': '3px 10px',
+                                        'borderRadius': '999px',
+                                        'display': 'inline-flex',
+                                        'alignItems': 'center',
+                                        'gap': '4px',
                                     }
-                                )
-                            ], style={'display': 'flex', 'alignItems': 'center'}),
-                            html.P(
-                                f"📅 Información actualizada al {fecha_act_value} | Sistema de Gestión Estadístico",
-                                style={
-                                    'color': MUTED,
-                                    'fontFamily': FONT_FAMILY,
-                                    'fontSize': '13px',
-                                    'margin': '8px 0 0 0'
-                                }
-                            )
+                                ),
+                                html.Span(
+                                    "Sistema de Gestión Estadística",
+                                    style={
+                                        'color': MUTED,
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontSize': '12px',
+                                    }
+                                ),
+                            ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginTop': '6px'})
                         ], style={
                             'display': 'flex',
                             'flexDirection': 'column',
@@ -320,7 +406,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                         clearable=True,
                         style={
                             'width': '240px',
-                            'fontFamily': FONT_FAMILY
+                            'fontFamily': FONT_FAMILY,
+                            'position': 'relative',
+                            'zIndex': 1200
                         }
                     ),
                     dcc.Dropdown(
@@ -330,7 +418,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                         clearable=False,
                         style={
                             'width': '200px',
-                            'fontFamily': FONT_FAMILY
+                            'fontFamily': FONT_FAMILY,
+                            'position': 'relative',
+                            'zIndex': 1200
                         }
                     ),
                     dbc.Button(
@@ -341,10 +431,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                         style={
                             'backgroundColor': BRAND,
                             'borderColor': BRAND,
+                            'padding': '8px 12px',
+                            'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
                             'fontFamily': FONT_FAMILY,
                             'fontWeight': '600',
-                            'borderRadius': '8px',
-                            'padding': '8px 20px'
+                            'borderRadius': '8px'
                         }
                     ),
                     dbc.Button(
@@ -355,10 +446,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                         style={
                             'backgroundColor': '#28a745',
                             'borderColor': '#28a745',
+                            'padding': '8px 12px',
+                            'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
                             'fontFamily': FONT_FAMILY,
                             'fontWeight': '600',
-                            'borderRadius': '8px',
-                            'padding': '8px 20px'
+                            'borderRadius': '8px'
                         }
                     ),
                     dcc.Download(id="download-dataframe-csv-cq-trans"),
@@ -375,17 +467,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                             'padding': '8px 12px'
                         }
                     ),
-                ], className='dashboard-control-bar', style={
-                    'display': 'flex',
-                    'alignItems': 'center',
-                    'gap': '16px',
-                    'marginBottom': '30px',
-                    'padding': '20px',
-                    'backgroundColor': CARD_BG,
-                    'borderRadius': '14px',
-                    'boxShadow': '0 8px 20px rgba(0,0,0,0.08)'
-                }),
-                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme-cq-trans', placement='bottom'),
+                ], className='dashboard-control-bar', style={**CONTROL_BAR_STYLE}),
+                dbc.Tooltip("Volver a la página anterior", target='btn-volver-eme-cq-trans', placement='bottom', style={'zIndex': 9999}),
+                dbc.Tooltip("Buscar datos", target='search-button-cq-trans', placement='bottom', style={'zIndex': 9999}),
+                dbc.Tooltip("Descargar Excel", target='download-button-cq-trans', placement='bottom', style={'zIndex': 9999}),
 
                 # CONTENEDORES
                 dbc.Row([
@@ -404,7 +489,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                         width=12
                     )
                 ]),
-                html.Br(),
                 dbc.Row([
                     dbc.Col(
                         html.Div(
@@ -420,7 +504,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                         ),
                         width=12
                     )
-                ]),
+                ], style={'marginTop': '16px', 'marginBottom': '24px'}),
                 ], id='main-eme-content-cq-trans'),
 
                 # Contenedor para páginas de detalle
@@ -432,7 +516,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq_trans/'):
                 'backgroundPosition': 'center center',
                 'backgroundRepeat': 'no-repeat',
                 'backgroundAttachment': 'fixed',
-                'minHeight': '100%',
+                'minHeight': '100vh',
                 'paddingTop': '20px',
                 'paddingBottom': '20px'
             })
@@ -943,6 +1027,24 @@ ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
         summary_row = dbc.Container(summary_sections, fluid=True)
 
         return summary_row, html.Div()
+
+    @dash_app.callback(
+        Output("download-ficha-tecnica-cq-trans", "data"),
+        Input("download-ficha-btn-cq-trans", "n_clicks"),
+        prevent_initial_call=True
+    )
+    def download_ficha_tecnica(n_clicks):
+        if not n_clicks:
+            return None
+
+        engine = create_connection()
+        ficha = fetch_ficha_tecnica(engine)
+        if not ficha:
+            return None
+
+        filename, pdf_bytes = ficha
+        return dcc.send_bytes(lambda buffer: buffer.write(pdf_bytes), filename)
+
        # ========== CALLBACK DESCARGA CSV ==========
     @dash_app.callback(
         Output("download-dataframe-csv-cq-trans", "data"),

@@ -175,8 +175,10 @@ def get_codcas_periodo(pathname: str, search: str, periodo_dropdown: str, anio_d
     codasegu = _parse_codasegu(search) or tipo_asegurado_dropdown or DEFAULT_TIPO_ASEGURADO
     return codcas, periodo, anio, codasegu
 
-# Layout sin verificador de query
-layout = html.Div([
+# Layout como funcion para recibir codcas del path
+def layout(codcas=None, **kwargs):
+    return html.Div([
+    dcc.Store(id="nm-pt-codcas-store", data=codcas),
     dcc.Location(id="page-url_nm_pt", refresh=False),
     html.Div([
         # Header con icono
@@ -296,14 +298,7 @@ register_page(
 # Conexión DB
 def create_connection():
     try:
-        engine = create_engine(
-            'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-            pool_size=5,
-            max_overflow=5,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            pool_timeout=30
-        )
+        engine = create_engine('postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA')
         with engine.connect():
             pass
         return engine
@@ -315,11 +310,15 @@ def create_connection():
 @callback(
     Output("bar-servicio-graph_nm_pt", "figure"),
     Output("bar-especialidad-graph_nm_pt", "figure"),
-    Input("page-url_nm_pt", "pathname"),
+    Input("nm-pt-codcas-store", "data"),
     Input("page-url_nm_pt", "search"),
 )
-def update_barras_inicio(pathname, search):
-    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, None, None)
+def update_barras_inicio(codcas_enc, search):
+    import secure_code as sc
+    codcas = sc.decode_code(codcas_enc) if codcas_enc else None
+    periodo = _parse_periodo(search)
+    anio = _parse_anio(search)
+    tipo_asegurado = _parse_codasegu(search) or DEFAULT_TIPO_ASEGURADO
     codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas or not periodo or not anio:
         return empty_fig("Atenciones por servicio"), empty_fig("Atenciones por subactividad")
@@ -452,11 +451,15 @@ def update_barras_inicio(pathname, search):
 @callback(
     Output("total-atenciones-graph_nm_pt", "figure"),
     Output("total-atenciones-msg_nm_pt", "children"),
-    Input("page-url_nm_pt", "pathname"),
+    Input("nm-pt-codcas-store", "data"),
     Input("page-url_nm_pt", "search"),
 )
-def update_total_atenciones_nm_pt(pathname, search):
-    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, None, None)
+def update_total_atenciones_nm_pt(codcas_enc, search):
+    import secure_code as sc
+    codcas = sc.decode_code(codcas_enc) if codcas_enc else None
+    periodo = _parse_periodo(search)
+    anio = _parse_anio(search)
+    tipo_asegurado = _parse_codasegu(search) or DEFAULT_TIPO_ASEGURADO
     codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
     if not codcas:
         return (
@@ -561,12 +564,16 @@ def update_total_atenciones_nm_pt(pathname, search):
 @callback(
     Output("download-query1-csv_nm_pt", "data"),
     Input("btn-download-query1_nm_pt", "n_clicks"),
-    State("page-url_nm_pt", "pathname"),
+    State("nm-pt-codcas-store", "data"),
     State("page-url_nm_pt", "search"),
     prevent_initial_call=True
 )
-def descargar_query1_csv(n_clicks, pathname, search):
-    codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, None, None)
+def descargar_query1_csv(n_clicks, codcas_enc, search):
+    import secure_code as sc
+    codcas = sc.decode_code(codcas_enc) if codcas_enc else None
+    periodo = _parse_periodo(search)
+    anio = _parse_anio(search)
+    tipo_asegurado = _parse_codasegu(search) or DEFAULT_TIPO_ASEGURADO
     if not codcas or not periodo or not anio:
         return None
     engine = create_connection()

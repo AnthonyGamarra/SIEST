@@ -336,15 +336,31 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                                 ),
                                 dcc.Download(id="download-ficha-tecnica-cq"),
                             ], style={'display': 'flex', 'alignItems': 'center'}),
-                            html.P(
-                                f"📅 Información actualizada al {fecha_act_value} | Sistema de Gestión Estadístico",
-                                style={
-                                    'color': MUTED,
-                                    'fontFamily': FONT_FAMILY,
-                                    'fontSize': '13px',
-                                    'margin': '8px 0 0 0'
-                                }
-                            )
+                            html.Div([
+                                html.Span(
+                                    [html.I(className="bi bi-clock me-1"), f"Actualizado: {fecha_act_value}"],
+                                    style={
+                                        'backgroundColor': BRAND_SOFT,
+                                        'color': BRAND,
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontSize': '11px',
+                                        'fontWeight': '600',
+                                        'padding': '3px 10px',
+                                        'borderRadius': '999px',
+                                        'display': 'inline-flex',
+                                        'alignItems': 'center',
+                                        'gap': '4px',
+                                    }
+                                ),
+                                html.Span(
+                                    "Sistema de Gestión Estadística",
+                                    style={
+                                        'color': MUTED,
+                                        'fontFamily': FONT_FAMILY,
+                                        'fontSize': '12px',
+                                    }
+                                ),
+                            ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10px', 'marginTop': '6px'})
                         ], style={
                             'display': 'flex',
                             'flexDirection': 'column',
@@ -502,7 +518,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                 'backgroundPosition': 'center center',
                 'backgroundRepeat': 'no-repeat',
                 'backgroundAttachment': 'fixed',
-                'minHeight': '100%',
+                'minHeight': '100vh',
                 'paddingTop': '20px',
                 'paddingBottom': '20px'
             })
@@ -1249,7 +1265,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                 b.conopedes as des_tipo_programacion,
                 cq.num_solicitud,
                 cq.cod_quirof,
-                --q.salopedes,
+                q.salopedes,
                 cq.fec_oper
             FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
             LEFT JOIN dwsge.sgss_cmsho10 AS c 
@@ -1257,10 +1273,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             LEFT JOIN dwsge.sgss_cmcas10 AS ca 
                 ON cq.cod_oricentro = ca.oricenasicod 
             AND cq.cod_centro = ca.cenasicod
-            --LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-            --    ON q.cenasicod = cq.cod_centro 
-            --AND q.salopecod = cq.cod_sala_operacion 
-            --AND cq.cod_quirof = q.cenquicod
+            LEFT JOIN dwsge.sgss_qmcqs10 AS q 
+                ON q.cenasicod = cq.cod_centro 
+            AND q.salopecod = cq.cod_sala_operacion 
+            AND cq.cod_quirof = q.cenquicod
             LEFT JOIN dwsge.sgss_cmcpp10 as cp 
                 ON cp.cpscod = cq.cod_cpms
             LEFT JOIN dwsge.sgss_cmaho10 as h
@@ -1278,8 +1294,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         df = pd.read_sql(query, engine)
         if df.empty:
             return None
-        filename = f"atenciones_por_complejidad_{codcas}_{anio_str}_{periodo}.xlsx"
-        return dcc.send_data_frame(df.to_excel, filename, index=False, sheet_name='Atenciones')   
+        df = df.astype(str)
+        filename = f"atenciones_por_complejidad_{codcas}_{anio_str}_{periodo}.csv"
+        return dcc.send_data_frame(df.to_csv, filename, index=False, sep='|')   
 
     # ========== CALLBACK DESCARGA FICHA TÉCNICA ==========
     @dash_app.callback(

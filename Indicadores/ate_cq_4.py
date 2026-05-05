@@ -84,6 +84,7 @@ COLUMN_DEFS = [
     {"field": "cpms",                  "headerName": "CPMS",               "minWidth": 160},
     {"field": "cod_complejidad",       "headerName": "Complejidad",        "minWidth": 110},
     {"field": "des_tipo_programacion", "headerName": "Tipo Programacion",  "minWidth": 180},
+    {"field": "salopedes",             "headerName": "Sala Operaciones",   "minWidth": 160},
     {"field": "acto_med",              "headerName": "Acto Med.",          "minWidth": 110},
     {"field": "num_solicitud",         "headerName": "N° Solicitud",       "minWidth": 120},
     {"field": "fec_oper",              "headerName": "Fecha Operacion",    "minWidth": 150},
@@ -160,15 +161,15 @@ def _build_query(anio_str, periodo, codcas, codasegu_clause):
             cq.cod_anest, cq.cod_tipo_programacion,
             b.conopedes   AS des_tipo_programacion,
             cq.num_solicitud, cq.cod_quirof,
-            --q.salopedes,
+            q.salopedes,
             cq.fec_oper
         FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
         LEFT JOIN dwsge.sgss_cmsho10  c  ON cq.cod_servicio = c.servhoscod
         LEFT JOIN dwsge.sgss_cmcas10  ca ON cq.cod_oricentro = ca.oricenasicod
                                          AND cq.cod_centro   = ca.cenasicod
-        --LEFT JOIN dwsge.sgss_qmcqs10  q  ON q.cenasicod  = cq.cod_centro
-        --                                 AND q.salopecod  = cq.cod_sala_operacion
-        --                                 AND cq.cod_quirof = q.cenquicod
+        LEFT JOIN dwsge.sgss_qmcqs10  q  ON q.cenasicod  = cq.cod_centro
+                                         AND q.salopecod  = cq.cod_sala_operacion
+                                         AND cq.cod_quirof = q.cenquicod
         LEFT JOIN dwsge.sgss_cmcpp10  cp ON cp.cpscod      = cq.cod_cpms
         LEFT JOIN dwsge.sgss_cmaho10  h  ON h.arehoscod    = cq.cod_area
         LEFT JOIN dwsge.sgss_qbcep10  b  ON b.conopecod    = cq.cod_tipo_programacion
@@ -265,7 +266,7 @@ def register_callbacks(app):
 
         # ---- AG Grid ----
         cols_table = ["cenasides", "area", "servicio", "cod_cpms","cpms", "cod_complejidad",
-                      "des_tipo_programacion", "acto_med", "num_solicitud",
+                      "des_tipo_programacion","salopedes", "acto_med", "num_solicitud",
                       "fec_oper", "anio_edad", "sexo", "cod_anest",
                       "cod_tipdoc_paciente", "doc_paciente"]
         rows = df[cols_table].astype(str).replace("nan", "").to_dict("records")
