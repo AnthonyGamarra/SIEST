@@ -144,6 +144,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         ("cod_subactividad", "Subactividad"),
         ("subactividad", "Desc. subactividad"),
         ("sexo", "Sexo"),
+        ("fecha_atencion", "Fecha atención"),
         ("anio_edad", "Edad (años)"),
         ("dni_medico", "DNI médico"),
         ("acto_med", "Acto médico"),
@@ -174,6 +175,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                doc_paciente,
                anio_edad,
                sexo,
+               fecha_atencion,
                cod_diag,
                d.diagdes,
                d.edxcapdes AS capitulo

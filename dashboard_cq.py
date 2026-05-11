@@ -689,97 +689,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         if engine is None:
             return html.Div("Error de conexión a la base de datos."), html.Div()
 
-        query = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
-                cq.cod_oricentro,
-                cq.cod_centro,
-                ca.cenasides AS cenasides,
-                cq.periodo,
-                cq.anio,
-                cq.cod_area,
-                h.arehosdes AS area,
-                cq.cod_servicio,
-                c.servhosdes AS servicio,
-                cq.cod_cpms,
-                cp.cpsdes AS cpms,
-                cq.cod_tipdoc_paciente,
-                cq.doc_paciente,
-                cq.anio_edad,
-                cq.meses,
-                cq.sexo,
-                cq.cod_sala,
-                cq.acto_med,
-                cq.cod_complejidad,
-                cq.cod_anest,
-                cq.cod_tipo_programacion,
-                cq.num_solicitud,
-                cq.cod_quirof,
-                ---q.salopedes,
-                cq.fec_oper
-            FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON cq.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                ON cq.cod_oricentro = ca.oricenasicod 
-            AND cq.cod_centro = ca.cenasicod
-            ---LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-            ---    ON q.cenasicod = cq.cod_centro 
-            ---AND q.salopecod = cq.cod_sala_operacion 
-            ---AND cq.cod_quirof = q.cenquicod
-            LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-                ON cp.cpscod = cq.cod_cpms
-            LEFT JOIN dwsge.sgss_cmaho10 as h
-                ON h.arehoscod = cq.cod_area
-            WHERE cq.cod_centro = '{codcas}'
-                        AND (
-                                CASE
-                                    WHEN cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                            ) IN {codasegu_clause}
-            ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
-        """
-
-        if not query.strip():
-            return html.Div("No se definió la consulta SQL para este dashboard."), html.Div()
-
-        df = pd.read_sql(query, engine)
-        if df.empty:
-            return html.Div([
-                html.I(className="bi bi-inbox", style={
-                    'fontSize': '64px',
-                    'color': MUTED,
-                    'marginBottom': '20px'
-                }),
-                html.H4("Sin registros", style={
-                    'color': TEXT,
-                    'fontFamily': FONT_FAMILY,
-                    'marginBottom': '10px'
-                }),
-                html.P("No hay registros de atenciones para el año y periodo seleccionados.", style={
-                    'color': MUTED,
-                    'fontFamily': FONT_FAMILY
-                }),
-                html.P(f"Centro: {codcas} | Año: {anio_str} | Periodo: {periodo}", style={
-                    'color': MUTED,
-                    'fontFamily': FONT_FAMILY,
-                    'fontSize': '12px'
-                })
-            ], style={
-                'textAlign': 'center',
-                'padding': '60px',
-                'backgroundColor': CARD_BG,
-                'borderRadius': '16px',
-                'boxShadow': '0 10px 30px rgba(0,0,0,0.08)'
-            }), html.Div()
-
-        # === NOMBRE DEL CENTRO ===
-        nombre_centro = df['cenasides'].dropna().unique()
-        nombre_centro = nombre_centro[0] if len(nombre_centro) > 0 else codcas
-        detail_query = f"?periodo={periodo}&anio={anio_str}&codasegu={quote_plus(tipo_filter)}"
-
-        # === TARJETAS RESUMEN POR PRIORIDAD ===
-        # Query base para obtener datos con cod_prioridad_n
         query_base = f"""
             SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms)
                 cq.cod_oricentro,
@@ -808,16 +717,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                 cq.cod_quirof,
                 cq.fec_oper
             FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
+            LEFT JOIN dwsge.sgss_cmsho10 AS c
                 ON cq.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                ON cq.cod_oricentro = ca.oricenasicod 
+            LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                ON cq.cod_oricentro = ca.oricenasicod
             AND cq.cod_centro = ca.cenasicod
-            ---LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-            ---    ON q.cenasicod = cq.cod_centro 
-            ---AND q.salopecod = cq.cod_sala_operacion 
-            ---AND cq.cod_quirof = q.cenquicod
-            LEFT JOIN dwsge.sgss_cmcpp10 as cp 
+            LEFT JOIN dwsge.sgss_cmcpp10 as cp
                 ON cp.cpscod = cq.cod_cpms
             LEFT JOIN dwsge.sgss_cmaho10 as h
                 ON h.arehoscod = cq.cod_area
@@ -831,180 +736,79 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                             ) IN {codasegu_clause}
             ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC;
         """
-        query_de_emergencia = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms)
-                cq.cod_oricentro,
-                cq.cod_centro,
-                ca.cenasides AS cenasides,
-                cq.periodo,
-                cq.anio,
-                cq.cod_area,
-                h.arehosdes AS area,
-                cq.cod_servicio,
-                c.servhosdes AS servicio,
-                cq.cod_cpms,
-                cp.cpsdes AS cpms,
-                cq.cod_tipdoc_paciente,
-                cq.doc_paciente,
-                cq.anio_edad,
-                cq.meses,
-                cq.sexo,
-                cq.cod_sala,
+
+        query_horas = f"""
+            SELECT DISTINCT ON (cq.acto_med, cq.fec_oper)
                 cq.acto_med,
-                cq.cod_complejidad,
-                cq.cod_anest,
-                cq.cod_tipo_programacion,
-                b.conopedes as des_tipo_programacion,
-                cq.num_solicitud,
-                cq.cod_quirof,
-                ---q.salopedes,
-                cq.fec_oper
+                cq.fec_oper,
+                cq.duracion_sala,
+                cq.cod_tipo_programacion
             FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                ON cq.cod_servicio = c.servhoscod
-            LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                ON cq.cod_oricentro = ca.oricenasicod 
-            AND cq.cod_centro = ca.cenasicod
-            ---LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-            ---    ON q.cenasicod = cq.cod_centro 
-            ---AND q.salopecod = cq.cod_sala_operacion 
-            ---AND cq.cod_quirof = q.cenquicod
-            LEFT JOIN dwsge.sgss_cmcpp10 as cp 
-                ON cp.cpscod = cq.cod_cpms
-            LEFT JOIN dwsge.sgss_cmaho10 as h
-                ON h.arehoscod = cq.cod_area
-            LEFT JOIN dwsge.sgss_qbcep10 as b ON b.conopecod = cq.cod_tipo_programacion
             WHERE cq.cod_centro = '{codcas}'
-                        AND (
-                                CASE
-                                    WHEN cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                            ) IN {codasegu_clause}
-            AND cq.cod_tipo_programacion = '2'
-            ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC;
+                AND (
+                        CASE
+                            WHEN cod_tipo_paciente = '4' THEN '2'
+                            ELSE '1'
+                        END
+                    ) IN {codasegu_clause}
+            ORDER BY cq.acto_med, cq.fec_oper DESC;
         """
 
-        query_horas_quirurgicas_electivas = f"""
-                SELECT 
-                    SUM(
-                        SPLIT_PART(t.duracion_sala, ':', 1)::numeric
-                        + SPLIT_PART(t.duracion_sala, ':', 2)::numeric / 60
-                    ) AS horas_quirurgicas_realizadas_iq_electivas
-                FROM (
-                    SELECT DISTINCT ON (cq.acto_med, cq.fec_oper)
-                        cq.cod_oricentro,
-                        cq.cod_centro,
-                        ca.cenasides AS cenasides,
-                        cq.periodo,
-                        cq.anio,
-                        cq.cod_area,
-                        h.arehosdes AS area,
-                        cq.cod_servicio,
-                        c.servhosdes AS servicio,
-                        cq.cod_cpms,
-                        cp.cpsdes AS cpms,
-                        cq.cod_tipdoc_paciente,
-                        cq.doc_paciente,
-                        cq.anio_edad,
-                        cq.meses,
-                        cq.sexo,
-                        cq.cod_sala,
-                        cq.acto_med,
-                        cq.cod_complejidad,
-                        cq.cod_anest,
-                        cq.cod_tipo_programacion,
-                        b.conopedes AS des_tipo_programacion,
-                        cq.num_solicitud,
-                        cq.cod_quirof,
-                        ---q.salopedes,
-                        cq.fec_oper,
-                        cq.duracion_sala
-                    FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON cq.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                        ON cq.cod_oricentro = ca.oricenasicod 
-                    AND cq.cod_centro = ca.cenasicod
-                    ---LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-                    ---    ON q.cenasicod = cq.cod_centro 
-                    ---AND q.salopecod = cq.cod_sala_operacion 
-                    ---AND cq.cod_quirof = q.cenquicod
-                    LEFT JOIN dwsge.sgss_cmcpp10 AS cp 
-                        ON cp.cpscod = cq.cod_cpms
-                    LEFT JOIN dwsge.sgss_cmaho10 AS h 
-                        ON h.arehoscod = cq.cod_area
-                    LEFT JOIN dwsge.sgss_qbcep10 AS b 
-                        ON b.conopecod = cq.cod_tipo_programacion
-                    WHERE cq.cod_centro = '{codcas}'
-                    AND (CASE WHEN cq.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
-                    AND cq.cod_tipo_programacion = '1'
-                    ORDER BY cq.acto_med, cq.fec_oper DESC
-                ) t;
-        """
-
-        query_horas_quirurgicas_emergencia = f"""
-                    SELECT 
-                        SUM(
-                            SPLIT_PART(t.duracion_sala, ':', 1)::numeric
-                            + SPLIT_PART(t.duracion_sala, ':', 2)::numeric / 60
-                        ) AS horas_quirurgicas_realizadas_iq_emergencia
-                    FROM (
-                        SELECT DISTINCT ON (cq.acto_med, cq.fec_oper)
-                            cq.cod_oricentro,
-                            cq.cod_centro,
-                            ca.cenasides AS cenasides,
-                            cq.periodo,
-                            cq.anio,
-                            cq.cod_area,
-                            h.arehosdes AS area,
-                            cq.cod_servicio,
-                            c.servhosdes AS servicio,
-                            cq.cod_cpms,
-                            cp.cpsdes AS cpms,
-                            cq.cod_tipdoc_paciente,
-                            cq.doc_paciente,
-                            cq.anio_edad,
-                            cq.meses,
-                            cq.sexo,
-                            cq.cod_sala,
-                            cq.acto_med,
-                            cq.cod_complejidad,
-                            cq.cod_anest,
-                            cq.cod_tipo_programacion,
-                            b.conopedes AS des_tipo_programacion,
-                            cq.num_solicitud,
-                            cq.cod_quirof,
-                            ---q.salopedes,
-                            cq.fec_oper,
-                            cq.duracion_sala
-                        FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-                        LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                            ON cq.cod_servicio = c.servhoscod
-                        LEFT JOIN dwsge.sgss_cmcas10 AS ca 
-                            ON cq.cod_oricentro = ca.oricenasicod 
-                        AND cq.cod_centro = ca.cenasicod
-                        ---LEFT JOIN dwsge.sgss_qmcqs10 AS q 
-                        ---    ON q.cenasicod = cq.cod_centro 
-                        ---AND q.salopecod = cq.cod_sala_operacion 
-                        ---AND cq.cod_quirof = q.cenquicod
-                        LEFT JOIN dwsge.sgss_cmcpp10 AS cp 
-                            ON cp.cpscod = cq.cod_cpms
-                        LEFT JOIN dwsge.sgss_cmaho10 AS h 
-                            ON h.arehoscod = cq.cod_area
-                        LEFT JOIN dwsge.sgss_qbcep10 AS b 
-                            ON b.conopecod = cq.cod_tipo_programacion
-                        WHERE cq.cod_centro = '{codcas}'
-                        AND (CASE WHEN cq.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
-                        AND cq.cod_tipo_programacion = '2'
-                        ORDER BY cq.acto_med, cq.fec_oper DESC
-                    ) t;
-        """
-        # Ejecutar consultas
         df_base = pd.read_sql(query_base, engine)
-        df_emergencia = pd.read_sql(query_de_emergencia, engine)
-        df_horas_electivas = pd.read_sql(query_horas_quirurgicas_electivas, engine)
-        df_horas_emergencia = pd.read_sql(query_horas_quirurgicas_emergencia, engine)
+        if df_base.empty:
+            return html.Div([
+                html.I(className="bi bi-inbox", style={
+                    'fontSize': '64px',
+                    'color': MUTED,
+                    'marginBottom': '20px'
+                }),
+                html.H4("Sin registros", style={
+                    'color': TEXT,
+                    'fontFamily': FONT_FAMILY,
+                    'marginBottom': '10px'
+                }),
+                html.P("No hay registros de atenciones para el año y periodo seleccionados.", style={
+                    'color': MUTED,
+                    'fontFamily': FONT_FAMILY
+                }),
+                html.P(f"Centro: {codcas} | Año: {anio_str} | Periodo: {periodo}", style={
+                    'color': MUTED,
+                    'fontFamily': FONT_FAMILY,
+                    'fontSize': '12px'
+                })
+            ], style={
+                'textAlign': 'center',
+                'padding': '60px',
+                'backgroundColor': CARD_BG,
+                'borderRadius': '16px',
+                'boxShadow': '0 10px 30px rgba(0,0,0,0.08)'
+            }), html.Div()
+
+        nombre_centro = df_base['cenasides'].dropna().unique()
+        nombre_centro = nombre_centro[0] if len(nombre_centro) > 0 else codcas
+        detail_query = f"?periodo={periodo}&anio={anio_str}&codasegu={quote_plus(tipo_filter)}"
+
+        df_emergencia = df_base[df_base['cod_tipo_programacion'] == '2'].copy()
+
+        df_horas = pd.read_sql(query_horas, engine)
+
+        def _parse_horas(df_h, programacion=None):
+            if programacion is not None:
+                df_h = df_h[df_h['cod_tipo_programacion'] == programacion]
+            if df_h.empty:
+                return 0.0
+            def _parse_one(val):
+                if pd.isna(val) or not str(val).strip():
+                    return 0.0
+                parts = str(val).split(':')
+                try:
+                    return int(parts[0]) + (int(parts[1]) / 60 if len(parts) > 1 else 0)
+                except (ValueError, IndexError):
+                    return 0.0
+            return df_h['duracion_sala'].apply(_parse_one).sum()
+
+        horas_electivas = _parse_horas(df_horas, programacion='1')
+        horas_emergencia = _parse_horas(df_horas, programacion='2')
 
 
         # === Procesar por prioridad en Pandas ===
@@ -1067,15 +871,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             )
             total_emergencia = len(df_emergencia)
 
-        horas_electivas = 0.0
-        if not df_horas_electivas.empty:
-            horas_electivas = df_horas_electivas.iloc[0].get('horas_quirurgicas_realizadas_iq_electivas')
-            horas_electivas = float(horas_electivas) if pd.notna(horas_electivas) else 0.0
-
-        horas_emergencia = 0.0
-        if not df_horas_emergencia.empty:
-            horas_emergencia = df_horas_emergencia.iloc[0].get('horas_quirurgicas_realizadas_iq_emergencia')
-            horas_emergencia = float(horas_emergencia) if pd.notna(horas_emergencia) else 0.0
 
 
         

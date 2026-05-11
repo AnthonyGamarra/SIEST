@@ -13,6 +13,7 @@ from dashboard_diag import create_dash_app as create_dash_diag
 from dashboard_odo import create_dash_app as create_dash_odo
 from dashboard_cq import create_dash_app as create_dash_cq
 from dashboard_cq_trans import create_dash_app as create_dash_cq_trans
+from dashboard_hosp import create_dash_app as create_dash_hosp
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -23,7 +24,7 @@ def create_app():
     # =============================
     # CONFIGURACIÓN GENERAL
     # =============================
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a9138ac6be9864d1cd0a258389f87cd7921ba598a5b2876436daaa4532858e3a')
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
 
     app.config['SQLALCHEMY_DATABASE_URI'] = (
         'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/Flask_Prueba'
@@ -77,6 +78,7 @@ def create_app():
     create_dash_odo(app, url_base_pathname='/dashboard_odo_embed/')
     create_dash_cq(app, url_base_pathname='/dashboard_cq_embed/')
     create_dash_cq_trans(app, url_base_pathname='/dashboard_cq_trans_embed/')
+    create_dash_hosp(app, url_base_pathname='/dashboard_hosp_embed/')
 
     # =============================
     # HELPER DE PASSWORD

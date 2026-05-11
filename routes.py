@@ -1116,6 +1116,31 @@ def register_routes(app):
 			codcas=code,
 		)
 	
+	@bp.route('/hosp/')
+	@login_required
+	def hosp_index():
+		token = dashboard_code_for_user(current_user, request)
+		if token:
+			return redirect(url_for('main.hosp_wrapper', token=token))
+		flash('No hay código asociado al usuario para mostrar el dashboard de Hospitalización.', 'warning')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/hosp/<token>', methods=['GET'])
+	@bp.route('/hosp/<token>/', methods=['GET'])
+	@login_required
+	def hosp_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_hosp_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
 		code = ""
 		if current_user.role == 'admin':
