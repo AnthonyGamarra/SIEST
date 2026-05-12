@@ -497,6 +497,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 AND enf.arehoscod = '03'
             WHERE ce.cod_centro = '{codcas}'
             AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
+            AND ce.cod_tipo_cama IN ('1')
         """
 
         try:
@@ -742,6 +743,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 AND enf.arehoscod = '03'
             WHERE ce.cod_centro = '{codcas}'
             AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
+            AND ce.cod_tipo_cama IN ('1','2','4')
         """
 
         try:

@@ -14,6 +14,7 @@ from dashboard_odo import create_dash_app as create_dash_odo
 from dashboard_cq import create_dash_app as create_dash_cq
 from dashboard_cq_trans import create_dash_app as create_dash_cq_trans
 from dashboard_hosp import create_dash_app as create_dash_hosp
+from tramas import create_dash_app as create_dash_tramas
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -79,6 +80,7 @@ def create_app():
     create_dash_cq(app, url_base_pathname='/dashboard_cq_embed/')
     create_dash_cq_trans(app, url_base_pathname='/dashboard_cq_trans_embed/')
     create_dash_hosp(app, url_base_pathname='/dashboard_hosp_embed/')
+    create_dash_tramas(app, url_base_pathname='/tramas_embed/')
 
     # =============================
     # HELPER DE PASSWORD

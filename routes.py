@@ -1252,5 +1252,17 @@ def register_routes(app):
 			back_url=back_url,
 			show_modules=False,
 		)
-	
+
+	@bp.route('/tramas/')
+	@login_required
+	def tramas():
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden acceder a las Tramas B1-B2.', 'danger')
+			return redirect(url_for('main.index'))
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url='/tramas_embed/',
+		)
+
 	app.register_blueprint(bp)

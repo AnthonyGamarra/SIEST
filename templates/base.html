@@ -406,6 +406,16 @@
           </a>
           {% endif %}
 
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.tramas') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='nature_13698536.png') }}"
+              alt="Tramas B1-B2"
+            />
+            <span>Tramas B1-B2</span>
+          </a>
+          {% endif %}
+
           <!-- Los gráficos de auditoría ahora están integrados en Reportes LOGS -->
         </div>
       </div>
