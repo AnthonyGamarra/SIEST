@@ -1116,9 +1116,20 @@ def register_routes(app):
 			codcas=code,
 		)
 	
+	HOSP_ALLOWED_USERS = {'42991109', '76262790'}
+
+	def _hosp_allowed():
+		return (
+			getattr(current_user, 'role', '') == 'admin'
+			or str(getattr(current_user, 'username', '')).strip() in HOSP_ALLOWED_USERS
+		)
+
 	@bp.route('/hosp/')
 	@login_required
 	def hosp_index():
+		if not _hosp_allowed():
+			flash('No tiene acceso al módulo de Hospitalización.', 'warning')
+			return redirect(url_for('main.index'))
 		token = dashboard_code_for_user(current_user, request)
 		if token:
 			return redirect(url_for('main.hosp_wrapper', token=token))
@@ -1129,6 +1140,9 @@ def register_routes(app):
 	@bp.route('/hosp/<token>/', methods=['GET'])
 	@login_required
 	def hosp_wrapper(token):
+		if not _hosp_allowed():
+			flash('No tiene acceso al módulo de Hospitalización.', 'warning')
+			return redirect(url_for('main.index'))
 		code = decode_code(token)
 		if not code:
 			flash('El código seleccionado es inválido o expiró.', 'warning')

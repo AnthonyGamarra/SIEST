@@ -305,7 +305,7 @@
 
           <!-- Módulo 3: Hospitalización -->
           {% set code_hosp = current_user.dashboard_code() if current_user else '' %}
-          {% if current_user.role == 'admin' and code_hosp %}
+          {% if (current_user.role == 'admin' or current_user.username in ('42991109', '76262790')) and code_hosp %}
           <a
             href="{{ '/hosp/' + dashboard_code_for_user() + '/' }}"
             class="module"

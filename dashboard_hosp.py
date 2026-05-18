@@ -124,7 +124,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
             style={**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
         )
 
-    def render_chart_card(figure, title):
+    def render_chart_card(figure, title, height='320px'):
         return dbc.Card(
             dbc.CardBody([
                 html.H6(title, style={
@@ -132,12 +132,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                     'fontWeight': '600', 'marginBottom': '12px'
                 }),
                 dcc.Graph(figure=figure, config={'displayModeBar': False},
-                          style={'height': '320px'})
+                          style={'height': height})
             ], style=CARD_BODY_STYLE),
             style={**CARD_STYLE}
         )
 
-    def render_table_card(title, dataframe, col_label, col_value='Egresos', extra_cols=None):
+    def render_table_card(title, dataframe, col_label, col_value='Egresos', extra_cols=None, height='320px'):
         extra_cols = extra_cols or []
         td_style = {'padding': '5px 8px', 'lineHeight': '1.2', 'fontSize': '12px', 'fontFamily': FONT_FAMILY}
         th_style = {'fontSize': '12px', 'fontFamily': FONT_FAMILY, 'padding': '5px 8px', 'color': BRAND}
@@ -171,7 +171,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                     'color': BRAND, 'fontFamily': FONT_FAMILY,
                     'fontWeight': '600', 'marginBottom': '12px'
                 }),
-                html.Div(body, style={'maxHeight': '340px', 'overflowY': 'auto'})
+                html.Div(body, style={'height': height, 'overflowY': 'auto'})
             ], style=CARD_BODY_STYLE),
             style={**CARD_STYLE}
         )
@@ -471,6 +471,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 ts.tipsegdes as tipo_seguro,
                 ce.cod_tipo_paciente,
                 tp.tipopacinom as tipo_paciente,
+                hc.esp as especialidad,
                 ce.fec_ingr,
                 ce.fec_altmed,
                 ce.fec_egreso,
@@ -495,6 +496,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 AND enf.estenfcod = ce.cod_estacion
                 AND enf.estenfestregcod = '1'
                 AND enf.arehoscod = '03'
+            LEFT JOIN dssge.dw_homologacion_camas hc ON hc.cod_centro = ce.cod_centro AND hc.cama = ce.cama
             WHERE ce.cod_centro = '{codcas}'
             AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
             AND ce.cod_tipo_cama IN ('1')
@@ -528,7 +530,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         subtitle = f"Año {anio_str} | Periodo {periodo}"
         total_egresos = len(df)
 
-        dias_col = df['dias_hospit'] if 'dias_hospit' in df.columns else pd.Series(dtype=float)
+        df_dias = df[~df.get('especialidad', pd.Series(dtype=str)).isin(['UCI', 'UCIN'])] if 'especialidad' in df.columns else df
+        dias_col = df_dias['dias_hospit'] if 'dias_hospit' in df_dias.columns else pd.Series(dtype=float)
         dias_col = pd.to_numeric(dias_col, errors='coerce').dropna()
         promedio_dias = round(dias_col.mean(), 1) if not dias_col.empty else 0
 
@@ -599,27 +602,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
             )
             charts.append(dbc.Col(render_chart_card(fig_serv, "Egresos por Servicio"), width=12, lg=6, className="mb-3"))
 
-        # Distribución por sexo
-        if 'sexo' in df.columns and df['sexo'].notna().any():
-            df_sexo = (
-                df[df['sexo'].notna()]
-                .groupby('sexo')
+        # Egresos por especialidad
+        if 'especialidad' in df.columns and df['especialidad'].notna().any():
+            df_esp = (
+                df[df['especialidad'].notna()]
+                .groupby('especialidad')
                 .size()
                 .reset_index(name='Egresos')
+                .sort_values('Egresos', ascending=False)
             )
-            fig_sexo = px.pie(
-                df_sexo, values='Egresos', names='sexo',
-                color_discrete_sequence=[BRAND, ACCENT, '#28a745', '#ffc107'],
-                hole=0.4
-            )
-            fig_sexo.update_traces(textinfo='label+value+percent', textposition='auto')
-            fig_sexo.update_layout(
-                margin=dict(l=10, r=10, t=10, b=10),
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                font_family=FONT_FAMILY,
-                showlegend=True
-            )
-            charts.append(dbc.Col(render_chart_card(fig_sexo, "Distribución por Sexo"), width=12, lg=6, className="mb-3"))
+            charts.append(dbc.Col(render_table_card("Egresos por Especialidad", df_esp, 'especialidad'), width=12, lg=6, className="mb-3"))
 
         # Egresos por capítulo CIE-10
         if 'capitulo' in df.columns and df['capitulo'].notna().any():
@@ -666,9 +658,47 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 width=12, className="mb-3"
             ))
 
+        # Pacientes por Día (debajo de tarjetas, encima de gráficos)
+        htaho_row = html.Div()
+        try:
+            query_htaho = f"""
+                SELECT
+                    CAST(ATENHOSFEC AS DATE) AS fecha,
+                    COUNT(DISTINCT ATENHOSACTMEDNUM) AS pacientes
+                FROM dssge.sgss_htaho_{anio_str}_{periodo}
+                WHERE ATENHOSAREHOSCOD = '03'
+                AND ATENHOSCENASICOD = '{codcas}'
+                GROUP BY CAST(ATENHOSFEC AS DATE)
+                ORDER BY CAST(ATENHOSFEC AS DATE)
+            """
+            df_htaho = pd.read_sql(query_htaho, engine)
+            if not df_htaho.empty:
+                df_htaho['fecha'] = pd.to_datetime(df_htaho['fecha'], errors='coerce')
+                df_htaho['fecha_str'] = df_htaho['fecha'].dt.strftime('%d/%m')
+                fig_htaho = px.bar(
+                    df_htaho, x='fecha_str', y='pacientes',
+                    color_discrete_sequence=[BRAND],
+                    labels={'fecha_str': 'Fecha', 'pacientes': 'Pacientes'},
+                    text='pacientes',
+                )
+                fig_htaho.update_traces(textposition='outside', textfont=dict(size=11, family=FONT_FAMILY))
+                fig_htaho.update_layout(
+                    margin=dict(l=10, r=10, t=30, b=60),
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                    font_family=FONT_FAMILY,
+                    xaxis=dict(tickangle=-45, tickmode='linear'),
+                    yaxis=dict(title='Pacientes', showticklabels=False),
+                    bargap=0.2,
+                )
+                htaho_row = dbc.Row([
+                    dbc.Col(render_chart_card(fig_htaho, "Pacientes por Día", height='480px'), width=12, className="mb-3")
+                ], style={'marginTop': '16px'})
+        except Exception as _e_htaho:
+            print(f"[Dashboard HOSP] htaho query error: {_e_htaho}")
+
         charts_row = dbc.Row(charts, style={'marginTop': '16px'}) if charts else html.Div()
 
-        return html.Div([summary_row, charts_row]), html.Div()
+        return html.Div([summary_row, htaho_row, charts_row]), html.Div()
 
     # ========== CALLBACK DESCARGA CSV ==========
     @dash_app.callback(
@@ -717,6 +747,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 ts.tipsegdes as tipo_seguro,
                 ce.cod_tipo_paciente,
                 tp.tipopacinom as tipo_paciente,
+                hc.esp as especialidad,
                 ce.fec_ingr,
                 ce.fec_altmed,
                 ce.fec_egreso,
@@ -741,6 +772,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 AND enf.estenfcod = ce.cod_estacion
                 AND enf.estenfestregcod = '1'
                 AND enf.arehoscod = '03'
+            LEFT JOIN dssge.dw_homologacion_camas hc ON hc.cod_centro = ce.cod_centro AND hc.cama = ce.cama
             WHERE ce.cod_centro = '{codcas}'
             AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
             AND ce.cod_tipo_cama IN ('1','2','4')

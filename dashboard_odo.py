@@ -1071,6 +1071,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
             if 'agrupador' in horas_programadas_df else pd.DataFrame(columns=['agrupador', 'counts'])
         )
 
+        if total_horas_efectivas > total_horas_programadas:
+            total_horas_efectivas = total_horas_programadas
+
+        if not horas_efectivas_df_agru.empty and not horas_programadas_por_agrupador.empty:
+            merged = horas_efectivas_df_agru.merge(
+                horas_programadas_por_agrupador[['agrupador', 'counts']],
+                on='agrupador',
+                how='left',
+                suffixes=('_efectivas', '_programadas')
+            )
+            merged['counts_efectivas'] = merged.apply(
+                lambda row: min(row['counts_efectivas'], row['counts_programadas'])
+                if pd.notna(row['counts_programadas']) else row['counts_efectivas'],
+                axis=1
+            )
+            horas_efectivas_df_agru = merged[['agrupador', 'counts_efectivas']].rename(
+                columns={'counts_efectivas': 'counts'}
+            )
 
         stats = {
             'total_atenciones': total_atenciones,
