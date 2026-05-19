@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="main ce-main">
+	<div class="modules-container">
+		<div class="modules-header" style="color: #ffffff">
+			{% if center_name %}
+			<h1 class="modules-titles">Centro seleccionado: {{ center_name }}</h1>
+			{% elif codcas %}
+			<h1 class="modules-titles">Centro seleccionado: {{ codcas }}</h1>
+			{% endif %}
+			<h1 class="modules-title">Procedimientos</h1>
+			<p class="modules-subtitle">
+				Elige la especialidad que deseas explorar para ver los indicadores disponibles.
+			</p>
+		</div>
+		<div class="modules-menu">
+
+			<a href="{{ cardiologia_url }}" class="module">
+				<img src="{{ url_for('static', filename='cardiomyopathy_10251056.png') }}" alt="Cardiología" />
+				<span>Cardiología</span>
+			</a>
+
+			<a href="{{ neurologia_url }}" class="module">
+				<img src="{{ url_for('static', filename='research_6002648.png') }}" alt="Neurología / Neurofisiología" />
+				<span>Neurología / Neurofisiología</span>
+			</a>
+
+			<a href="{{ gastroenterologia_url }}" class="module">
+				<img src="{{ url_for('static', filename='magnifier_12869043.png') }}" alt="Gastroenterología" />
+				<span>Gastroenterología</span>
+			</a>
+
+			{% for img, label in [
+				('otoscopy_5015913.png',           'Otorrinolaringología / Audiología'),
+				('check_11059151.png',              'Oftalmología'),
+				('reproductive-health_12106284.png','Ginecología'),
+				('baby_9593079.png',                'Neonatología / Medicina Respiratoria'),
+			] %}
+			<div class="module inactive" title="En desarrollo">
+				<img src="{{ url_for('static', filename=img) }}" alt="{{ label }}" />
+				<span>{{ label }}</span>
+			</div>
+			{% endfor %}
+
+		</div>
+		<div class="modules-footer" style="margin-top: 2rem; text-align: center">
+			<a class="pill-btn pill-btn--ghost" href="javascript:history.back();">Volver al inicio</a>
+		</div>
+	</div>
+</div>
+{% endblock %}

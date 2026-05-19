@@ -1155,6 +1155,83 @@ def register_routes(app):
 			codcas=code,
 		)
 
+	@bp.route('/proc/')
+	@login_required
+	def proc_index():
+		token = dashboard_code_for_user(current_user, request)
+		if token:
+			return redirect(url_for('main.proc_wrapper', token=token))
+		flash('No hay código asociado al usuario para mostrar el dashboard de Procedimientos.', 'warning')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/proc/<token>', methods=['GET'])
+	@bp.route('/proc/<token>/', methods=['GET'])
+	@login_required
+	def proc_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		center_name = _get_center_name_by_code(code)
+		return render_template(
+			'proc.html',
+			show_modules=False,
+			dashboard_token=token,
+			codcas=code,
+			center_name=center_name,
+			cardiologia_url=f'/proc/{token}/cardiologia/',
+			neurologia_url=f'/proc/{token}/neurologia/',
+			gastroenterologia_url=f'/proc/{token}/gastroenterologia/',
+		)
+
+	@bp.route('/proc/<token>/cardiologia', methods=['GET'])
+	@bp.route('/proc/<token>/cardiologia/', methods=['GET'])
+	@login_required
+	def proc_cardiologia_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_proc_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
+	@bp.route('/proc/<token>/gastroenterologia', methods=['GET'])
+	@bp.route('/proc/<token>/gastroenterologia/', methods=['GET'])
+	@login_required
+	def proc_gastroenterologia_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_proc_gastro_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
+	@bp.route('/proc/<token>/neurologia', methods=['GET'])
+	@bp.route('/proc/<token>/neurologia/', methods=['GET'])
+	@login_required
+	def proc_neurologia_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_proc_neuro_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
 		code = ""
 		if current_user.role == 'admin':

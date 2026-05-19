@@ -327,14 +327,28 @@
           </div>
           {% endif %}
 
-          <!-- Módulo: Procedimientos (desactivado) -->
-          <div class="module inactive">
+          <!-- Módulo: Procedimientos -->
+          {% if current_user.role == 'admin' %}
+          {% set _proc_token = dashboard_code_for_user() %}
+          <a
+            href="{{ ('/proc/' + _proc_token + '/') if _proc_token else '/proc/' }}"
+            class="module"
+          >
             <img
-              src="{{ url_for('static', filename='hospitalizacion.png') }}"
+              src="{{ url_for('static', filename='medical_13604970.png') }}"
+              alt="Procedimientos"
+            />
+            <span>Procedimientos</span>
+          </a>
+          {% else %}
+          <div class="module inactive" title="Sin acceso">
+            <img
+              src="{{ url_for('static', filename='medical_13604970.png') }}"
               alt="Procedimientos"
             />
             <span>Procedimientos</span>
           </div>
+          {% endif %}
 
           <!-- Módulo 4: Tablas homologadas -->
           {% set homologada_codcas = request.args.get('codcas') or selected_codcas|default('') or current_user.codcas|default('') %}

@@ -535,16 +535,39 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         dias_col = pd.to_numeric(dias_col, errors='coerce').dropna()
         promedio_dias = round(dias_col.mean(), 1) if not dias_col.empty else 0
 
+        # Total pacientes del mes (suma de pacientes distintos por día)
+        total_pacientes_mes = 0
+        try:
+            query_pac_mes = f"""
+                SELECT SUM(pacientes_dia) AS total
+                FROM (
+                    SELECT COUNT(DISTINCT ATENHOSACTMEDNUM) AS pacientes_dia
+                    FROM dssge.sgss_htaho_{anio_str}_{periodo}
+                    WHERE ATENHOSAREHOSCOD = '03'
+                    AND ATENHOSCENASICOD = '{codcas}'
+                    GROUP BY CAST(ATENHOSFEC AS DATE)
+                ) t
+            """
+            df_pac_mes = pd.read_sql(query_pac_mes, engine)
+            if not df_pac_mes.empty and df_pac_mes['total'].notna().any():
+                total_pacientes_mes = int(df_pac_mes['total'].iloc[0])
+        except Exception as _e_pac:
+            print(f"[Dashboard HOSP] pacientes_mes query error: {_e_pac}")
+
         # ---- TARJETAS RESUMEN ----
         summary_row = dbc.Row([
             dbc.Col(render_card(
                 "Total Egresos", f"{total_egresos:,.0f}",
                 BRAND, subtitle, icon="bi-person-check-fill"
-            ), width=12, md=6, className="mb-3"),
+            ), width=12, md=4, className="mb-3"),
             dbc.Col(render_card(
-                "Promedio Días Hospitalización", f"{promedio_dias}",
+                "Días Estancia", f"{promedio_dias}",
                 ACCENT, subtitle, icon="bi-calendar2-week"
-            ), width=12, md=6, className="mb-3"),
+            ), width=12, md=4, className="mb-3"),
+            dbc.Col(render_card(
+                "Paciente Día", f"{total_pacientes_mes:,.0f}",
+                '#28a745', subtitle, icon="bi-people-fill"
+            ), width=12, md=4, className="mb-3"),
         ], className="mb-2")
 
         # ---- GRÁFICOS ----
