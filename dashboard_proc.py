@@ -81,51 +81,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
     # ========== CONFIGURACIÓN DE TARJETAS ==========
     # Para agregar una tarjeta nueva, añade una tupla a esta lista:
     #   ("Título de la tarjeta", ("COD1", "COD2", ...), "bi-icono-bootstrap", "#COLOR_HEX")
-    # Los códigos deben corresponder a codproced en las tablas dw_proc_*.
+    # Para agregar un separador de sección usa un dict: {"section": "Nombre sección"}
     TARJETAS = [
-        (
-            "Cateterismo Cardíaco",
-            ("36013", "36014", "93455", "93456", "93458",
-             "93503", "93556", "93562", "93452", "93454", "93544"),
-            "bi-clipboard2-pulse-fill",
-            "#0064AF",
-        ),
-        (
-            "Electrocardiografía",
-            ("93000", "93005", "93010"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Cardio Holter",
-            ("93224", "93225", "93233"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Prueba de Esfuerzo",
-            ("93015", "93016", "93017","93018","93464"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Ecocardiografía Transtorácica",
-            ("93306","93307","93308","93320","93882.06","93321"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Ecocardiografía Transesofágica",
-            ("93312","93313","93314","93315","93317"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Ecocardiografía Stress",
-            ("93350","93351"),
-            "bi-activity",
-            "#0064AF",
-        ),
+
+        {"section": "Cardiología"},
         (
             "Ablación Transcatérer",
             ("93651","93652","93653","93654"),
@@ -139,14 +98,51 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
-            "Marcapaso Transitorio",
-            ("92953","33211"),
+            "Angioplastia Stent Metálico",
+            ("37238"),
             "bi-activity",
             "#0064AF",
         ),
         (
-            "Marcapaso Definitivo Unicameral",
-            ("33206","33207","33212","33227","93612","33233"),
+            "Cardio Holter",
+            ("93224", "93225", "93233"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Cardioversión Eléctrica Electiva",
+            ("92960","92961"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Cateterismo Cardíaco",
+            ("36013", "36014", "93455", "93456", "93458",
+             "93503", "93556", "93562", "93452", "93454", "93544"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Ecocardiografía Stress",
+            ("93350","93351"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Ecocardiografía Transesofágica",
+            ("93312","93313","93314","93315","93317"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Ecocardiografía Transtorácica",
+            ("93306","93307","93308","93320","93882.06","93321"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Electrocardiografía",
+            ("93000", "93005", "93010"),
             "bi-activity",
             "#0064AF",
         ),
@@ -157,15 +153,160 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
-            "Angioplastia Stent Metálico",
-            ("37238"),
+            "Marcapaso Definitivo Unicameral",
+            ("33206","33207","33212","33227","93612","33233"),
             "bi-activity",
             "#0064AF",
         ),
         (
-            "Cardioversión Eléctrica Electiva",
-            ("92960","92961"),
+            "Marcapaso Transitorio",
+            ("92953","33211"),
             "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Reserva de Flujo Fraccionado",
+            ("92953","33211"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Prueba de Esfuerzo",
+            ("93015", "93016", "93017","93018","93464"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Test de Inclinación",
+            ("93660"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Ultrasonido Endovascular",
+            ("92978"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Estudios Fisiológicos (Electrofisiológicos)",
+            ("93613","93618","93619","93623","93609"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Valvuloplastía Pulmonar y/o Aórtica",
+            ("92998"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Valvuloplastia Mitral con Balón",
+            ("92987"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Dilatación con Protesis de Coartación de Aorta",
+            ("35472"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Oclusión de Defecto Septal Interventricular",
+            ("93581"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Oclusión de Defecto Septal Interauricular",
+            ("93580"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Cateterismo + Medición de CIA",
+            ("93451"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Cateterismo + Medición de CIA",
+            ("93451"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Biopsia Endomiocárdica",
+            ("93505"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Trombólisis Sistémica",
+            ("37195"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Marcapaso Definitivo para Resincronización",
+            ("33221", "33229"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Implantación de Cardiovector Desfibrilador Automático",
+            ("33215", "33225","33263","33240","33244","33249"),
+            "bi-activity",
+            "#0064AF",
+        ),
+#############################
+        {"section": "Neurología / Neurofisiología"},
+        (
+            "Electroencefalografía",
+            ("95812","95812.02","95813","95816","95819","95822"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Electromiografía y Velocidad de Conducción",
+            ("95860","95861","95863","95864","95872","95885","95886","95887","96867","95877","95900","95903","95904","95905","95907","95908","95909","95910","95937"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        {"section": "Gastroenterología"},
+        (
+            "Endoscopia Digestiva Diagnostica",
+            ("43234","43239","44388","44391","45358","45359","45378","45380","91200","91202"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        {"section": "Otorrinolaringología/ Audiología"},
+        (
+            "Audiometría",
+            ("92552","92553","92556","92583","92551","92555","92557","92560","92561"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        {"section": "Oftalmología"},
+        (
+            "Angiografia Retinal",
+            ("92235","92227","92250","92300"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        {"section": "Ginecología"},
+        (
+            "Colposcopía",
+            ("56820","57420","57454","57455","58110","56821","57421","57452","57456","57461"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        {"section": "Neonatología"},
+        (
+            "Instalación y Mantenimiento de CPAC de burbuja",
+            ("94660"),
+            "bi-clipboard2-pulse-fill",
             "#0064AF",
         ),
     ]
@@ -187,18 +328,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
     dash_app.title = "SIEST - Procedimientos"
 
     # ========== HELPERS UI ==========
-    def render_card(title, value, border_color, subtitle_text, icon=None):
+    def render_card(title, value, border_color, subtitle_text):
         return dbc.Card(
             dbc.CardBody([
-                html.Div([
-                    html.I(className=f"bi {icon}", style={
-                        'fontSize': '22px', 'color': border_color, 'marginRight': '8px'
-                    }) if icon else None,
-                    html.H5(title, className="card-title", style={
-                        'color': BRAND, 'marginBottom': '6px',
-                        'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'
-                    })
-                ], style={'display': 'flex', 'alignItems': 'center'}),
+                html.H5(title, className="card-title", style={
+                    'color': BRAND, 'marginBottom': '6px',
+                    'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.1px'
+                }),
                 html.H2(value, style={
                     'fontWeight': '800', 'color': TEXT, 'fontSize': '34px',
                     'margin': 0, 'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
@@ -212,10 +348,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                    "height": "100%", "width": "100%"}
         )
 
+    def render_section_header(label):
+        return dbc.Row(
+            dbc.Col(
+                html.Div(
+                    html.H4(label, style={
+                        'color': BRAND, 'fontFamily': FONT_FAMILY, 'fontWeight': '700',
+                        'fontSize': '28px', 'margin': '0', 'textAlign': 'center',
+                        'letterSpacing': '0.5px', 'textShadow': '0 1px 4px rgba(255,255,255,0.3)',
+                    }),
+                    style={
+                        'backgroundColor': '#FFFFFF',
+                        'backdropFilter': 'blur(6px)',
+                        'borderRadius': '12px',
+                        'padding': '8px 24px',
+                        'width': '100%',
+                    }
+                ),
+                width=12, lg=8,
+            ),
+            justify="center",
+            style={'marginTop': '30px', 'marginBottom': '8px'}
+        )
+
     def render_inline_table(dataframe):
         SIDE_COLOR = "#00AEEF"
         heading = html.H6(
-            "Código CPMS",
+            "Servicio",
             className="fw-semibold",
             style={'fontSize': '11px', 'color': BRAND, 'letterSpacing': '0.6px', 'marginBottom': '8px'}
         )
@@ -316,13 +475,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             ),
             union_proc AS (
                 SELECT
-                    cod_oricentro, cod_centro, anio, periodo, cod_servicio,
+                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio, s.servhosdescor,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
-                    fecha_aten, acto_med, codproced, cantproced,
+                    fecha_aten, acto_med, codproced, cantproced::numeric,
                     cod_actividad, cod_subactividad, cp.cpsdes AS cpms
                 FROM dssge.dw_proc_{anio_str}_{periodo} as pc
+                LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
+                LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
@@ -330,13 +491,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 UNION ALL
 
                 SELECT
-                    cod_oricentro, cod_centro, anio, periodo, cod_servicio,
+                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
-                    fecha_aten, acto_med, codproced, cantproced,
+                    fecha_aten, acto_med, codproced, cantproced::numeric,
                     cod_actividad, cod_subactividad, cp.cpsdes AS cpms
                 FROM dssge.dw_proc_eme_{anio_str}_{periodo} as pc
+                LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
+                LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
@@ -344,13 +507,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 UNION ALL
 
                 SELECT
-                    cod_oricentro, cod_centro, anio, periodo, cod_servicio,
+                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
-                    fecha_aten, acto_med, codproced, cantproced,
+                    fecha_aten, acto_med, codproced, cantproced::numeric,
                     cod_actividad, cod_subactividad, cp.cpsdes AS cpms
                 FROM dssge.dw_proc_hos_{anio_str}_{periodo} as pc
+                LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
+                LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
@@ -393,7 +558,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 html.Div([
                     html.I(className="bi bi-heart-pulse-fill",
                            style={'fontSize': '32px', 'color': BRAND, 'marginRight': '12px'}),
-                    html.H2("Total Procedimientos Cardiológicos - Realizados",
+                    html.H2("Total Procedimientos Realizados",
                             style={'color': BRAND, 'fontFamily': FONT_FAMILY,
                                    'fontSize': '26px', 'margin': '0', 'fontWeight': '700'})
                 ], style={'display': 'flex', 'alignItems': 'center'}),
@@ -521,10 +686,24 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         if engine is None:
             return html.Div("Error de conexión a la base de datos.")
 
-        subtitle = f"Año {anio_str} | Periodo {periodo} | Centro: {codcas}"
+        try:
+            from sqlalchemy import text as sa_text
+            with engine.connect() as _conn:
+                _row = _conn.execute(
+                    sa_text("SELECT cenasides FROM dwsge.sgss_cmcas10 WHERE cenasicod = :cod"),
+                    {'cod': codcas}
+                ).mappings().first()
+            center_label = _row['cenasides'] if _row else codcas
+        except Exception:
+            center_label = codcas
+        subtitle = f"Año {anio_str} | Periodo {periodo} | Centro: {center_label}"
 
         sections = []
-        for titulo, codes, icono, color in TARJETAS:
+        for item in TARJETAS:
+            if isinstance(item, dict):
+                sections.append(render_section_header(item["section"]))
+                continue
+            titulo, codes, _, color = item
             try:
                 df_card = pd.read_sql(
                     build_proc_query(anio_str, periodo, codcas, codasegu_clause, codes),
@@ -536,12 +715,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                     ).fillna(0)
                 total = int(df_card['cantproced'].sum()) if 'cantproced' in df_card.columns else len(df_card)
 
-                if not df_card.empty and 'codproced' in df_card.columns:
+                if not df_card.empty and 'servhosdescor' in df_card.columns:
                     df_breakdown = (
-                        df_card.groupby('codproced', dropna=False)['cantproced']
+                        df_card.groupby('servhosdescor', dropna=False)['cantproced']
                         .sum()
                         .reset_index(name='counts')
-                        .rename(columns={'codproced': 'agrupador'})
+                        .rename(columns={'servhosdescor': 'agrupador'})
                         .sort_values('counts', ascending=False)
                     )
                 else:
@@ -550,11 +729,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 total = 0
                 df_breakdown = pd.DataFrame(columns=['agrupador', 'counts'])
 
+            if total == 0:
+                continue
+
             sections.append(
                 dbc.Row(
                     [
                         dbc.Col(
-                            render_card(titulo, f"{total:,.0f}", color, subtitle, icon=icono),
+                            render_card(titulo, f"{total:,.0f}", color, subtitle),
                             width=12, lg=4,
                             style={'display': 'flex'}
                         ),
