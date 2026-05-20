@@ -3,7 +3,7 @@ import threading
 
 import dash_bootstrap_components as dbc
 import pandas as pd
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output, State, no_update
 from flask import has_request_context
 from flask_login import current_user
 from sqlalchemy import create_engine
@@ -83,12 +83,29 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
     #   ("Título de la tarjeta", ("COD1", "COD2", ...), "bi-icono-bootstrap", "#COLOR_HEX")
     # Para agregar un separador de sección usa un dict: {"section": "Nombre sección"}
     TARJETAS = [
-
-        {"section": "Cardiología"},
         (
             "Ablación Transcatérer",
             ("93651","93652","93653","93654"),
             "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Administración de Oxígeno por Casco Cefálico (OXIHOOD)",
+            ("94799.02"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Angiografía Cerebral",
+            ("36221","36222","36223","36224","36225","36228","36251",
+             "61254","61257","61623","61630","61635","61640","64627"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Angiografía Retinal",
+            ("92235","92227","92250","92300"),
+            "bi-clipboard2-pulse-fill",
             "#0064AF",
         ),
         (
@@ -104,8 +121,20 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
+            "Audiometría",
+            ("92552","92553","92556","92583","92551","92555","92557","92560","92561"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Biopsia Endomiocárdica",
+            ("93505"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
             "Cardio Holter",
-            ("93224", "93225", "93233"),
+            ("93224","93225","93233"),
             "bi-activity",
             "#0064AF",
         ),
@@ -116,10 +145,46 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
+            "Cateterismo + Medición de CIA",
+            ("93451"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
             "Cateterismo Cardíaco",
-            ("36013", "36014", "93455", "93456", "93458",
-             "93503", "93556", "93562", "93452", "93454", "93544"),
+            ("36013","36014","93455","93456","93458",
+             "93503","93556","93562","93452","93454","93544"),
             "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Colposcopía",
+            ("56820","57420","57454","57455","58110","56821","57421","57452","57456","57461"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Cono Frío",
+            ("57520"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Cono LEEP",
+            ("57522"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Crioterapia",
+            ("17340"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Dilatación con Protesis de Coartación de Aorta",
+            ("35472"),
+            "bi-activity",
             "#0064AF",
         ),
         (
@@ -142,13 +207,94 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         ),
         (
             "Electrocardiografía",
-            ("93000", "93005", "93010"),
+            ("93000","93005","93010"),
             "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Electroencefalografía",
+            ("95812","95812.02","95813","95816","95819","95822"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Electromiografía y Velocidad de Conducción",
+            ("95860","95861","95863","95864","95872","95885","95886","95887","96867","95877",
+             "95900","95903","95904","95905","95907","95908","95909","95910","95937"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Endoscopía Diagnóstica no Digestiva",
+            ("31231","31505","31575","31622","31623","45338","31624","31625","31627","31628","31632",
+             "91010","31633","31641","31645","31646","45334","45337","45379","46614","49082","90901",
+             "90911","91038","91111","91122","91212","92511","96366"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Endoscopía Digestiva Diagnóstica",
+            ("43234","43239","44388","44391","45358","45359","45378","45380","91200","91202"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Espirometría",
+            ("94060","94010","94012.01","94315"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Estimulación Eléctrica Cerebral",
+            ("95979","95975","95978"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Estudios Fisiológicos (Electrofisiológicos)",
+            ("93613","93618","93619","93623","93609"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Implantación de Cardiovector Desfibrilador Automático",
+            ("33215","33225","33263","33240","33244","33249"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Instalación y Mantenimiento de CPAC de burbuja",
+            ("94660"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Instalación y Mantenimiento del Cateter Venoso Central de Inserción Periferica (PICC)",
+            ("36568","36569"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Laparoscopía Diagnóstica",
+            ("49320"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Laserterapia Ocular",
+            ("92136","92250","92286","92287","96905"),
+            "bi-clipboard2-pulse-fill",
             "#0064AF",
         ),
         (
             "Marcapaso Definitivo Bicameral",
             ("33208","33213","33214","33228","33230"),
+            "bi-activity",
+            "#0064AF",
+        ),
+        (
+            "Marcapaso Definitivo para Resincronización",
+            ("33221","33229"),
             "bi-activity",
             "#0064AF",
         ),
@@ -165,50 +311,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
-            "Reserva de Flujo Fraccionado",
-            ("92953","33211"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Prueba de Esfuerzo",
-            ("93015", "93016", "93017","93018","93464"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Test de Inclinación",
-            ("93660"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Ultrasonido Endovascular",
-            ("92978"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Estudios Fisiológicos (Electrofisiológicos)",
-            ("93613","93618","93619","93623","93609"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Valvuloplastía Pulmonar y/o Aórtica",
-            ("92998"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Valvuloplastia Mitral con Balón",
-            ("92987"),
-            "bi-activity",
-            "#0064AF",
-        ),
-        (
-            "Dilatación con Protesis de Coartación de Aorta",
-            ("35472"),
+            "Oclusión de Defecto Septal Interauricular",
+            ("93580"),
             "bi-activity",
             "#0064AF",
         ),
@@ -219,27 +323,63 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
-            "Oclusión de Defecto Septal Interauricular",
-            ("93580"),
+            "Perimetría (Campimetría)",
+            ("92081","92082","92083"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Procedimiento Corneal Instrumentado",
+            ("92025","92100","92137"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Procedimientos Médicos de Rehabilitación",
+            ("1983","1984","1985","23929","26011","26989","27427","28001","29220","29240","29260","29280",
+             "29530","29540","36513","36514","62271","92020","92548","93015","96008","96009","97784","97785",
+             "97786","97125","97003","99187","99193","99194","99199","99207","99210","99214","98889","99489",
+             "36516","50590","28890","62311","64418","64445","64450","64470","64475","64612","64613","64722",
+             "90287","90885","92015","92506","29799","31299","93668","93750","95851","95852","95860","96001",
+             "96004","96110","96111","97010","97014","97034"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Prueba de Esfuerzo",
+            ("93015","93016","93017","93018","93464"),
             "bi-activity",
             "#0064AF",
         ),
         (
-            "Cateterismo + Medición de CIA",
-            ("93451"),
+            "Reserva de Flujo Fraccionado",
+            ("92953","33211"),
             "bi-activity",
             "#0064AF",
         ),
         (
-            "Cateterismo + Medición de CIA",
-            ("93451"),
+            "Test de Inclinación",
+            ("93660"),
             "bi-activity",
             "#0064AF",
         ),
         (
-            "Biopsia Endomiocárdica",
-            ("93505"),
-            "bi-activity",
+            "Test del Aliento",
+            ("83013"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Tomografía de Coherencia Óptica (OCT)",
+            ("92132","92133","92134"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Tratamiento del Dolor",
+            ("1984.01","1984","20553","27299","62310","62311","64483","64510","90780","96365","96367",
+             "97785","97786","97810","99187","99193","99194","99489.02"),
+            "bi-clipboard2-pulse-fill",
             "#0064AF",
         ),
         (
@@ -249,63 +389,32 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "#0064AF",
         ),
         (
-            "Marcapaso Definitivo para Resincronización",
-            ("33221", "33229"),
+            "Ultrasonido Endovascular",
+            ("92978"),
             "bi-activity",
             "#0064AF",
         ),
         (
-            "Implantación de Cardiovector Desfibrilador Automático",
-            ("33215", "33225","33263","33240","33244","33249"),
+            "Urodinamia",
+            ("51726","51729","51741"),
+            "bi-clipboard2-pulse-fill",
+            "#0064AF",
+        ),
+        (
+            "Valvuloplastia Mitral con Balón",
+            ("92987"),
             "bi-activity",
             "#0064AF",
         ),
-#############################
-        {"section": "Neurología / Neurofisiología"},
         (
-            "Electroencefalografía",
-            ("95812","95812.02","95813","95816","95819","95822"),
-            "bi-clipboard2-pulse-fill",
-            "#0064AF",
-        ),
-        (
-            "Electromiografía y Velocidad de Conducción",
-            ("95860","95861","95863","95864","95872","95885","95886","95887","96867","95877","95900","95903","95904","95905","95907","95908","95909","95910","95937"),
+            "Valvuloplastía Pulmonar y/o Aórtica",
+            ("92998"),
             "bi-activity",
             "#0064AF",
         ),
-        {"section": "Gastroenterología"},
         (
-            "Endoscopia Digestiva Diagnostica",
-            ("43234","43239","44388","44391","45358","45359","45378","45380","91200","91202"),
-            "bi-clipboard2-pulse-fill",
-            "#0064AF",
-        ),
-        {"section": "Otorrinolaringología/ Audiología"},
-        (
-            "Audiometría",
-            ("92552","92553","92556","92583","92551","92555","92557","92560","92561"),
-            "bi-clipboard2-pulse-fill",
-            "#0064AF",
-        ),
-        {"section": "Oftalmología"},
-        (
-            "Angiografia Retinal",
-            ("92235","92227","92250","92300"),
-            "bi-clipboard2-pulse-fill",
-            "#0064AF",
-        ),
-        {"section": "Ginecología"},
-        (
-            "Colposcopía",
-            ("56820","57420","57454","57455","58110","56821","57421","57452","57456","57461"),
-            "bi-clipboard2-pulse-fill",
-            "#0064AF",
-        ),
-        {"section": "Neonatología"},
-        (
-            "Instalación y Mantenimiento de CPAC de burbuja",
-            ("94660"),
+            "Video/Epilepsia",
+            ("95951"),
             "bi-clipboard2-pulse-fill",
             "#0064AF",
         ),
@@ -346,29 +455,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             ], style=CARD_BODY_STYLE),
             style={**CARD_STYLE, "borderLeft": f"5px solid {border_color}",
                    "height": "100%", "width": "100%"}
-        )
-
-    def render_section_header(label):
-        return dbc.Row(
-            dbc.Col(
-                html.Div(
-                    html.H4(label, style={
-                        'color': BRAND, 'fontFamily': FONT_FAMILY, 'fontWeight': '700',
-                        'fontSize': '28px', 'margin': '0', 'textAlign': 'center',
-                        'letterSpacing': '0.5px', 'textShadow': '0 1px 4px rgba(255,255,255,0.3)',
-                    }),
-                    style={
-                        'backgroundColor': '#FFFFFF',
-                        'backdropFilter': 'blur(6px)',
-                        'borderRadius': '12px',
-                        'padding': '8px 24px',
-                        'width': '100%',
-                    }
-                ),
-                width=12, lg=8,
-            ),
-            justify="center",
-            style={'marginTop': '30px', 'marginBottom': '8px'}
         )
 
     def render_inline_table(dataframe):
@@ -475,15 +561,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             ),
             union_proc AS (
                 SELECT
-                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio, s.servhosdescor,
+                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio, s.servhosdescor as servicio,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
                     fecha_aten, acto_med, codproced, cantproced::numeric,
-                    cod_actividad, cod_subactividad, cp.cpsdes AS cpms
+                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms, 'CE' as area
                 FROM dssge.dw_proc_{anio_str}_{periodo} as pc
                 LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
                 LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
+                LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
@@ -491,15 +578,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 UNION ALL
 
                 SELECT
-                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor,
+                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor as servicio,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
                     fecha_aten, acto_med, codproced, cantproced::numeric,
-                    cod_actividad, cod_subactividad, cp.cpsdes AS cpms
+                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms, 'EME' as area
                 FROM dssge.dw_proc_eme_{anio_str}_{periodo} as pc
                 LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
                 LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
+                LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
@@ -507,15 +595,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 UNION ALL
 
                 SELECT
-                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor,
+                    cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor as servicio,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
                     fecha_aten, acto_med, codproced, cantproced::numeric,
-                    cod_actividad, cod_subactividad, cp.cpsdes AS cpms
+                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms, 'HOS' as area
                 FROM dssge.dw_proc_hos_{anio_str}_{periodo} as pc
                 LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
                 LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
+                LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
@@ -607,6 +696,21 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                        'boxShadow': '0 4px 10px rgba(0,100,175,0.2)',
                        'fontFamily': FONT_FAMILY, 'fontWeight': '600', 'borderRadius': '8px'}
             ),
+            dcc.Loading(
+                id='loading-download-proc',
+                type='circle',
+                color=BRAND,
+                children=[
+                    dbc.Button(
+                        [html.I(className="bi bi-file-earmark-excel me-2"), "Descargar Excel"],
+                        id='download-btn-proc', color='success',
+                        className='dashboard-control-btn',
+                        style={'padding': '8px 12px', 'fontFamily': FONT_FAMILY,
+                               'fontWeight': '600', 'borderRadius': '8px'}
+                    ),
+                    dcc.Download(id='download-excel-proc'),
+                ],
+            ),
             dbc.Button(
                 [html.I(className="bi bi-arrow-left me-1"), "Volver"],
                 id="btn-volver-proc", color='secondary', outline=True,
@@ -624,6 +728,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 control_bar,
                 dbc.Tooltip("Volver", target='btn-volver-proc', placement='bottom', style={'zIndex': 9999}),
                 dbc.Tooltip("Buscar datos", target='search-button-proc', placement='bottom', style={'zIndex': 9999}),
+                dbc.Tooltip("Descargar todos los registros en Excel", target='download-btn-proc', placement='bottom', style={'zIndex': 9999}),
                 dbc.Row([
                     dbc.Col(
                         html.Div(
@@ -701,7 +806,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         sections = []
         for item in TARJETAS:
             if isinstance(item, dict):
-                sections.append(render_section_header(item["section"]))
                 continue
             titulo, codes, _, color = item
             try:
@@ -752,6 +856,63 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             )
 
         return html.Div(sections)
+
+    # ========== CALLBACK DESCARGA EXCEL ==========
+    @dash_app.callback(
+        Output('download-excel-proc', 'data'),
+        Input('download-btn-proc', 'n_clicks'),
+        State('filter-periodo-proc', 'value'),
+        State('filter-anio-proc', 'value'),
+        State('filter-tipo-proc', 'value'),
+        State('url-proc', 'pathname'),
+        prevent_initial_call=True,
+    )
+    def download_excel(n_clicks, periodo, anio, tipo_asegurado, pathname):
+        if not n_clicks:
+            return no_update
+
+        codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
+        codcas = sc.decode_code(codcas_url) if codcas_url else None
+
+        if not periodo or not anio or not codcas:
+            return no_update
+
+        # Build code → titulo mapping from all TARJETAS
+        code_to_titulo = {}
+        for item in TARJETAS:
+            if isinstance(item, dict):
+                continue
+            titulo, codes, _, _ = item
+            for code in codes:
+                code_to_titulo[code] = titulo
+
+        all_codes = list(code_to_titulo.keys())
+        anio_str = str(anio)
+        codasegu_clause = resolve_tipo(tipo_asegurado or DEFAULT_TIPO)
+
+        engine = create_connection()
+        if engine is None:
+            return no_update
+
+        try:
+            df = pd.read_sql(
+                build_proc_query(anio_str, periodo, codcas, codasegu_clause, all_codes),
+                engine,
+            )
+        except Exception as exc:
+            print(f"[Dashboard PROC] download_excel error: {exc}")
+            return no_update
+
+        if df.empty:
+            return no_update
+
+        if 'cantproced' in df.columns:
+            df['cantproced'] = pd.to_numeric(df['cantproced'], errors='coerce').fillna(0)
+
+        df.insert(0, 'Procedimiento', df['codproced'].map(code_to_titulo))
+
+        filename = f"procedimientos_{anio_str}_{periodo}_{codcas}.xlsx"
+        return dcc.send_data_frame(df.to_excel, filename, index=False, sheet_name="Procedimientos")
 
     dash_app.layout = serve_layout
     return dash_app

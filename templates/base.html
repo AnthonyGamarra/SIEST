@@ -243,112 +243,18 @@
           </p>
         </div>
         <div class="modules-menu">
-          <!-- Módulo 1: Dashboard (activo) -->
-
+          <!-- Variables de sesión (CE, Emergencia, CQ, Hospitalización, Procedimientos) -->
+          {% set _vs_token = dashboard_code_for_user() %}
           <a
-            href="{{ '/ce/' + dashboard_code_for_user() }}"
+            href="{{ ('/variables_ses/' + _vs_token + '/') if _vs_token else '/variables_ses/' }}"
             class="module"
           >
             <img
-              src="{{ url_for('static', filename='RCS2.png') }}"
-              alt="Dashboard"
+              src="{{ url_for('static', filename='charts_15140258.png') }}"
+              alt="Variables del SES"
             />
-            <span>Consulta externa</span>
+            <span>Variables del SES</span>
           </a>
-
-          <!-- Módulo 2: Emergencia (activar si existe código del usuario) -->
-          {% set code_alt = current_user.dashboard_code() if current_user else
-          '' %} {% if code_alt %}
-          <a
-            href="{{ '/dashboard_alt/' + dashboard_code_for_user() + '/' }}"
-            class="module"
-          >
-            <img
-              src="{{ url_for('static', filename='RSC1.png') }}"
-              alt="Emergencia"
-            />
-            <span>Emergencia</span>
-          </a>
-          {% else %}
-          <div class="module inactive">
-            <img
-              src="{{ url_for('static', filename='RSC1.png') }}"
-              alt="Módulo 2"
-            />
-            <span>Emergencia</span>
-          </div>
-          {% endif %}
-
-          <!-- Módulo 4: Centro quirúrgico -->
-          {% set code_cq = current_user.dashboard_code() if current_user else '' %}
-          {% if code_cq %}
-          <a
-            href="{{ '/cq/' + dashboard_code_for_user() + '/' }}"
-            class="module"
-          >
-            <img
-              src="{{ url_for('static', filename='cirugia.png') }}"
-              alt="Centro quirúrgico"
-            />
-            <span>Centro quirúrgico</span>
-          </a>
-          {% else %}
-          <div class="module inactive" title="En desarrollo">
-            <img
-              src="{{ url_for('static', filename='cirugia.png') }}"
-              alt="Centro quirúrgico"
-            />
-            <span>Centro quirúrgico</span>
-            <small style="font-size:10px; color:#aaa; display:block; margin-top:2px;">En desarrollo</small>
-          </div>
-          {% endif %}
-
-          <!-- Módulo 3: Hospitalización -->
-          {% set code_hosp = current_user.dashboard_code() if current_user else '' %}
-          {% if (current_user.role == 'admin' or current_user.username in ('42991109', '76262790')) and code_hosp %}
-          <a
-            href="{{ '/hosp/' + dashboard_code_for_user() + '/' }}"
-            class="module"
-          >
-            <img
-              src="{{ url_for('static', filename='hospitalizacion.png') }}"
-              alt="Hospitalización"
-            />
-            <span>Hospitalización</span>
-          </a>
-          {% else %}
-          <div class="module inactive" title="En desarrollo">
-            <img
-              src="{{ url_for('static', filename='hospitalizacion.png') }}"
-              alt="Hospitalización"
-            />
-            <span>Hospitalización</span>
-            <small style="font-size:10px; color:#aaa; display:block; margin-top:2px;">En desarrollo</small>
-          </div>
-          {% endif %}
-
-          <!-- Módulo: Procedimientos -->
-          {% if current_user.role == 'admin' %}
-          {% set _proc_token = dashboard_code_for_user() %}
-          <a
-            href="{{ ('/proc/' + _proc_token + '/') if _proc_token else '/proc/' }}"
-            class="module"
-          >
-            <img
-              src="{{ url_for('static', filename='medical_13604970.png') }}"
-              alt="Procedimientos"
-            />
-            <span>Procedimientos</span>
-          </a>
-          {% else %}
-          <div class="module inactive" title="Sin acceso">
-            <img
-              src="{{ url_for('static', filename='medical_13604970.png') }}"
-              alt="Procedimientos"
-            />
-            <span>Procedimientos</span>
-          </div>
-          {% endif %}
 
           <!-- Módulo 4: Tablas homologadas -->
           {% set homologada_codcas = request.args.get('codcas') or selected_codcas|default('') or current_user.codcas|default('') %}

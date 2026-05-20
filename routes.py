@@ -1180,6 +1180,36 @@ def register_routes(app):
 			codcas=code,
 		)
 
+	@bp.route('/variables_ses/')
+	@login_required
+	def variables_ses_index():
+		token = dashboard_code_for_user(current_user, request)
+		if token:
+			return redirect(url_for('main.variables_ses_menu', token=token))
+		flash('No hay código asociado al usuario.', 'warning')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/variables_ses/<token>', methods=['GET'])
+	@bp.route('/variables_ses/<token>/', methods=['GET'])
+	@login_required
+	def variables_ses_menu(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		return render_template(
+			'variables_ses.html',
+			show_modules=False,
+			dashboard_token=token,
+			codcas=code,
+			center_name=_get_center_name_by_code(code),
+			ce_url=f'/ce/{token}/',
+			emergencia_url=f'/dashboard_alt/{token}/',
+			cq_url=f'/cq/{token}/',
+			hosp_url=f'/hosp/{token}/',
+			proc_url=f'/proc/{token}/',
+		)
+
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
 		code = ""
 		if current_user.role == 'admin':

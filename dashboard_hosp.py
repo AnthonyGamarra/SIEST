@@ -1,4 +1,4 @@
-from dash import Dash, html, dcc, Input, Output, State
+from dash import Dash, html, dcc, Input, Output, State, no_update
 from flask import has_request_context
 from flask_login import current_user
 from sqlalchemy import create_engine, text
@@ -294,18 +294,25 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                                 'fontFamily': FONT_FAMILY, 'fontWeight': '600', 'borderRadius': '8px'
                             }
                         ),
-                        dbc.Button(
-                            [html.I(className="bi bi-download me-2"), "Exportar CSV"],
-                            id='download-button-hosp',
-                            color='success',
-                            className='dashboard-control-btn',
-                            style={
-                                'backgroundColor': '#28a745', 'borderColor': '#28a745',
-                                'padding': '8px 12px', 'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
-                                'fontFamily': FONT_FAMILY, 'fontWeight': '600', 'borderRadius': '8px'
-                            }
+                        dcc.Loading(
+                            id='loading-download-hosp',
+                            type='circle',
+                            color=BRAND,
+                            children=[
+                                dbc.Button(
+                                    [html.I(className="bi bi-download me-2"), "Exportar CSV"],
+                                    id='download-button-hosp',
+                                    color='success',
+                                    className='dashboard-control-btn',
+                                    style={
+                                        'backgroundColor': '#28a745', 'borderColor': '#28a745',
+                                        'padding': '8px 12px', 'boxShadow': '0 4px 10px rgba(40,167,69,0.18)',
+                                        'fontFamily': FONT_FAMILY, 'fontWeight': '600', 'borderRadius': '8px'
+                                    }
+                                ),
+                                dcc.Download(id="download-hosp-csv"),
+                            ],
                         ),
-                        dcc.Download(id="download-hosp-csv"),
                         dbc.Button(
                             [html.I(className="bi bi-arrow-left me-1"), "Volver"],
                             id="btn-volver-hosp",
@@ -735,13 +742,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
     )
     def download_csv(n_clicks, periodo, anio, tipo_asegurado, pathname):
         if not n_clicks or not periodo or not anio or not pathname:
-            return None
+            return no_update
 
         import secure_code as sc
         codcas_encoded = pathname.rstrip('/').split('/')[-1] if pathname else None
         codcas = sc.decode_code(codcas_encoded) if codcas_encoded else None
         if not codcas:
-            return None
+            return no_update
 
         anio_str = str(anio)
         tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
@@ -749,7 +756,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
 
         engine = create_connection()
         if engine is None:
-            return None
+            return no_update
 
         query = f"""
             select
@@ -804,10 +811,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         try:
             df = pd.read_sql(query, engine)
         except Exception:
-            return None
+            return no_update
 
         if df.empty:
-            return None
+            return no_update
 
         df = df.astype(str)
         filename = f"hospitalizacion_egresos_{codcas}_{anio_str}_{periodo}.csv"

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="main ce-main">
+	<div class="modules-container">
+		<div class="modules-header" style="color: #ffffff">
+			{% if center_name %}
+			<h1 class="modules-titles">Centro seleccionado: {{ center_name }}</h1>
+			{% elif codcas %}
+			<h1 class="modules-titles">Centro seleccionado: {{ codcas }}</h1>
+			{% endif %}
+			<h1 class="modules-title">Variables de sesión</h1>
+			<p class="modules-subtitle">
+				Elige el módulo de producción que deseas explorar.
+			</p>
+		</div>
+		<div class="modules-menu">
+
+			<a href="{{ ce_url }}" class="module">
+				<img src="{{ url_for('static', filename='RCS2.png') }}" alt="Consulta Externa" />
+				<span>Consulta Externa</span>
+			</a>
+
+			{% set code_alt = current_user.dashboard_code() if current_user else '' %}
+			{% if code_alt %}
+			<a href="{{ emergencia_url }}" class="module">
+				<img src="{{ url_for('static', filename='RSC1.png') }}" alt="Emergencia" />
+				<span>Emergencia</span>
+			</a>
+			{% else %}
+			<div class="module inactive" title="Sin código asociado">
+				<img src="{{ url_for('static', filename='RSC1.png') }}" alt="Emergencia" />
+				<span>Emergencia</span>
+			</div>
+			{% endif %}
+
+			{% set code_cq = current_user.dashboard_code() if current_user else '' %}
+			{% if code_cq %}
+			<a href="{{ cq_url }}" class="module">
+				<img src="{{ url_for('static', filename='cirugia.png') }}" alt="Centro Quirúrgico" />
+				<span>Centro Quirúrgico</span>
+			</a>
+			{% else %}
+			<div class="module inactive" title="Sin código asociado">
+				<img src="{{ url_for('static', filename='cirugia.png') }}" alt="Centro Quirúrgico" />
+				<span>Centro Quirúrgico</span>
+			</div>
+			{% endif %}
+
+			{% set code_hosp = current_user.dashboard_code() if current_user else '' %}
+			{% if (current_user.role == 'admin' or current_user.username in ('42991109', '76262790')) and code_hosp %}
+			<a href="{{ hosp_url }}" class="module">
+				<img src="{{ url_for('static', filename='hospitalizacion.png') }}" alt="Hospitalización" />
+				<span>Hospitalización</span>
+			</a>
+			{% else %}
+			<div class="module inactive" title="En desarrollo">
+				<img src="{{ url_for('static', filename='hospitalizacion.png') }}" alt="Hospitalización" />
+				<span>Hospitalización</span>
+				<small style="font-size:10px; color:#aaa; display:block; margin-top:2px;">En desarrollo</small>
+			</div>
+			{% endif %}
+
+			{% if current_user.role == 'admin' %}
+			<a href="{{ proc_url }}" class="module">
+				<img src="{{ url_for('static', filename='medical_13604970.png') }}" alt="Procedimientos" />
+				<span>Procedimientos</span>
+			</a>
+			{% else %}
+			<div class="module inactive" title="Sin acceso">
+				<img src="{{ url_for('static', filename='medical_13604970.png') }}" alt="Procedimientos" />
+				<span>Procedimientos</span>
+			</div>
+			{% endif %}
+
+		</div>
+		<div class="modules-footer" style="margin-top: 2rem; text-align: center">
+			<a class="pill-btn pill-btn--ghost" href="javascript:history.back();">Volver al inicio</a>
+		</div>
+	</div>
+</div>
+{% endblock %}
