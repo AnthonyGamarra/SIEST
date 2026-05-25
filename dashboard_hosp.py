@@ -1,13 +1,12 @@
 from dash import Dash, html, dcc, Input, Output, State, no_update
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 import pandas as pd
 import dash_bootstrap_components as dbc
 import plotly.express as px
 from datetime import date
 import os
-import threading
 
 
 def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
@@ -374,48 +373,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         ])
 
     # ========== CONEXIÓN DB ==========
-    _engine = None
-    _engine_lock = None
-
     def create_connection():
-        nonlocal _engine, _engine_lock
-
-        if _engine_lock is None:
-            _engine_lock = threading.Lock()
-
-        with _engine_lock:
-            if _engine is not None:
-                try:
-                    with _engine.connect() as conn:
-                        pass
-                    return _engine
-                except Exception:
-                    _engine = None
-
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    import time
-                    engine = create_engine(
-                        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=20,
-                        max_overflow=10,
-                        pool_pre_ping=True,
-                        pool_recycle=1800,
-                        pool_timeout=30,
-                        echo_pool=False
-                    )
-                    with engine.connect() as conn:
-                        pass
-                    _engine = engine
-                    return _engine
-                except Exception as e:
-                    print(f"[Dashboard HOSP] Intento {attempt + 1}/{max_retries} - Failed to connect: {e}")
-                    if attempt < max_retries - 1:
-                        time.sleep(1 * (attempt + 1))
-                    else:
-                        print("[Dashboard HOSP] No se pudo establecer conexión después de todos los reintentos")
-                        return None
+        from extensions import get_dw_engine
+        return get_dw_engine()
 
     # ========== CALLBACK PRINCIPAL ==========
     @dash_app.callback(
@@ -543,21 +503,83 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         promedio_dias = round(dias_col.mean(), 1) if not dias_col.empty else 0
 
         # Total pacientes del mes (suma de pacientes distintos por día)
+        import calendar as _cal
+        _ultimo_dia = _cal.monthrange(int(anio_str), int(periodo))[1]
+        _fecha_inicio = f"{anio_str}-{periodo}-01"
+        _fecha_fin    = f"{anio_str}-{periodo}-{_ultimo_dia:02d}"
+
         total_pacientes_mes = 0
         try:
             query_pac_mes = f"""
-                SELECT SUM(pacientes_dia) AS total
-                FROM (
-                    SELECT COUNT(DISTINCT ATENHOSACTMEDNUM) AS pacientes_dia
-                    FROM dssge.sgss_htaho_{anio_str}_{periodo}
-                    WHERE ATENHOSAREHOSCOD = '03'
-                    AND ATENHOSCENASICOD = '{codcas}'
-                    GROUP BY CAST(ATENHOSFEC AS DATE)
-                ) t
+            WITH parametros AS (
+                SELECT
+                    DATE '{_fecha_inicio}' AS fecha_inicio,
+                    DATE '{_fecha_fin}' AS fecha_fin
+            ),
+
+            hospitalizacion AS (
+                SELECT
+                    h.cod_centro,
+                    h.doc_paciente,
+                    h.acto_med,
+                    h.cama,
+
+                    (h.fec_ingr::date + h.hor_ingr::time) AS fecha_hora_ingreso,
+
+                    CASE
+                        WHEN h.fec_egreso IS NOT NULL
+                        AND h.hor_egreso IS NOT NULL
+                        THEN (h.fec_egreso::date + h.hor_egreso::time)
+                        ELSE NULL
+                    END AS fecha_hora_egreso
+
+                FROM dwsge.dwe_hosp_egresos h
+                CROSS JOIN parametros p
+
+                WHERE h.cod_centro = '{codcas}'
+
+                -- SOLO MES ACTUAL Y MES ANTERIOR
+                AND h.fec_ingr::date >= (
+                    date_trunc('month', p.fecha_inicio::date)
+                    - interval '1 month'
+                )::date
+
+                AND h.fec_ingr::date <= p.fecha_fin::date
+            ),
+
+            calendario AS (
+                SELECT
+                    (
+                        gs::date + time '08:00:00'
+                    ) AS fecha_censo
+                FROM parametros p,
+                generate_series(
+                    p.fecha_inicio,
+                    p.fecha_fin,
+                    interval '1 day'
+                ) gs
+            )
+
+            SELECT
+                c.fecha_censo::date AS fecha,
+
+                COUNT(DISTINCT h.doc_paciente)
+                    AS pacientes_hospitalizados
+
+            FROM calendario c
+            JOIN hospitalizacion h
+                ON h.fecha_hora_ingreso <= c.fecha_censo
+            AND (
+                    h.fecha_hora_egreso > c.fecha_censo
+                    OR h.fecha_hora_egreso IS NULL
+            )
+
+            GROUP BY c.fecha_censo
+            ORDER BY c.fecha_censo;
             """
             df_pac_mes = pd.read_sql(query_pac_mes, engine)
-            if not df_pac_mes.empty and df_pac_mes['total'].notna().any():
-                total_pacientes_mes = int(df_pac_mes['total'].iloc[0])
+            if not df_pac_mes.empty:
+                total_pacientes_mes = int(df_pac_mes['pacientes_hospitalizados'].sum())
         except Exception as _e_pac:
             print(f"[Dashboard HOSP] pacientes_mes query error: {_e_pac}")
 
@@ -692,14 +714,70 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         htaho_row = html.Div()
         try:
             query_htaho = f"""
+            WITH parametros AS (
                 SELECT
-                    CAST(ATENHOSFEC AS DATE) AS fecha,
-                    COUNT(DISTINCT ATENHOSACTMEDNUM) AS pacientes
-                FROM dssge.sgss_htaho_{anio_str}_{periodo}
-                WHERE ATENHOSAREHOSCOD = '03'
-                AND ATENHOSCENASICOD = '{codcas}'
-                GROUP BY CAST(ATENHOSFEC AS DATE)
-                ORDER BY CAST(ATENHOSFEC AS DATE)
+                    DATE '{_fecha_inicio}' AS fecha_inicio,
+                    DATE '{_fecha_fin}' AS fecha_fin
+            ),
+
+            hospitalizacion AS (
+                SELECT
+                    h.cod_centro,
+                    h.doc_paciente,
+                    h.acto_med,
+                    h.cama,
+
+                    (h.fec_ingr::date + h.hor_ingr::time) AS fecha_hora_ingreso,
+
+                    CASE
+                        WHEN h.fec_egreso IS NOT NULL
+                        AND h.hor_egreso IS NOT NULL
+                        THEN (h.fec_egreso::date + h.hor_egreso::time)
+                        ELSE NULL
+                    END AS fecha_hora_egreso
+
+                FROM dwsge.dwe_hosp_egresos h
+                CROSS JOIN parametros p
+
+                WHERE h.cod_centro = '{codcas}'
+
+                AND h.fec_ingr::date >= (
+                    date_trunc('month', p.fecha_inicio::date)
+                    - interval '1 month'
+                )::date
+
+                AND h.fec_ingr::date <= p.fecha_fin::date
+            ),
+
+            calendario AS (
+                SELECT
+                    (
+                        gs::date + time '08:00:00'
+                    ) AS fecha_censo
+                FROM parametros p,
+                generate_series(
+                    p.fecha_inicio,
+                    p.fecha_fin,
+                    interval '1 day'
+                ) gs
+            )
+
+            SELECT
+                c.fecha_censo::date AS fecha,
+
+                COUNT(DISTINCT h.doc_paciente)
+                    AS pacientes
+
+            FROM calendario c
+            JOIN hospitalizacion h
+                ON h.fecha_hora_ingreso <= c.fecha_censo
+            AND (
+                    h.fecha_hora_egreso > c.fecha_censo
+                    OR h.fecha_hora_egreso IS NULL
+            )
+
+            GROUP BY c.fecha_censo
+            ORDER BY c.fecha_censo;
             """
             df_htaho = pd.read_sql(query_htaho, engine)
             if not df_htaho.empty:

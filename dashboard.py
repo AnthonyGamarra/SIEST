@@ -2,7 +2,6 @@ import io
 import importlib
 import json
 import pkgutil
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
@@ -16,7 +15,7 @@ from dash import Dash, html, dcc, Input, Output, State
 from dash.dependencies import ALL
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 import secure_code as sc
 
@@ -747,47 +746,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard/'):
             style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
         )
 
-    _engine = None
-    _engine_lock = threading.Lock()
-
     def create_connection():
-        """Crea o retorna una instancia singleton del engine de base de datos con reintentos."""
-        nonlocal _engine
-
-        with _engine_lock:
-            if _engine is not None:
-                try:
-                    with _engine.connect() as conn:
-                        pass
-                    return _engine
-                except Exception:
-                    _engine = None
-
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    import time
-                    engine = create_engine(
-                        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=20,
-                        max_overflow=10,
-                        pool_pre_ping=True,
-                        pool_recycle=1800,
-                        pool_timeout=30,
-                        echo_pool=False
-                    )
-                    # Verificar la conexión
-                    with engine.connect() as conn:
-                        pass
-                    _engine = engine
-                    return _engine
-                except Exception as exc:
-                    print(f"[Dashboard] Intento {attempt + 1}/{max_retries} - Failed to connect: {exc}")
-                    if attempt < max_retries - 1:
-                        time.sleep(1 * (attempt + 1))
-                    else:
-                        print("[Dashboard] No se pudo establecer conexión después de todos los reintentos")
-                        return None
+        from extensions import get_dw_engine
+        return get_dw_engine()
 
     def build_queries_consulta(anio_str, periodo_str, params):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])

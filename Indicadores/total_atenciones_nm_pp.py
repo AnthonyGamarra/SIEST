@@ -297,14 +297,9 @@ register_page(
 
 # Conexión DB
 def create_connection():
-    try:
-        engine = create_engine('postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA')
-        with engine.connect():
-            pass
-        return engine
-    except Exception as e:
-        print(f"Failed to connect to the database: {e}")
-        return None
+    from extensions import get_dw_engine
+    return get_dw_engine()
+
 
 
 def build_nm_pp_base_query(anio: str, periodo: str, codasegu_clause: str, select_columns: str) -> str:

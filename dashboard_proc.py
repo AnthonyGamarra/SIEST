@@ -1,12 +1,10 @@
 import os
-import threading
 
 import dash_bootstrap_components as dbc
 import pandas as pd
 from dash import Dash, dcc, html, Input, Output, State, no_update
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine
 
 import secure_code as sc
 
@@ -495,41 +493,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         )
 
     # ========== DB ==========
-    _engine = None
-    _engine_lock = None
-
     def create_connection():
-        nonlocal _engine, _engine_lock
-        if _engine_lock is None:
-            _engine_lock = threading.Lock()
-        with _engine_lock:
-            if _engine is not None:
-                try:
-                    with _engine.connect():
-                        pass
-                    return _engine
-                except Exception:
-                    _engine = None
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    import time
-                    engine = create_engine(
-                        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                        pool_size=20, max_overflow=10, pool_pre_ping=True,
-                        pool_recycle=1800, pool_timeout=30, echo_pool=False
-                    )
-                    with engine.connect():
-                        pass
-                    _engine = engine
-                    return _engine
-                except Exception as exc:
-                    print(f"[Dashboard PROC] Intento {attempt + 1}/{max_retries}: {exc}")
-                    if attempt < max_retries - 1:
-                        time.sleep(1 * (attempt + 1))
-                    else:
-                        print("[Dashboard PROC] No se pudo establecer conexión")
-                        return None
+        from extensions import get_dw_engine
+        return get_dw_engine()
 
     def fecha_act(engine):
         if engine is None:
@@ -573,6 +539,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
+                  AND cod_actividad = '96'
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
 
                 UNION ALL
@@ -590,6 +557,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
+                  AND cod_actividad = '96'
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
 
                 UNION ALL
@@ -607,6 +575,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
+                  AND cod_actividad = '96'
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
             )
             SELECT *
@@ -819,12 +788,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                     ).fillna(0)
                 total = int(df_card['cantproced'].sum()) if 'cantproced' in df_card.columns else len(df_card)
 
-                if not df_card.empty and 'servhosdescor' in df_card.columns:
+                if not df_card.empty and 'servicio' in df_card.columns:
                     df_breakdown = (
-                        df_card.groupby('servhosdescor', dropna=False)['cantproced']
+                        df_card.groupby('servicio', dropna=False)['cantproced']
                         .sum()
                         .reset_index(name='counts')
-                        .rename(columns={'servhosdescor': 'agrupador'})
+                        .rename(columns={'servicio': 'agrupador'})
                         .sort_values('counts', ascending=False)
                     )
                 else:

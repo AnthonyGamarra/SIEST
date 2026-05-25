@@ -4,7 +4,6 @@ import json
 import pkgutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Callable, Optional
 from urllib.parse import quote_plus
 
@@ -15,7 +14,7 @@ from dash import Dash, html, dcc, Input, Output, State
 from dash.dependencies import ALL
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 import secure_code as sc
 
@@ -835,23 +834,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             style={**CARD_STYLE, "borderLeft": f"5px solid {ACCENT}", "height": "100%"}
         )
 
-    @lru_cache(maxsize=1)
     def create_connection():
-        try:
-            engine = create_engine(
-                'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-                pool_size=5,
-                max_overflow=5,
-                pool_pre_ping=True,
-                pool_recycle=3600,
-                echo_pool=False
-            )
-            with engine.connect():
-                pass
-            return engine
-        except Exception as exc:
-            print(f"Failed to connect to the database: {exc}")
-            return None
+        from extensions import get_dw_engine
+        return get_dw_engine()
 
     def build_queries_complementaria(anio_str, periodo_str, params):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])

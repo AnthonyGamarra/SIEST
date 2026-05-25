@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
-from sqlalchemy import func, text, create_engine
+from sqlalchemy import func, text
 from sqlalchemy.orm import joinedload
 from bi import get_bi_url
 from backend.models import dashboard_code_for_user
@@ -28,23 +28,9 @@ from backend.models import (
 
 
 DESERCION_MODEL_FILENAME = 'modelo_desercion.pkl'
-DW_ESTADISTICA_URI = 'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA'
-_dw_engine = None
-
-
 def _get_dw_engine():
-	global _dw_engine
-	if _dw_engine is None:
-		_dw_engine = create_engine(
-			DW_ESTADISTICA_URI,
-			pool_size=20,
-			max_overflow=10,
-			pool_pre_ping=True,
-			pool_recycle=1800,
-			pool_timeout=30,
-			echo_pool=False,
-		)
-	return _dw_engine
+	from extensions import get_dw_engine
+	return get_dw_engine()
 
 
 def _fetch_tabla_homologada_rows(codcas):

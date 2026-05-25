@@ -38,8 +38,8 @@ def create_app():
     # CONFIGURACIÓN DEL POOL (CRÍTICO PARA CARGA)
     # =============================
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        "pool_size": 20,
-        "max_overflow": 10,
+        "pool_size": 5,
+        "max_overflow": 5,
         "pool_timeout": 30,
         "pool_recycle": 1800,
         "pool_pre_ping": True,

@@ -1,4 +1,4 @@
-﻿from dash import html, dcc, Input, Output, State
+from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 from sqlalchemy import create_engine
 import pandas as pd
@@ -132,14 +132,9 @@ def layout(codcas=None, **kwargs):
 
 
 def create_connection():
-    try:
-        engine = create_engine("postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA",
-                               pool_pre_ping=True)
-        with engine.connect():
-            pass
-        return engine
-    except Exception:
-        return None
+    from extensions import get_dw_engine
+    return get_dw_engine()
+
 
 
 def _build_query(anio_str, periodo, codcas, codasegu_clause):

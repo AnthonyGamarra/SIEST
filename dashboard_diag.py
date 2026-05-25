@@ -8,7 +8,7 @@ import pandas as pd
 from dash import Dash, dcc, html, Input, Output, State, dash_table, no_update
 from flask import has_request_context
 from flask_login import current_user
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 
 def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
@@ -225,22 +225,9 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         WHERE 1 = 1
         """
 
-    @lru_cache(maxsize=1)
     def create_connection():
-        try:
-            engine = create_engine(
-                "postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA",
-                pool_size=5,
-                max_overflow=5,
-                pool_pre_ping=True,
-                pool_recycle=3600,
-            )
-            with engine.connect():
-                pass
-            return engine
-        except Exception as exc:  # pragma: no cover - connection issues logged
-            print(f"[Diag Report] Error creando conexión: {exc}")
-            return None
+        from extensions import get_dw_engine
+        return get_dw_engine()
 
     def field_wrapper(label_text, component):
         return html.Div(

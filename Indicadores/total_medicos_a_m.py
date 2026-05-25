@@ -136,21 +136,9 @@ def get_codcas_periodo(
 
 # Conexión DB
 def create_connection():
-    try:
-        engine = create_engine(
-            'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
-            pool_size=5,
-            max_overflow=5,
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            pool_timeout=30
-        )
-        with engine.connect():
-            pass
-        return engine
-    except Exception as e:
-        print(f"Failed to connect to the database: {e}")
-        return None
+    from extensions import get_dw_engine
+    return get_dw_engine()
+
 
 # --- NUEVO: helper para aplicar filtros del grid a los datos de la tabla ---
 def _tm_apply_filter(data_records, filter_model):
