@@ -217,7 +217,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                                         'fontSize': '32px', 'color': BRAND, 'marginRight': '12px'
                                     }),
                                     html.H2(
-                                        "Hospitalización - Egresos",
+                                        ["Hospitalización - Egresos ",
+                                         html.Span("(En proceso de validación)", style={'color': '#dc3545'})],
                                         style={
                                             'color': BRAND, 'fontFamily': FONT_FAMILY,
                                             'fontSize': '26px', 'margin': '0', 'fontWeight': '700'

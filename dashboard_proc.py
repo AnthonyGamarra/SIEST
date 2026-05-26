@@ -244,7 +244,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         ),
         (
             "Estimulación Eléctrica Cerebral",
-            ("95979","95975","95978"),
+            ("95979","95975","95978","95974","95971"),
             "bi-clipboard2-pulse-fill",
             "#0064AF",
         ),
@@ -616,9 +616,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 html.Div([
                     html.I(className="bi bi-heart-pulse-fill",
                            style={'fontSize': '32px', 'color': BRAND, 'marginRight': '12px'}),
-                    html.H2("Total Procedimientos Realizados",
-                            style={'color': BRAND, 'fontFamily': FONT_FAMILY,
-                                   'fontSize': '26px', 'margin': '0', 'fontWeight': '700'})
+                    html.H2(
+                        ["Total Procedimientos Realizados ",
+                         html.Span("(En proceso de validación)", style={'color': '#dc3545'})],
+                        style={'color': BRAND, 'fontFamily': FONT_FAMILY,
+                               'fontSize': '26px', 'margin': '0', 'fontWeight': '700'})
                 ], style={'display': 'flex', 'alignItems': 'center'}),
                 html.Div([
                     html.Span(
