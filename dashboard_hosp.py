@@ -412,7 +412,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 'boxShadow': '0 10px 30px rgba(0,0,0,0.08)'
             }), html.Div()
 
-        anio_str = str(anio)
+        from extensions import validate_anio_periodo
+        try:
+            anio_str, periodo = validate_anio_periodo(anio, periodo)
+        except ValueError as _ve:
+            return html.Div(f"Parámetros inválidos: {_ve}"), html.Div()
+
         tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
         codasegu_clause = resolve_tipo_asegurado_clause(tipo_filter)
 
@@ -534,11 +539,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                         ELSE NULL
                     END AS fecha_hora_egreso
 
-                FROM dwsge.dwe_hosp_egresos h
+                FROM dssge.dw_hosp_v2 h
                 CROSS JOIN parametros p
 
                 WHERE h.cod_centro = '{codcas}'
-
+                AND h.ubicacion = 'HOSPIT'
                 -- SOLO MES ACTUAL Y MES ANTERIOR
                 AND h.fec_ingr::date >= (
                     date_trunc('month', p.fecha_inicio::date)
@@ -551,7 +556,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
             calendario AS (
                 SELECT
                     (
-                        gs::date + time '08:00:00'
+                        gs::date + time '06:00:00'
                     ) AS fecha_censo
                 FROM parametros p,
                 generate_series(
@@ -737,7 +742,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                         ELSE NULL
                     END AS fecha_hora_egreso
 
-                FROM dwsge.dwe_hosp_egresos h
+                FROM dssge.dw_hosp_v2 h
                 CROSS JOIN parametros p
 
                 WHERE h.cod_centro = '{codcas}'
@@ -829,7 +834,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         if not codcas:
             return no_update
 
-        anio_str = str(anio)
+        from extensions import validate_anio_periodo
+        try:
+            anio_str, periodo = validate_anio_periodo(anio, periodo)
+        except ValueError:
+            return no_update
+
         tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
         codasegu_clause = resolve_tipo_asegurado_clause(tipo_filter)
 

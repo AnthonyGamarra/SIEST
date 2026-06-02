@@ -1,1 +1,10 @@
 modelo_desercion.pkl
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.sqlite3
+instance/
+.pytest_cache/

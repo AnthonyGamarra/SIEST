@@ -636,7 +636,12 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                 'boxShadow': '0 10px 30px rgba(0,0,0,0.08)'
             }), html.Div()
 
-        anio_str = str(anio)
+        from extensions import validate_anio_periodo
+        try:
+            anio_str, periodo = validate_anio_periodo(anio, periodo)
+        except ValueError as _ve:
+            return html.Div(f"Parámetros inválidos: {_ve}"), html.Div()
+
         tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
         codasegu_clause = resolve_tipo_asegurado_clause(tipo_filter)
 
@@ -980,7 +985,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         if not codcas:
             return None
 
-        anio_str = str(anio)
+        from extensions import validate_anio_periodo
+        try:
+            anio_str, periodo = validate_anio_periodo(anio, periodo)
+        except ValueError:
+            return None
 
         tipo_filter = tipo_asegurado or DEFAULT_TIPO_ASEGURADO
         codasegu_clause = resolve_tipo_asegurado_clause(tipo_filter)

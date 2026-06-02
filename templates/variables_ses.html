@@ -8,7 +8,7 @@
 			{% elif codcas %}
 			<h1 class="modules-titles">Centro seleccionado: {{ codcas }}</h1>
 			{% endif %}
-			<h1 class="modules-title">Variables de sesión</h1>
+			<h1 class="modules-title">Variables del SES</h1>
 			<p class="modules-subtitle">
 				Elige el módulo de producción que deseas explorar.
 			</p>
@@ -60,7 +60,7 @@
 			</div>
 			{% endif %}
 
-			{% if current_user.role == 'admin' %}
+			{% if current_user.role == 'admin' or current_user.username == '18182276' %}
 			<a href="{{ proc_url }}" class="module">
 				<img src="{{ url_for('static', filename='medical_13604970.png') }}" alt="Procedimientos" />
 				<span>Procedimientos</span>

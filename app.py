@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask
 import sys
 from extensions import db, login_manager
@@ -26,11 +29,21 @@ def create_app():
     # =============================
     # CONFIGURACIÓN GENERAL
     # =============================
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-me')
+    secret_key = os.environ.get('SECRET_KEY', '')
+    if not secret_key or secret_key == 'dev-secret-key-change-me':
+        raise RuntimeError(
+            "SECRET_KEY no está configurada o usa el valor por defecto inseguro. "
+            "Define SECRET_KEY como variable de entorno antes de iniciar la aplicación."
+        )
+    app.config['SECRET_KEY'] = secret_key
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = (
-        'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/Flask_Prueba'
-    )
+    app_db_uri = os.environ.get('APP_DATABASE_URI')
+    if not app_db_uri:
+        raise RuntimeError(
+            "La variable de entorno APP_DATABASE_URI no está configurada. "
+            "Revisa tu archivo .env o la configuración del servidor."
+        )
+    app.config['SQLALCHEMY_DATABASE_URI'] = app_db_uri
 
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 

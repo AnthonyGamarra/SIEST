@@ -2038,8 +2038,11 @@ CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END AS cod_tipo_paciente,
     def _load_dashboard_data(periodo, anio, codcas, engine, query_builder, tipo_asegurado_value):
         if not periodo or not codcas or not anio:
             return None
-        periodo_str = f"{int(periodo):02d}" if str(periodo).isdigit() else str(periodo)
-        anio_str = str(anio)
+        from extensions import validate_anio_periodo
+        try:
+            anio_str, periodo_str = validate_anio_periodo(anio, periodo)
+        except ValueError:
+            return None
         periodo_sql = f"{anio_str}{periodo_str}"
         params = {
             "codcas": codcas,

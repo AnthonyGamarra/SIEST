@@ -1,3 +1,4 @@
+import os
 from sqlalchemy import create_engine
 import pandas as pd
 from backend.models import User
@@ -30,8 +31,11 @@ def create_connection():
         max_retries = 3
         for attempt in range(max_retries):
             try:
+                dw_uri = os.environ.get('DW_DATABASE_URI')
+                if not dw_uri:
+                    raise RuntimeError("DW_DATABASE_URI no está configurada.")
                 engine = create_engine(
-                    'postgresql+psycopg2://app_user:sge02@10.0.29.117:5433/DW_ESTADISTICA',
+                    dw_uri,
                     pool_size=3,
                     max_overflow=2,
                     pool_pre_ping=True,
