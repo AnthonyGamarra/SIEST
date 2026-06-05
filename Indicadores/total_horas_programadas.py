@@ -330,7 +330,6 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
 	    ce.cod_servicio,
         ce.cod_especialidad,
         ca.cenasides,
-        ce.cod_tipdoc_medico,
         ce.dni_medico,
         am.actdes AS actividad,
         ag.agrupador AS agrupador,
@@ -339,7 +338,7 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
         e.especialidad AS descripcion_especialidad,
 		ce.total_horas,
         ce.fecha_prog
-    FROM dwsge.dwe_consulta_externa_programacion_{anio}_{periodo} ce
+    FROM dwsge.dwe_consulta_externa_horas_efectivas_{anio}_{periodo} ce
     LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
     LEFT JOIN dwsge.dim_especialidad AS e ON ce.cod_especialidad = e.cod_especialidad
     LEFT JOIN dwsge.sgss_cmace10 AS a ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
@@ -348,8 +347,8 @@ def build_query(periodo: str, anio: str, codcas: str) -> str:
     LEFT JOIN dwsge.dim_agrupador AS ag ON ce.cod_agrupador = ag.cod_agrupador
     WHERE ce.cod_centro = '{codcas}'
         AND (
-            ce.cod_motivo_suspension IS NULL 
-            OR ce.cod_motivo_suspension NOT IN ('04','09','10','99','13','16','11')
+            ce.cod_mot_suspension IS NULL 
+            OR ce.cod_mot_suspension NOT IN ('04','09','10','99','13','16','11')
         )
       AND ce.cod_actividad = '91'
       AND ce.cod_variable = '001'
@@ -630,11 +629,10 @@ def build_tabla_horas(data):
         detalle_subactividad=df.get("detalle_subactividad", "").fillna("Sin subactividad").replace("", "Sin subactividad"),
         agrupador=df.get("agrupador", "").fillna("Sin agrupador").replace("", "Sin agrupador"),
         descripcion_especialidad=df.get("descripcion_especialidad", "").fillna("Sin especialidad").replace("", "Sin especialidad"),
-        cod_tipdoc_medico=df.get("cod_tipdoc_medico", "").fillna("Sin tipo doc").replace("", "Sin tipo doc"),
         dni_medico=df.get("dni_medico", "").fillna("Sin DNI").replace("", "Sin DNI"),
     )
     grouped = (df.groupby(
-        ["fecha_prog", "descripcion_servicio", "detalle_subactividad", "agrupador", "descripcion_especialidad", "cod_tipdoc_medico", "dni_medico"],
+        ["fecha_prog", "descripcion_servicio", "detalle_subactividad", "agrupador", "descripcion_especialidad", "dni_medico"],
         as_index=False)["total_horas"].sum()
                .sort_values("total_horas", ascending=False))
     # CASTEO EXPLÍCITO TRAS EL GROUPBY

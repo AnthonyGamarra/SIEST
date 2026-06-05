@@ -33,16 +33,16 @@
 			</div>
 			{% endif %}
 
-			{% set code_cq = current_user.dashboard_code() if current_user else '' %}
-			{% if code_cq %}
+			{% if current_user.role == 'admin' %}
 			<a href="{{ cq_url }}" class="module">
 				<img src="{{ url_for('static', filename='cirugia.png') }}" alt="Centro Quirúrgico" />
 				<span>Centro Quirúrgico</span>
 			</a>
 			{% else %}
-			<div class="module inactive" title="Sin código asociado">
+			<div class="module inactive" title="En desarrollo">
 				<img src="{{ url_for('static', filename='cirugia.png') }}" alt="Centro Quirúrgico" />
 				<span>Centro Quirúrgico</span>
+				<small style="font-size:10px; color:#aaa; display:block; margin-top:2px;">En desarrollo</small>
 			</div>
 			{% endif %}
 
