@@ -993,6 +993,9 @@ ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
         prevent_initial_call=True
     )
     def download_ficha_tecnica(n_clicks):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return None
         if not n_clicks:
             return None
 
@@ -1015,6 +1018,9 @@ ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
         prevent_initial_call=True
     )
     def download_csv(n_clicks, periodo, anio, tipo_asegurado, pathname):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return None
         if not n_clicks or not periodo or not anio or not pathname:
             return None
 

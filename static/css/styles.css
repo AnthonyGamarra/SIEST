@@ -550,6 +550,7 @@ body {
   gap: 14px;
   min-height: 180px;
   overflow: hidden;
+  text-decoration: none;
 }
 
 .module::before {

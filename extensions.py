@@ -49,3 +49,15 @@ def get_dw_engine():
             echo_pool=False,
         )
     return _dw_engine
+
+
+def is_consulta_user():
+    """
+    Retorna True si el usuario autenticado tiene role == 'consulta'.
+    Seguro para usar tanto en callbacks Dash como en rutas Flask.
+    """
+    try:
+        from flask_login import current_user
+        return getattr(current_user, 'role', None) == 'consulta'
+    except Exception:
+        return False

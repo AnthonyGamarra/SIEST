@@ -611,6 +611,9 @@ def create_dash_app(flask_app, url_base_pathname='/tramas_embed/'):
         prevent_initial_call=True,
     )
     def descargar_b1(n, ini, fin, cas):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            raise PreventUpdate
         if not n:
             raise PreventUpdate
         err = _validar(ini, fin, cas)
@@ -651,6 +654,9 @@ def create_dash_app(flask_app, url_base_pathname='/tramas_embed/'):
         prevent_initial_call=True,
     )
     def descargar_b2(n, ini, fin, cas):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            raise PreventUpdate
         if not n:
             raise PreventUpdate
         err = _validar(ini, fin, cas)

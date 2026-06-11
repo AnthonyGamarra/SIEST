@@ -494,6 +494,9 @@ def register_routes(app):
 	@bp.route('/tabla_homologada/consulta-externa/csv', methods=['GET'])
 	@login_required
 	def tabla_homologada_ce_csv():
+		if getattr(current_user, 'role', None) == 'consulta':
+			flash('No tienes permisos para descargar archivos.', 'warning')
+			return redirect(url_for('main.tabla_homologada_ce'))
 		try:
 			rows = _fetch_tabla_homologada_ce_rows()
 		except Exception as exc:
@@ -537,6 +540,9 @@ def register_routes(app):
 	@bp.route('/tabla_homologada/csv', methods=['GET'])
 	@login_required
 	def tabla_homologada_csv():
+		if getattr(current_user, 'role', None) == 'consulta':
+			flash('No tienes permisos para descargar archivos.', 'warning')
+			return redirect(url_for('main.index'))
 		selected_codcas = (request.args.get('codcas') or '').strip()
 		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
 		codcas = selected_codcas or fallback_codcas

@@ -535,6 +535,9 @@ def register_callbacks(app):
 
 
 def download_csv(n_clicks, codcas, search):
+    from extensions import is_consulta_user
+    if is_consulta_user():
+        return None
     import pandas as pd
     from dash import no_update
     from dash import dcc

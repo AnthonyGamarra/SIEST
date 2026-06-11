@@ -1204,6 +1204,9 @@ def actualizar_total_resumen(filter_model, row_data):
     prevent_initial_call=True
 )
 def descargar_query1_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    from extensions import is_consulta_user
+    if is_consulta_user():
+        return None
     codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown)
     if not codcas or not periodo or not anio:
         return None

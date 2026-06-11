@@ -672,6 +672,9 @@ def update_grid(data):
     prevent_initial_call=True
 )
 def download_csv(n_clicks, data, pathname, search, periodo_dropdown, anio_dropdown):
+    from extensions import is_consulta_user
+    if is_consulta_user():
+        return None
     if not n_clicks or not data:
         return None
     

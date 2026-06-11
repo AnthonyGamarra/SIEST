@@ -531,6 +531,9 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def download_csv(n_clicks, codcas, search):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return None
         import secure_code as sc
         codcas = sc.decode_code(codcas) if codcas else None
         

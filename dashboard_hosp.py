@@ -825,6 +825,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
         prevent_initial_call=True
     )
     def download_csv(n_clicks, periodo, anio, tipo_asegurado, pathname):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return no_update
         if not n_clicks or not periodo or not anio or not pathname:
             return no_update
 

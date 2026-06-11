@@ -567,6 +567,9 @@ def register_callbacks(app):
         prevent_initial_call=True
     )
     def descargar_query1_csv(n_clicks, codcas_enc, search):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return None
         import secure_code as sc
         codcas = sc.decode_code(codcas_enc) if codcas_enc else None
         periodo = _parse_periodo(search)

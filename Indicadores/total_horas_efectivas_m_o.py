@@ -669,6 +669,9 @@ def update_grid(data):
     prevent_initial_call=True
 )
 def download_csv(n_clicks, data, pathname, search):
+    from extensions import is_consulta_user
+    if is_consulta_user():
+        return None
     if not data or not pathname:
         return None
     codcas, periodo, anio = get_codcas_periodo(pathname, search, None, None)

@@ -698,6 +698,9 @@ def render_tabla_prod_servicio(pathname, search, periodo_dropdown, anio_dropdown
     prevent_initial_call=True
 )
 def tc_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown, tipo_dropdown):
+    from extensions import is_consulta_user
+    if is_consulta_user():
+        return None
     if not n_clicks:
         return None
     codcas, periodo, anio, tipo_asegurado = get_codcas_periodo(

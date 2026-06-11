@@ -699,7 +699,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 color=BRAND,
                 children=[
                     dbc.Button(
-                        [html.I(className="bi bi-file-earmark-excel me-2"), "Descargar Excel"],
+                        [html.I(className="bi bi-file-earmark-excel me-2"), "Exportar xlsx"],
                         id='download-btn-proc', color='success',
                         className='dashboard-control-btn',
                         style={'padding': '8px 12px', 'fontFamily': FONT_FAMILY,
@@ -869,6 +869,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         prevent_initial_call=True,
     )
     def download_excel(n_clicks, periodo, anio, tipo_asegurado, pathname):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return no_update
         if not n_clicks:
             return no_update
 

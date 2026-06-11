@@ -742,6 +742,9 @@ def actualizar_total_horas(filter_model, row_data):
     prevent_initial_call=True
 )
 def hp_descargar_csv(n_clicks, pathname, search, periodo_dropdown, anio_dropdown):
+    from extensions import is_consulta_user
+    if is_consulta_user():
+        return None
     if not n_clicks:
         return None
     codcas, periodo, anio = get_codcas_periodo(pathname, search, periodo_dropdown, anio_dropdown)

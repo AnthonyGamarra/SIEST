@@ -316,6 +316,9 @@ def register_callbacks(app):
         prevent_initial_call=True,
     )
     def download_csv(n_clicks, codcas_enc, search):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return None
         if not n_clicks:
             return None
         from dash import dcc as _dcc

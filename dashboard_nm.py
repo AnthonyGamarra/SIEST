@@ -2095,6 +2095,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     ]
 
     def build_download_response(periodo, anio, pathname, tipo_asegurado_value, data_loader, include_citas=True, include_desercion=True):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return None
         if not periodo or not pathname or not anio:
             return None
         codcas_url = pathname.rstrip('/').split('/')[-1] if pathname else None
@@ -2453,6 +2456,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         prevent_initial_call=True
     )
     def download_ficha_tecnica(n_clicks):
+        from extensions import is_consulta_user
+        if is_consulta_user():
+            return dash.no_update
         if not n_clicks:
             return dash.no_update
 
