@@ -1038,7 +1038,9 @@ ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
             return None
 
         query =  f"""
-            SELECT cod_oricentro,
+            SELECT
+                DISTINCT ON (cq.acto_med, cq.cod_cpms, cq.fec_oper) 
+                cod_oricentro,
                 cod_centro,
                 ca.cenasides AS cenasides,
                 periodo,
@@ -1127,6 +1129,7 @@ ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
                         ELSE '1'
                     END
                   ) IN {codasegu_clause}
+            ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC;
         """
         df = pd.read_sql(query, engine)
         if df.empty:

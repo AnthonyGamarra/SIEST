@@ -457,11 +457,18 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
 
     def render_inline_table(dataframe):
         SIDE_COLOR = "#00AEEF"
-        heading = html.H6(
-            "Servicio",
-            className="fw-semibold",
-            style={'fontSize': '11px', 'color': BRAND, 'letterSpacing': '0.6px', 'marginBottom': '8px'}
-        )
+        heading = html.Div([
+            html.H6(
+                "Servicio",
+                className="fw-semibold",
+                style={'fontSize': '11px', 'color': BRAND, 'letterSpacing': '0.6px', 'marginBottom': '0px', 'display': 'inline-block', 'marginRight': '8px'}
+            ),
+            html.H6(
+                "Área Hosp.",
+                className="fw-semibold",
+                style={'fontSize': '11px', 'color': BRAND, 'letterSpacing': '0.6px', 'marginBottom': '0px', 'display': 'inline-block'}
+            )
+        ], style={'marginBottom': '8px'})
         if dataframe.empty:
             return dbc.Card(
                 dbc.CardBody(
@@ -471,21 +478,37 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 ),
                 style={**CARD_STYLE, "borderLeft": f"5px solid {SIDE_COLOR}", "height": "100%"}
             )
+        table_head = html.Thead([
+            html.Tr([
+                html.Th('Código', style={'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'}),
+                html.Th('Procedimiento', style={'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'}),
+                html.Th('Servicio', style={'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'}),
+                html.Th('Área Hosp.', style={'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'}),
+                html.Th('Cantidad', style={'textAlign': 'right', 'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'})
+            ])
+        ])
         table_body = html.Tbody([
             html.Tr([
-                html.Td(str(r.get('agrupador') or 'Sin descripción'),
-                        style={'padding': '4px 8px', 'lineHeight': '1.1'}),
+                html.Td(str(r.get('codproced') or '-'),
+                        style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px', 'fontFamily': 'monospace'}),
+                html.Td(str(r.get('cpms') or '-')[:20] + ('...' if len(str(r.get('cpms') or '')) > 20 else ''),
+                        title=str(r.get('cpms') or '-'),
+                        style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px', 'cursor': 'help'}),
+                html.Td(str(r.get('servicio') or 'Sin descripción'),
+                        style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px'}),
+                html.Td(str(r.get('area_hosp') or '-'),
+                        style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px'}),
                 html.Td(
                     '-' if pd.isna(r.get('counts')) else f"{r['counts']:,.0f}",
-                    style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1'}
+                    style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px', 'fontWeight': '600'}
                 )
             ])
             for _, r in dataframe.iterrows()
         ])
         return dbc.Card(
             dbc.CardBody(
-                [heading, dbc.Table([table_body], bordered=False, hover=False,
-                                    responsive=True, striped=False,
+                [dbc.Table([table_head, table_body], bordered=False, hover=True,
+                                    responsive=True, striped=True,
                                     className="mb-0", style={'fontSize': '13px'})],
                 style={**CARD_BODY_STYLE, 'padding': '14px'}
             ),
@@ -530,13 +553,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                     cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio, s.servhosdescor as servicio,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
-                    fecha_aten, acto_med, codproced, cantproced::numeric,
-                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms, 'CE' as area
+                    fecha_aten, acto_med, codproced, cantproced::numeric, ar.arehosdes as area_hosp,
+                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms
                 FROM dssge.dw_proc_{anio_str}_{periodo} as pc
                 LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
                 LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
                 LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
+                LEFT JOIN dwsge.sgss_cmaho10 as ar ON ar.arehoscod = pc.area_hosp
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND cod_actividad = '96'
@@ -548,13 +572,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                     cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor as servicio,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
-                    fecha_aten, acto_med, codproced, cantproced::numeric,
-                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms, 'EME' as area
+                    fecha_aten, acto_med, codproced, cantproced::numeric, ar.arehosdes as area_hosp,
+                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms
                 FROM dssge.dw_proc_eme_{anio_str}_{periodo} as pc
                 LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
                 LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
                 LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
+                LEFT JOIN dwsge.sgss_cmaho10 as ar ON ar.arehoscod = pc.area_hosp
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND cod_actividad = '96'
@@ -566,13 +591,14 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                     cod_oricentro, cod_centro, c.cenasides, anio, periodo, cod_servicio,s.servhosdescor as servicio,
                     dni_medico, doc_paciente, tip_doc_paciente, anio_edad, sexo,
                     cod_tipo_seguro, cod_tipo_parentesco, cod_tipo_paciente,
-                    fecha_aten, acto_med, codproced, cantproced::numeric,
-                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms, 'HOS' as area
+                    fecha_aten, acto_med, codproced, cantproced::numeric, ar.arehosdes as area_hosp,
+                    cod_actividad, a.actdes as actividad, cod_subactividad, cp.cpsdes AS cpms
                 FROM dssge.dw_proc_hos_{anio_str}_{periodo} as pc
                 LEFT JOIN dwsge.sgss_cmsho10 as s ON s.servhoscod = pc.cod_servicio
                 LEFT JOIN dwsge.sgss_cmcpp10 as cp ON cp.cpscod = pc.codproced
                 LEFT JOIN dwsge.sgss_cmcas10 as c ON c.cenasicod = pc.cod_centro AND c.oricenasicod = pc.cod_oricentro
                 LEFT JOIN dwsge.sgss_cmact10 as a ON a.actcod = pc.cod_actividad
+                LEFT JOIN dwsge.sgss_cmaho10 as ar ON ar.arehoscod = pc.area_hosp
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
                   AND cod_actividad = '96'
@@ -797,17 +823,16 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
 
                 if not df_card.empty and 'servicio' in df_card.columns:
                     df_breakdown = (
-                        df_card.groupby('servicio', dropna=False)['cantproced']
+                        df_card.groupby(['codproced', 'cpms', 'servicio', 'area_hosp'], dropna=False)['cantproced']
                         .sum()
                         .reset_index(name='counts')
-                        .rename(columns={'servicio': 'agrupador'})
                         .sort_values('counts', ascending=False)
                     )
                 else:
-                    df_breakdown = pd.DataFrame(columns=['agrupador', 'counts'])
+                    df_breakdown = pd.DataFrame(columns=['codproced', 'cpms', 'servicio', 'area_hosp', 'counts'])
             except Exception:
                 total = 0
-                df_breakdown = pd.DataFrame(columns=['agrupador', 'counts'])
+                df_breakdown = pd.DataFrame(columns=['codproced', 'cpms', 'servicio', 'area_hosp', 'counts'])
 
             if total == 0:
                 continue

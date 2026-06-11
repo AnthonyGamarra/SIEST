@@ -907,9 +907,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq', endpoint='dashboard_cq_redirect')
 	@login_required
 	def dashboard_cq_redirect():
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = request.args.get('codcas', '')
 		if code:
 			token = encode_code(code)
@@ -919,9 +916,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq/')
 	@login_required
 	def dashboard_cq_index():
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = request.form.get('codcas', '')
 		if code:
 			token = encode_code(code)
@@ -932,9 +926,6 @@ def register_routes(app):
 	@bp.route('/cq/')
 	@login_required
 	def cq_index():
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		token = dashboard_code_for_user(current_user, request)
 		if token:
 			return redirect(url_for('main.cq_menu', token=token))
@@ -945,9 +936,6 @@ def register_routes(app):
 	@bp.route('/cq/<token>/', methods=['GET'])
 	@login_required
 	def cq_menu(token):
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = decode_code(token)
 		if not code:
 			flash('El código seleccionado es inválido o expiró.', 'warning')
@@ -969,9 +957,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq/<token>/', methods=['GET'])
 	@login_required
 	def dashboard_cq_wrapper(token):
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = decode_code(token)
 		if not code:
 			flash('El código seleccionado es inválido o expiró.', 'warning')
@@ -988,9 +973,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq/complejidad_<complejidad>/<token>/', methods=['GET'])
 	@login_required
 	def dashboard_cq_complejidad_wrapper(complejidad, token):
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = decode_code(token)
 		if not code:
 			flash('El código seleccionado es inválido o expiró.', 'warning')
@@ -1009,9 +991,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq_trans', endpoint='dashboard_cq_trans_redirect')
 	@login_required
 	def dashboard_cq_trans_redirect():
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = request.args.get('codcas', '')
 		if code:
 			token = encode_code(code)
@@ -1021,9 +1000,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq_trans/')
 	@login_required
 	def dashboard_cq_trans_index():
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = request.form.get('codcas', '')
 		if code:
 			token = encode_code(code)
@@ -1035,9 +1011,6 @@ def register_routes(app):
 	@bp.route('/dashboard_cq_trans/<token>/', methods=['GET'])
 	@login_required
 	def dashboard_cq_trans_wrapper(token):
-		if current_user.role != 'admin':
-			flash('El módulo de Centro Quirúrgico está en desarrollo.', 'warning')
-			return redirect(url_for('main.index'))
 		code = decode_code(token)
 		if not code:
 			flash('El código seleccionado es inválido o expiró.', 'warning')

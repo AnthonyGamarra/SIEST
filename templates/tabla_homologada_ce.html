@@ -117,6 +117,10 @@
     {% if rows %}
     <div class="filters-grid">
       <div class="filter-item">
+        <label for="filter-variable">Filtrar por variable</label>
+        <input id="filter-variable" type="text" placeholder="Codigo o descripcion de variable" />
+      </div>
+      <div class="filter-item">
         <label for="filter-servicio">Filtrar por servicio</label>
         <input id="filter-servicio" type="text" placeholder="Codigo o descripcion de servicio" />
       </div>
@@ -132,6 +136,8 @@
             <th>GPO_OCUP</th>
             <th>COD_AREA</th>
             <th>AREA</th>
+            <th>COD_VARIABLE</th>
+            <th>VARIABLE</th>
             <th>COD_ACTIVIDAD</th>
             <th>ACTIVIDAD</th>
             <th>COD_SUBACTIVIDAD</th>
@@ -144,8 +150,6 @@
             <th>SUBESPECIALIDAD</th>
             <th>COD_AGRUPADOR</th>
             <th>AGRUPADOR</th>
-            <th>COD_VARIABLE</th>
-            <th>VARIABLE</th>
             <th>ANIO</th>
             <th>ANIO_USO</th>
           </tr>
@@ -156,6 +160,8 @@
             <td>{{ row.desc_gpo_ocup }}</td>
             <td>{{ row.cod_area }}</td>
             <td>{{ row.desc_area }}</td>
+            <td>{{ row.cod_variable }}</td>
+            <td>{{ row.variable }}</td>
             <td>{{ row.cod_actividad }}</td>
             <td>{{ row.desc_actividad }}</td>
             <td>{{ row.cod_subactividad }}</td>
@@ -168,8 +174,6 @@
             <td>{{ row.subespecialidad }}</td>
             <td>{{ row.cod_agrupador }}</td>
             <td>{{ row.agrupador }}</td>
-            <td>{{ row.cod_variable }}</td>
-            <td>{{ row.variable }}</td>
             <td>{{ row.anio }}</td>
             <td>{{ row.anio_uso }}</td>
           </tr>
@@ -199,6 +203,7 @@
     }
 
     var tbodyRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+    var variableInput = document.getElementById('filter-variable');
     var serviceInput = document.getElementById('filter-servicio');
     var specialtyInput = document.getElementById('filter-especialidad');
     var visibleCount = document.getElementById('visible-count');
@@ -224,17 +229,22 @@
     function applyFilters() {
       var serviceTerm = normalize(serviceInput && serviceInput.value);
       var specialtyTerm = normalize(specialtyInput && specialtyInput.value);
+      var variableTerm = normalize(variableInput && variableInput.value);
       var visible = 0;
 
       tbodyRows.forEach(function (row) {
         var serviceText = rowText(row, [7, 8]);
         var specialtyText = rowText(row, [9, 10]);
+        var variableText = rowText(row, [15, 16]);
 
         var matches = true;
         if (matches && serviceTerm && serviceText.indexOf(serviceTerm) === -1) {
           matches = false;
         }
         if (matches && specialtyTerm && specialtyText.indexOf(specialtyTerm) === -1) {
+          matches = false;
+        }
+        if (matches && variableTerm && variableText.indexOf(variableTerm) === -1) {
           matches = false;
         }
 
@@ -249,7 +259,7 @@
       }
     }
 
-    [serviceInput, specialtyInput].forEach(function (input) {
+    [serviceInput, specialtyInput, variableInput].forEach(function (input) {
       if (input) {
         input.addEventListener('input', applyFilters);
       }

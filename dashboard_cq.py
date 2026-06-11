@@ -650,7 +650,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             return html.Div("Error de conexión a la base de datos."), html.Div()
 
         query_base = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms)
+            SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms, cq.fec_oper)
                 cq.cod_oricentro,
                 cq.cod_centro,
                 ca.cenasides AS cenasides,
@@ -698,7 +698,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         """
 
         query_horas = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.fec_oper)
+            SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms, cq.fec_oper)
                 cq.acto_med,
                 cq.fec_oper,
                 cq.duracion_sala,
@@ -711,7 +711,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                             ELSE '1'
                         END
                     ) IN {codasegu_clause}
-            ORDER BY cq.acto_med, cq.fec_oper DESC;
+            ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC;
         """
 
         df_base = pd.read_sql(query_base, engine)
