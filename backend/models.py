@@ -122,7 +122,6 @@ class User(UserMixin, db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-
 class SurveyResponse(db.Model):
     """Stores the validation outcome for each survey variable a user reviews."""
 
@@ -210,3 +209,16 @@ class SurveyVariable(db.Model):
     active = db.Column(db.Integer, nullable=False, server_default='1', default=1)
 
     subcategoria = db.relationship('SurveySubcategory', back_populates='variables')
+
+
+class ClasificacionCamas(db.Model):
+    __tablename__ = 'clasificacion_camas'
+    __table_args__ = {'schema': 'public'}
+
+    id = db.Column('id', db.Integer, primary_key=True)
+    codcas = db.Column('codcas', db.String(50), nullable=False)
+    camcod = db.Column('camcod', db.String(50), nullable=False)
+    arehoscod = db.Column('arehoscod', db.String(50), nullable=False)
+    habcod = db.Column('habcod', db.String(50), nullable=False)
+    servhoscod = db.Column('servhoscod', db.String(50), nullable=False)
+    descripcion = db.Column('descripcion', db.String(200), nullable=False)

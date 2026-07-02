@@ -24,6 +24,7 @@ from backend.models import (
 	SurveyCategory,
 	SurveySubcategory,
 	SurveyVariable,
+	ClasificacionCamas,
 )
 
 
@@ -98,6 +99,43 @@ def _fetch_tabla_homologada_ce_rows():
 	with engine.connect() as conn:
 		result = conn.execute(query)
 		return [dict(row._mapping) for row in result]
+
+
+def _fetch_tabla_homologada_camas_rows(codcas):
+	query = text("""
+		SELECT 
+		cam.*,
+		cas.cenasides,
+		cma.arehosdes,
+		serv.servhosdes
+		FROM dwsge.sgss_hmcam10 cam
+		LEFT JOIN dwsge.sgss_cmcas10 cas ON cam.cenasicod = cas.cenasicod
+		LEFT JOIN dwsge.sgss_cmaho10 cma ON cam.arehoscod = cma.arehoscod
+		LEFT JOIN dwsge.sgss_cmsho10 serv ON cam.servhoscod = serv.servhoscod
+		WHERE cam.tipcamcod IN ('1','2','4')
+		AND cam.camestregcod = '1'
+		AND cam.camflgfun = '0'
+		AND cam.cenasicod = :codcas
+		"""
+	)
+
+	engine = _get_dw_engine()
+	with engine.connect() as conn:
+		result = conn.execute(query, {'codcas': codcas})
+		return [dict(row._mapping) for row in result]
+
+
+def _clasificacion_camas_to_dict(clasificaciones):
+	return {
+		str(clasificacion.id): {
+			'id': clasificacion.id,
+			'codcas': clasificacion.codcas,
+			'camcod': clasificacion.camcod,
+			'arehoscod': clasificacion.arehoscod,
+			'servhoscod': clasificacion.servhoscod,
+		}
+		for clasificacion in clasificaciones
+	}
 
 
 def _format_select_options(df, code_key, label_key):
@@ -232,8 +270,6 @@ def register_routes(app):
 			'dashboard_code_for_user': lambda: dashboard_code_for_user(current_user, request),
 			'getNombreCentroAsistencial': lambda: getNombreCentroAsistencial (request),
 		}
-	
-
 
 	@bp.route('/', methods=['GET', 'POST'])
 	@login_required
@@ -431,6 +467,175 @@ def register_routes(app):
 			model_path=model_path,
 		)
 
+	@bp.route('/tabla_homologada-camas/', methods=['GET'])
+	@login_required
+	def tabla_homologada_camas():
+		selected_codcas = (request.args.get('codcas') or '').strip()
+		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
+		codcas = selected_codcas or fallback_codcas
+
+		if not codcas:
+			flash('Selecciona un centro asistencial para visualizar la tabla homologada.', 'warning')
+			return redirect(url_for('main.index'))
+
+		try:
+			rows = _fetch_tabla_homologada_camas_rows(codcas)
+		except Exception as exc:
+			current_app.logger.exception('Error al consultar la tabla homologada para codcas=%s: %s', codcas, exc)
+			flash('No se pudo cargar la tabla homologada en este momento.', 'danger')
+			return redirect(url_for('main.index'))
+		
+		new_rows = []
+		
+		for row in rows:
+			camcod = row.get('camcod')
+			arehoscod = row.get('arehoscod')
+			servhoscod = row.get('servhoscod')
+			habcod = row.get('habcod')
+			if camcod and arehoscod and servhoscod:
+				clasificacion = ClasificacionCamas.query.filter_by(
+					codcas=codcas,
+					camcod=camcod,
+					arehoscod=arehoscod,
+					servhoscod=servhoscod,
+					habcod=habcod
+				).first()
+				row['descripcion_clasificacion'] = clasificacion.descripcion if clasificacion else None
+			else:
+				row['descripcion_clasificacion'] = None
+			new_rows.append(row)
+			
+		return render_template(
+			'tabla_homologada_camas.html',
+			show_modules=False,
+			rows=new_rows,
+			codcas=codcas,
+			center_name=_get_center_name_by_code(codcas),
+		)
+
+	@bp.route('/clasificacion_camas', methods=['POST'])
+	@login_required
+	def clasificacion_camas():
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden gestionar la clasificación de camas.', 'danger')
+			return redirect(url_for('main.index'))
+		
+		codcas = (request.form.get('codcas') or '').strip()
+		camcods = request.form.getlist('camcod')
+		arehoscods = request.form.getlist('arehoscod')
+		servhoscods = request.form.getlist('servhoscod')
+		habcods = request.form.getlist('habcod')
+		descripciones = request.form.getlist('descripcion')
+
+		if not codcas or not camcods:
+			flash('No hay filas para clasificar.', 'warning')
+			return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
+
+		if not (len(camcods) == len(arehoscods) == len(servhoscods) == len(habcods) == len(descripciones)):
+			flash('No se pudo leer la clasificación de todas las filas.', 'danger')
+			return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
+
+		if any(not descripcion.strip() for descripcion in descripciones):
+			flash('Debes seleccionar una clasificación para cada fila.', 'warning')
+			return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
+
+		try:
+			ClasificacionCamas.query.filter_by(codcas=codcas).delete(synchronize_session=False)
+			next_id = (db.session.query(func.coalesce(func.max(ClasificacionCamas.id), 0)).scalar() or 0) + 1
+			for camcod, arehoscod, servhoscod, habcod, descripcion in zip(camcods, arehoscods, servhoscods, habcods, descripciones):
+				camcod = (camcod or '').strip()
+				arehoscod = (arehoscod or '').strip()
+				servhoscod = (servhoscod or '').strip()
+				habcod = (habcod or '').strip()
+				descripcion = (descripcion or '').strip()
+				if not (camcod and arehoscod and servhoscod and habcod and descripcion):
+					continue
+
+				clasificacion_cama = ClasificacionCamas(
+					id=next_id,
+					codcas=codcas,
+					camcod=camcod,
+					arehoscod=arehoscod,
+					servhoscod=servhoscod,
+					habcod=habcod,
+					descripcion=descripcion
+				)
+				db.session.add(clasificacion_cama)
+				next_id += 1
+
+			db.session.commit()
+			flash('Clasificación de camas actualizada exitosamente.', 'success')
+		except Exception as exc:
+			db.session.rollback()
+			current_app.logger.exception('Error al actualizar la clasificación de camas: %s', exc)
+			flash('No se pudo actualizar la clasificación de camas.', 'danger')
+
+		return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
+
+
+	@bp.route('/tabla_homologada_camas/csv', methods=['GET'])
+	@login_required
+	def tabla_homologada_camas_csv():
+		if getattr(current_user, 'role', None) == 'consulta':
+			flash('No tienes permisos para descargar archivos.', 'warning')
+			return redirect(url_for('main.index'))
+		selected_codcas = (request.args.get('codcas') or '').strip()
+		fallback_codcas = (getattr(current_user, 'codcas', '') or '').strip()
+		codcas = selected_codcas or fallback_codcas
+
+		if not codcas:
+			flash('Selecciona un centro asistencial para descargar la tabla homologada camas.', 'warning')
+			return redirect(url_for('main.index'))
+
+		try:
+			rows = _fetch_tabla_homologada_camas_rows(codcas)
+			new_rows = []
+			for row in rows:
+				camcod = row.get('camcod')
+				arehoscod = row.get('arehoscod')
+				servhoscod = row.get('servhoscod')
+				habcod = row.get('habcod')
+				if camcod and arehoscod and servhoscod:
+					clasificacion = ClasificacionCamas.query.filter_by(
+					codcas=codcas,
+					camcod=camcod,
+					arehoscod=arehoscod,
+					servhoscod=servhoscod,
+					habcod=habcod
+				).first()
+					row['descripcion_clasificacion'] = clasificacion.descripcion if clasificacion else None
+				else:
+					row['descripcion_clasificacion'] = None
+				new_rows.append(row)
+		except Exception as exc:
+			current_app.logger.exception('Error al exportar tabla homologada para codcas=%s: %s', codcas, exc)
+			flash('No se pudo generar el archivo CSV en este momento.', 'danger')
+			return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
+
+		output = io.StringIO()
+		fieldnames = [
+			'cod_centro',
+			'cenasides',
+			'arehoscod',
+			'arehosdes',
+			'servhoscod',
+			'servhosdes',
+			'habcod',
+			'camcod',
+			'descripcion_clasificacion'
+		]
+		writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+		writer.writeheader()
+		if new_rows:
+			writer.writerows(new_rows)
+
+		filename = f'tabla_homologada_camas_{codcas}.csv'
+		csv_content = '\ufeff' + output.getvalue()
+		response = Response(csv_content, mimetype='text/csv; charset=utf-8')
+		response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+		return response
+
+
 	@bp.route('/tabla_homologada/', methods=['GET'], endpoint='tabla_homologada_eme')
 	@bp.route('/tabla_homologada/', methods=['GET'])
 	@login_required
@@ -457,6 +662,7 @@ def register_routes(app):
 			codcas=codcas,
 			center_name=_get_center_name_by_code(codcas),
 		)
+
 
 	@bp.route('/tablas_homologadas/', methods=['GET'])
 	@login_required
@@ -490,6 +696,7 @@ def register_routes(app):
 			rows=rows,
 			codcas=codcas,
 		)
+
 
 	@bp.route('/tabla_homologada/consulta-externa/csv', methods=['GET'])
 	@login_required
@@ -536,6 +743,7 @@ def register_routes(app):
 		response = Response(csv_content, mimetype='text/csv; charset=utf-8')
 		response.headers['Content-Disposition'] = f'attachment; filename={filename}'
 		return response
+
 
 	@bp.route('/tabla_homologada/csv', methods=['GET'])
 	@login_required
@@ -628,6 +836,7 @@ def register_routes(app):
 			red_options=red_options,
 		)
 
+
 	@bp.route('/manage_users', methods=['GET', 'POST'])
 	@login_required
 	def manage_users():
@@ -708,6 +917,7 @@ def register_routes(app):
 			search_query=search_query,
 		)
 
+
 	@bp.route('/change_password', methods=['GET', 'POST'])
 	@login_required
 	def change_password():
@@ -752,6 +962,7 @@ def register_routes(app):
 		centers = _format_select_options(df, 'cenasicod', 'cenasides')
 		return jsonify({'centers': centers})
 
+
 	@bp.route('/login', methods=['GET', 'POST'])
 	def login():
 		if request.method == 'POST':
@@ -767,6 +978,7 @@ def register_routes(app):
 			else:
 				flash('Credenciales inválidas', 'danger')
 		return render_template('login.html')
+
 
 	@bp.route('/logout')
 	@login_required
@@ -791,6 +1003,7 @@ def register_routes(app):
 			return redirect(f'/dashboard/{token}/')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard/')
 	@login_required
 	def dashboard_index():
@@ -804,6 +1017,7 @@ def register_routes(app):
 			return redirect(f'/dashboard/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/dashboard/<token>', methods=['GET'])
 	@bp.route('/dashboard/<token>/', methods=['GET'])
@@ -821,6 +1035,7 @@ def register_routes(app):
 			codcas=code,
 		)
 	
+
 	@bp.route('/dashboard_nm', endpoint='dashboard_nm_redirect')
 	@login_required
 	def dashboard_nm_redirect():
@@ -835,6 +1050,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_nm/{token}/')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard_nm/')
 	@login_required
 	def dashboard_nm_index():
@@ -848,6 +1064,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_nm/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/dashboard_nm/<token>', methods=['GET'])
 	@bp.route('/dashboard_nm/<token>/', methods=['GET'])
@@ -880,6 +1097,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_odo/{token}/')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard_odo/')
 	@login_required
 	def dashboard_odo_index():
@@ -893,6 +1111,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_odo/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/dashboard_odo/<token>', methods=['GET'])
 	@bp.route('/dashboard_odo/<token>/', methods=['GET'])
@@ -919,6 +1138,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_cq/{token}/')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard_cq/')
 	@login_required
 	def dashboard_cq_index():
@@ -937,6 +1157,7 @@ def register_routes(app):
 			return redirect(url_for('main.cq_menu', token=token))
 		flash('No hay código asociado al usuario para mostrar el menú de Centro Quirúrgico.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/cq/<token>', methods=['GET'])
 	@bp.route('/cq/<token>/', methods=['GET'])
@@ -974,6 +1195,7 @@ def register_routes(app):
 			dashboard_url=dashboard_url,
 			codcas=code,
 		)
+
 
 	@bp.route('/dashboard_cq/complejidad_<complejidad>/<token>', methods=['GET'])
 	@bp.route('/dashboard_cq/complejidad_<complejidad>/<token>/', methods=['GET'])
@@ -1013,6 +1235,7 @@ def register_routes(app):
 		flash('No hay código asociado al usuario para mostrar el dashboard.', 'warning')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard_cq_trans/<token>', methods=['GET'])
 	@bp.route('/dashboard_cq_trans/<token>/', methods=['GET'])
 	@login_required
@@ -1038,6 +1261,7 @@ def register_routes(app):
 			return redirect(url_for('main.index'))
 		return redirect('/diag_cap/')
 
+
 	@bp.route('/diag_cap/')
 	@login_required
 	def diag_cap_wrapper():
@@ -1047,6 +1271,7 @@ def register_routes(app):
 			show_modules=False,
 			dashboard_url=dashboard_url,
 		)
+
 
 	@bp.route('/dashboard_alt', endpoint='dashboard_alt_redirect')
 	@login_required
@@ -1061,6 +1286,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_alt/{token}/')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/dashboard_alt/')
 	@login_required
 	def dashboard_alt_index():
@@ -1074,6 +1300,7 @@ def register_routes(app):
 			return redirect(f'/dashboard_alt/{token}/')
 		flash('No hay código asociado al usuario para mostrar el dashboard alternativo.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/dashboard_alt/<token>', methods=['GET'])
 	@bp.route('/dashboard_alt/<token>/', methods=['GET'])
@@ -1139,6 +1366,7 @@ def register_routes(app):
 		flash('No hay código asociado al usuario para mostrar el dashboard de Procedimientos.', 'warning')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/proc/<token>', methods=['GET'])
 	@bp.route('/proc/<token>/', methods=['GET'])
 	@login_required
@@ -1155,6 +1383,7 @@ def register_routes(app):
 			codcas=code,
 		)
 
+
 	@bp.route('/variables_ses/')
 	@login_required
 	def variables_ses_index():
@@ -1163,6 +1392,7 @@ def register_routes(app):
 			return redirect(url_for('main.variables_ses_menu', token=token))
 		flash('No hay código asociado al usuario.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/variables_ses/<token>', methods=['GET'])
 	@bp.route('/variables_ses/<token>/', methods=['GET'])
@@ -1196,6 +1426,7 @@ def register_routes(app):
 		flash(warning_msg, 'warning')
 		return redirect(url_for('main.index'))
 
+
 	@bp.route('/ce/', methods=['GET'])
 	@login_required
 	def ce_index():
@@ -1204,6 +1435,7 @@ def register_routes(app):
 			return redirect(url_for('main.ce_menu', token=token))
 		flash('No hay código asociado al usuario para mostrar el menú de Consulta Externa.', 'warning')
 		return redirect(url_for('main.index'))
+
 
 	@bp.route('/ce/<token>', methods=['GET'])
 	@bp.route('/ce/<token>/', methods=['GET'])
@@ -1228,6 +1460,7 @@ def register_routes(app):
 			odo_medical_url=odo_medical_url,
 		)
 
+
 	@bp.route('/dashboard_eme_prioridad_<prioridad>/<codcas>')
 	@login_required
 	def dashboard_eme_prioridad_redirect(prioridad, codcas):
@@ -1244,36 +1477,43 @@ def register_routes(app):
 			codcas=resolved_code,
 		)
 
+
 	@bp.route('/total_atenciones/')
 	@login_required
 	def total_atenciones_redirect():
 		return redirect_with('/total_atenciones', 'No hay código asociado al usuario para mostrar total_atenciones.')
+
 
 	@bp.route('/total_atendidos/')
 	@login_required
 	def total_atendidos_redirect():
 		return redirect_with('/total_atendidos', 'No hay código asociado al usuario para mostrar total_atendidos.')
 
+
 	@bp.route('/total_citados/')
 	@login_required
 	def total_citados_redirect():
 		return redirect_with('/total_citados', 'No hay código asociado al usuario para mostrar total_citados.')
+
 
 	@bp.route('/total_desercion/')
 	@login_required
 	def total_desercion_redirect():
 		return redirect_with('/total_desercion', 'No hay código asociado al usuario para mostrar total_desercion.')
 
+
 	@bp.route('/total_horas_efectivas/')
 	@login_required
 	def total_horas_efectivas_redirect():
 		return redirect_with('/total_horas_efectivas', 'No hay código asociado al usuario para mostrar total_horas_efectivas.')
 	
+
 	@bp.route('/total_horas_programadas/')
 	@login_required
 	def total_horas_programadas_redirect():
 		return redirect_with('/total_horas_programadas', 'No hay código asociado al usuario para mostrar total_horas_programadas.')
 	
+
 	@bp.route('/total_medicos/')
 	@login_required
 	def total_medicos_redirect():
@@ -1287,6 +1527,7 @@ def register_routes(app):
 		back_url = url_for('main.index')
 		return render_template('reportes_gerenciales.html', bi_url=bi_url, show_modules=False, back_url=back_url)
 
+
 	@bp.route('/reportes_gerenciales/historico/', endpoint='historico_ce')
 	@login_required
 	def historico_ce():
@@ -1296,6 +1537,7 @@ def register_routes(app):
 			back_url=back_url,
 			show_modules=False,
 		)
+
 
 	@bp.route('/tramas/')
 	@login_required

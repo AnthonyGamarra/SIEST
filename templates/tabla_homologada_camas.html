@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .homologada-wrapper {
+    padding: 2rem 1rem;
+  }
+
+  .homologada-card {
+    background: #ffffff;
+    border-radius: 1.25rem;
+    border: 1px solid #e4e9f2;
+    box-shadow: 0 20px 45px rgba(15, 43, 70, 0.08);
+    padding: 1.5rem;
+  }
+
+  .homologada-title {
+    color: #0f2b46;
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .homologada-subtitle {
+    color: #556070;
+    margin-bottom: 0;
+  }
+
+  .homologada-meta {
+    margin: 1rem 0 1.25rem;
+    color: #1c3554;
+    font-size: 0.95rem;
+  }
+
+  .homologada-table thead th {
+    background: #0f2b46;
+    color: #ffffff;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    white-space: nowrap;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .homologada-table td {
+    vertical-align: middle;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.84rem;
+  }
+
+  .homologada-actions {
+    margin-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .homologada-actions .pill-btn {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.78rem;
+    border-radius: 0.7rem;
+    box-shadow: none;
+    min-height: 2.1rem;
+    transform: none;
+    transition: none;
+  }
+
+  .homologada-actions .pill-btn::before,
+  .homologada-actions .pill-btn::after {
+    display: none;
+    content: none;
+  }
+
+  .homologada-actions .pill-btn:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .homologada-submit-btn {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.72rem;
+    min-height: 1.8rem;
+  }
+
+  .empty-state {
+    border: 1px dashed #c9d7eb;
+    border-radius: 0.9rem;
+    padding: 1rem;
+    background: #f7fbff;
+    color: #41556e;
+    margin-top: 1rem;
+  }
+</style>
+
+<div class="homologada-wrapper">
+  <div class="homologada-card">
+    <h1 class="homologada-title">Tabla homologada de camas</h1>
+    <p class="homologada-subtitle">
+      Relación de camas para el centro seleccionado.
+    </p>
+
+    <div class="homologada-meta">
+      <strong>Centro:</strong> {{ center_name or 'Sin descripción' }}
+      <span class="ms-2"><strong>Código:</strong> {{ codcas }}</span>
+      <span class="ms-2"><strong>Registros:</strong> {{ rows|length }}</span>
+    </div>
+
+    {% if rows %}
+    <form method="post" action="{{ url_for('main.clasificacion_camas') }}">
+      <input type="hidden" name="codcas" value="{{ codcas }}">
+      <div class="table-responsive" style="max-height: 52vh;">
+        <table class="table table-striped table-hover homologada-table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>COD_CENTRO</th>
+              <th>CENTRO</th>
+              <th>COD_AREA</th>
+              <th>AREA</th>
+              <th>COD_SERVICIO</th>
+              <th>SERVICIO</th>
+              <th>hadcod</th>
+              <th>COD CAMA</th>
+              <th>DESCRIPCION</th>
+              <th>ACCION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td>{{ row.cenasicod }}</td>
+              <td>{{ row.cenasides }}</td>
+              <td>{{ row.arehoscod }}</td>
+              <td>{{ row.arehosdes }}</td>
+              <td>{{ row.servhoscod }}</td>
+              <td>{{ row.servhosdes }}</td>
+              <td>{{ row.habcod }}</td>
+              <td>{{ row.camcod }}</td>
+              <td>{{ row.descripcion_clasificacion }}</td>
+              <td>
+                <input type="hidden" name="camcod" value="{{ row.camcod }}">
+                <input type="hidden" name="arehoscod" value="{{ row.arehoscod }}">
+                <input type="hidden" name="servhoscod" value="{{ row.servhoscod }}">
+                <input type="hidden" name="habcod" value="{{ row.habcod }}">
+                <select class="form-select form-select-sm" name="descripcion" required>
+                  <option value="" {% if not row.descripcion_clasificacion %}selected{% endif %}>Seleccionar
+                    clasificación</option>
+                  <option value="Fisico" {% if row.descripcion_clasificacion=='Fisico' %}selected{% endif %}>Físico
+                  </option>
+                  <option value="Virtual" {% if row.descripcion_clasificacion=='Virtual' %}selected{% endif %}>Virtual
+                  </option>
+                </select>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="homologada-actions">
+        <button type="submit" class="pill-btn pill-btn--primary homologada-submit-btn" style="width: 250px;">
+          Aplicar clasificación
+        </button>
+      </div>
+    </form>
+    {% else %}
+    <div class="empty-state">
+      No se encontraron registros activos para el centro seleccionado.
+    </div>
+    {% endif %}
+
+    <div class="homologada-actions">
+      <a class="pill-btn pill-btn--primary" href="{{ url_for('main.tabla_homologada_camas_csv', codcas=codcas) }}" style="display: none;">Descargar
+        CSV</a>
+      <a class="pill-btn pill-btn--ghost" href="{{ url_for('main.index', codcas=codcas) }}">Volver al inicio</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -268,6 +268,23 @@
             />
             <span>Tablas homologadas</span>
           </a>
+          
+              <!-- Módulo 4: Tablas homologadas Camas -->
+          {% set homologada_codcas = request.args.get('codcas') or selected_codcas|default('') or current_user.codcas|default('') %}
+          <a
+            href="{{ url_for('main.tabla_homologada_camas') }}{% if homologada_codcas %}?codcas={{ homologada_codcas }}{% endif %}"
+            class="module"
+          >
+            <img
+              src="{{ url_for('static', filename='surgery-room_17774465.png') }}"
+              alt="tabla_homologada_camas"
+            />
+            <span>Tablas homologadas Camas</span>
+          </a>
+
+         
+
+
 
           <!-- Módulo 5: reportes gerenciales -->
           {% if current_user.role in ['admin', 'admin_red', 'consulta'] %}
