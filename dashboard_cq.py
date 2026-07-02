@@ -701,7 +701,29 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms, cq.fec_oper)
                 cq.acto_med,
                 cq.fec_oper,
-                cq.duracion_sala,
+                CASE
+                    WHEN cq.duracion_sala = '00:00' THEN
+                        -- Calcula la diferencia entre el mayor y menor valor entre las 4 horas
+                        TO_CHAR(
+                            (
+                                GREATEST(
+                                    cq.hor_ini_anest::TIME,
+                                    cq.hor_fin_anest::TIME,
+                                    cq.hor_ini_operac::TIME,
+                                    cq.hor_fin_operac::TIME
+                                )
+                                -
+                                LEAST(
+                                    cq.hor_ini_anest::TIME,
+                                    cq.hor_fin_anest::TIME,
+                                    cq.hor_ini_operac::TIME,
+                                    cq.hor_fin_operac::TIME
+                                )
+                            ),
+                            'HH24:MI'
+                        )
+                    ELSE cq.duracion_sala
+                END AS duracion_sala,
                 cq.cod_tipo_programacion
             FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
             WHERE cq.cod_centro = '{codcas}'

@@ -351,7 +351,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         ),
         (
             "Reserva de Flujo Fraccionado",
-            ("92953","33211"),
+            ("93571"),
             "bi-activity",
             "#0064AF",
         ),
@@ -563,7 +563,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 LEFT JOIN dwsge.sgss_cmaho10 as ar ON ar.arehoscod = pc.area_hosp
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
-                  AND cod_actividad = '96'
+                  AND cod_actividad in ('96','91')
+                  AND pc.grupo_ocupacional ='01'
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
 
                 UNION ALL
@@ -582,7 +583,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 LEFT JOIN dwsge.sgss_cmaho10 as ar ON ar.arehoscod = pc.area_hosp
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
-                  AND cod_actividad = '96'
+                  AND cod_actividad in ('96','91')
+                  AND pc.grupo_ocupacional ='01'
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
 
                 UNION ALL
@@ -601,7 +603,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 LEFT JOIN dwsge.sgss_cmaho10 as ar ON ar.arehoscod = pc.area_hosp
                 WHERE cod_centro = '{codcas}'
                   AND codproced IN ({codes_str})
-                  AND cod_actividad = '96'
+                  AND cod_actividad in ('96','91')
+                  AND pc.grupo_ocupacional ='01'
                   AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
             )
             SELECT *

@@ -1255,7 +1255,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WHERE cod_centro = :codcas
                         AND cod_servicio ='F11'
                         AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('072','073','093','576','680','010','801','056')
+                        AND (
+                            ce.cod_subactividad in ('072','073','093','576','680','010','056')
+                            OR (ce.cod_subactividad = '801' AND ce.cod_centro IN ('392','401','382'))
+                        )
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1367,6 +1370,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND cod_servicio ='F11'
                         AND cod_actividad ='B1'
                         AND ce.cod_subactividad in ('801')
+                        AND ce.cod_centro IN ('392','401','382')
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'

@@ -543,7 +543,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_hosp/'):
                 CROSS JOIN parametros p
 
                 WHERE h.cod_centro = '{codcas}'
-                AND h.ubicacion = 'HOSPIT'
+                AND h.ubicacion = 'HOSPITALIZACION'
                 -- SOLO MES ACTUAL Y MES ANTERIOR
                 AND h.fec_ingr::date >= (
                     date_trunc('month', p.fecha_inicio::date)
