@@ -6,7 +6,7 @@ import joblib
 import pandas as pd
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify, Response
 from flask_login import login_user, logout_user, login_required, current_user
-from extensions import db
+from extensions import db, is_consulta_user
 from backend.models import User
 from sqlalchemy import func, text
 from sqlalchemy.orm import joinedload
@@ -516,8 +516,9 @@ def register_routes(app):
 	@bp.route('/clasificacion_camas', methods=['POST'])
 	@login_required
 	def clasificacion_camas():
-		if current_user.role != 'admin':
-			flash('Solo los administradores pueden gestionar la clasificación de camas.', 'danger')
+
+		from extensions import is_consulta_user
+		if is_consulta_user():
 			return redirect(url_for('main.index'))
 		
 		codcas = (request.form.get('codcas') or '').strip()
@@ -535,13 +536,9 @@ def register_routes(app):
 			flash('No se pudo leer la clasificación de todas las filas.', 'danger')
 			return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
 
-		if any(not descripcion.strip() for descripcion in descripciones):
-			flash('Debes seleccionar una clasificación para cada fila.', 'warning')
-			return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
-
 		try:
-			ClasificacionCamas.query.filter_by(codcas=codcas).delete(synchronize_session=False)
 			next_id = (db.session.query(func.coalesce(func.max(ClasificacionCamas.id), 0)).scalar() or 0) + 1
+			clasificaciones_guardadas = 0
 			for camcod, arehoscod, servhoscod, habcod, descripcion in zip(camcods, arehoscods, servhoscods, habcods, descripciones):
 				camcod = (camcod or '').strip()
 				arehoscod = (arehoscod or '').strip()
@@ -551,17 +548,33 @@ def register_routes(app):
 				if not (camcod and arehoscod and servhoscod and habcod and descripcion):
 					continue
 
-				clasificacion_cama = ClasificacionCamas(
-					id=next_id,
+				clasificacion_cama = ClasificacionCamas.query.filter_by(
 					codcas=codcas,
 					camcod=camcod,
 					arehoscod=arehoscod,
 					servhoscod=servhoscod,
-					habcod=habcod,
-					descripcion=descripcion
-				)
-				db.session.add(clasificacion_cama)
-				next_id += 1
+					habcod=habcod
+				).first()
+
+				if clasificacion_cama:
+					clasificacion_cama.descripcion = descripcion
+				else:
+					clasificacion_cama = ClasificacionCamas(
+						id=next_id,
+						codcas=codcas,
+						camcod=camcod,
+						arehoscod=arehoscod,
+						servhoscod=servhoscod,
+						habcod=habcod,
+						descripcion=descripcion
+					)
+					db.session.add(clasificacion_cama)
+					next_id += 1
+				clasificaciones_guardadas += 1
+
+			if clasificaciones_guardadas == 0:
+				flash('Selecciona al menos una clasificacion para guardar.', 'warning')
+				return redirect(url_for('main.tabla_homologada_camas', codcas=codcas))
 
 			db.session.commit()
 			flash('Clasificación de camas actualizada exitosamente.', 'success')
