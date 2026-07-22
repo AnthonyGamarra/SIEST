@@ -1,10 +1,13 @@
 """
 Modulo Ejecutivo de Patologias (solo admin).
 
-Pestana 1 - Analitica por patologia: KPIs y graficos ejecutivos leidos desde
-    las vistas materializadas de rollup (dssge.mv_ejec_pat_*). Consultas
-    parametrizadas y pequenas -> respuesta en milisegundos.
-Pestana 2 - Comorbilidad del paciente: buscador por documento que arma una
+Pestana 1 - Analitica por patologia: vista comparativa (todas las patologias)
+    y comorbilidad global, leidas desde las vistas materializadas de rollup
+    (dssge.mv_ejec_pat_*). Consultas parametrizadas y pequenas -> respuesta en
+    milisegundos.
+Pestana 2 - Detalle por patologia: filtro por patologia/red/centro con KPIs,
+    evolucion anual, servicios, sexo/edad y top diagnosticos.
+Pestana 3 - Comorbilidad del paciente: buscador por documento que arma una
     matriz patologia x anio con checks y el detalle de diagnosticos asociados,
     leido en vivo desde dssge.mv_ejec_base (indexado por doc_paciente).
 
@@ -33,6 +36,25 @@ EDAD_ORDER = ["0-11", "12-17", "18-29", "30-44", "45-59", "60+", "SIN DATO"]
 
 # Paleta accesible y consistente (claro). Colores por serie.
 PALETTE = ["#0064AF", "#00A3A3", "#F2A900", "#E4572E", "#7B61FF", "#2BB673", "#B23A48"]
+
+SEXO_ORDER = ["M", "F"]
+SEXO_LABELS = {"M": "Masculino", "F": "Femenino"}
+SEXO_COLORS = {"M": PALETTE[0], "F": PALETTE[3]}
+
+# Un color fijo por grupo etario (identidad, nunca por ranking). SIN DATO en
+# gris neutro porque no es una categoria demografica real.
+EDAD_COLORS = dict(zip(EDAD_ORDER[:-1], PALETTE[:6]))
+EDAD_COLORS["SIN DATO"] = "#9CA3AF"
+
+
+def _as_list(value):
+    """Normaliza el value de un dcc.Dropdown(multi=True): puede llegar como
+    None, un escalar (compatibilidad) o una lista."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [v for v in value if v not in (None, "")]
+    return [value]
 
 
 def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
@@ -113,6 +135,9 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             opts.append({"label": "Todos los anios" if a == "TODOS" else a, "value": a})
         return opts
 
+    def get_edad_options():
+        return [{"label": "Todos los grupos", "value": "TODOS"}] + [{"label": a, "value": a} for a in EDAD_ORDER]
+
     @lru_cache(maxsize=1)
     def load_red_centro_df():
         """Dimension red/centro (activos), cargada directamente y cacheada en
@@ -146,7 +171,8 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         base = [{"label": "Todos los centros", "value": "TODOS"}]
         if df.empty:
             return base
-        sub = df if not red_value or red_value == "TODAS" else df[df["redasiscod"] == red_value]
+        red_list = _as_list(red_value)
+        sub = df if not red_list or "TODAS" in red_list else df[df["redasiscod"].isin(red_list)]
         sub = sub.drop_duplicates(subset=["cenasicod"]).dropna(subset=["cenasicod"])
         return base + [
             {"label": row["cenasides"], "value": row["cenasicod"]}
@@ -215,58 +241,112 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             style={**card_style, "flex": flex, "minWidth": "320px"},
         )
 
-    # Rampa secuencial de un solo tono (magnitud), anclada al azul de marca:
-    # clara = pocos pacientes, oscura = muchos. Nunca arcoiris.
-    HEAT_SCALE = [[0, "#EAF3FF"], [0.25, "#B7D6F5"], [0.5, "#4C93D9"], [0.75, brand], [1, "#00385F"]]
+    GLOBAL_PATOLOGIAS = ["Raras", "Oncologico", "Renal"]
+    GLOBAL_COLORS = {"Oncologico": brand, "Renal": "#00A3A3", "Raras": "#F2A900"}
 
-    def _build_comorbilidad_fig():
-        """Matriz patologia x patologia: % de pacientes de la fila (patologia_a)
-        que TAMBIEN tienen la patologia de la columna (patologia_b). No es
-        simetrica (comorbilidad es direccional: "de los diabeticos, cuantos son
-        hipertensos" != "de los hipertensos, cuantos son diabeticos"). Usa todo
-        el historico del paciente (no se filtra por anio)."""
-        df, err = run_df(f"SELECT patologia_a, patologia_b, pacientes FROM {SCHEMA}.mv_ejec_comorbilidad")
+    def _build_pacientes_total_fig():
+        """Pacientes totales por patologia (Raras/Oncologico/Renal), historico
+        completo (anio='TODOS', igual criterio que el resto del modulo)."""
+        df, err = run_df(
+            f"SELECT patologia, pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
+            f"WHERE anio = 'TODOS' AND patologia = ANY(:pats)",
+            {"pats": GLOBAL_PATOLOGIAS},
+        )
         if err or df is None or df.empty:
             return empty_fig(err or "Sin datos")
 
-        pivot = df.pivot_table(index="patologia_a", columns="patologia_b", values="pacientes", fill_value=0)
-        comunes = [p for p in pivot.index if p in pivot.columns]
-        pivot = pivot.loc[comunes, comunes]
-        diag = pd.Series({p: pivot.loc[p, p] for p in comunes})
-        # orden por prevalencia (patologia mas frecuente arriba/izquierda)
-        order = diag.sort_values(ascending=False).index
-        pivot = pivot.loc[order, order]
-        diag = diag.loc[order]
-
-        pct = pivot.div(diag, axis=0) * 100
-        z = pct.values.astype(float)
-        np.fill_diagonal(z, np.nan)  # la diagonal es siempre 100%: no aporta, se oculta
-
-        labels = [_pat_label(p) for p in order]
+        d = df.copy()
+        d = d.sort_values("pacientes", ascending=False)
+        labels = [_pat_label(p) for p in d["patologia"]]
+        colors = [GLOBAL_COLORS.get(p, brand) for p in d["patologia"]]
         fig = go.Figure(
-            data=go.Heatmap(
-                z=z,
+            data=go.Bar(
                 x=labels,
-                y=labels,
-                colorscale=HEAT_SCALE,
-                zmin=0,
-                zmax=100,
-                xgap=2,
-                ygap=2,
-                customdata=pivot.values,
-                hovertemplate="De los pacientes con %{y}<br>%{z:.1f}% tambien tiene %{x}<br>(%{customdata:,} pacientes)<extra></extra>",
-                colorbar=dict(title="%", thickness=12, len=0.9),
+                y=d["pacientes"],
+                text=d["pacientes"],
+                texttemplate="%{text:,}",
+                textposition="outside",
+                marker_color=colors,
+                hovertemplate="%{x}<br>%{y:,} pacientes<extra></extra>",
             )
         )
-        fig.update_xaxes(tickangle=-35, automargin=True, showgrid=False)
-        fig.update_yaxes(automargin=True, showgrid=False)
-        fig.update_layout(
-            margin=dict(l=10, r=10, t=10, b=10),
-            height=440,
-            paper_bgcolor="white",
-            plot_bgcolor="white",
-            font=dict(family=font_family, size=11, color="#374151"),
+        fig.update_yaxes(title="Pacientes")
+        fig.update_xaxes(title=None)
+        style_fig(fig, height=340)
+        fig.update_layout(showlegend=False)
+        return fig
+
+    def _build_comorbilidad_global_fig():
+        """Evolucion anual de pacientes por patologia de alto costo
+        (Raras/Oncologico/Renal): una linea por patologia, con etiquetas de
+        dato visibles en cada punto."""
+        df, err = run_df(
+            f"SELECT patologia, anio, pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
+            f"WHERE anio <> 'TODOS' AND patologia = ANY(:pats) ORDER BY anio",
+            {"pats": GLOBAL_PATOLOGIAS},
         )
+        if err or df is None or df.empty:
+            return empty_fig(err or "Sin datos")
+
+        d = df.copy()
+        d["patologia_label"] = d["patologia"].map(_pat_label)
+        color_map = {_pat_label(k): v for k, v in GLOBAL_COLORS.items()}
+        fig = px.line(
+            d, x="anio", y="pacientes", color="patologia_label", markers=True,
+            color_discrete_map=color_map, text="pacientes",
+        )
+        fig.update_traces(
+            texttemplate="%{text:,}",
+            textposition="top center",
+            textfont=dict(size=11),
+            marker=dict(size=8),
+            line=dict(width=3),
+            hovertemplate="%{x}<br>%{fullData.name}: %{y:,} pacientes<extra></extra>",
+        )
+        fig.update_yaxes(title="Pacientes")
+        fig.update_xaxes(title=None)
+        style_fig(fig, height=340)
+        fig.update_layout(legend_title_text=None)
+        return fig
+
+    def _build_comorbilidad_grupo_fig(patologia_global, patron_comorbilidad, color=brand):
+        """% de pacientes de la patologia global (Oncologico/Renal) que TAMBIEN
+        tienen cada una de las comorbilidades curadas de su grupo (columna
+        patron de dwsge.mt_patologia). Historico completo, sin filtro de anio,
+        igual criterio que la matriz de comorbilidad general."""
+        df, err = run_df(
+            f"""SELECT c.patologia_b, c.pacientes
+                FROM {SCHEMA}.mv_ejec_comorbilidad c
+                JOIN dwsge.mt_patologia p ON p.patologia = c.patologia_b
+                WHERE c.patologia_a = :pat AND p.patron = :patron
+                ORDER BY c.pacientes DESC""",
+            {"pat": patologia_global, "patron": patron_comorbilidad},
+        )
+        if err or df is None or df.empty:
+            return empty_fig(err or "Sin datos")
+
+        total_df, _ = run_df(
+            f"SELECT pacientes FROM {SCHEMA}.mv_ejec_comorbilidad WHERE patologia_a = :pat AND patologia_b = :pat",
+            {"pat": patologia_global},
+        )
+        total = int(total_df["pacientes"].iloc[0]) if total_df is not None and not total_df.empty else 0
+        if not total:
+            return empty_fig("Sin pacientes para esta patologia")
+
+        d = df.copy()
+        d["pct"] = d["pacientes"] / total * 100
+        d = d.sort_values("pct")
+        fig = px.bar(d, x="pct", y="patologia_b", orientation="h", text="pacientes")
+        fig.update_traces(
+            marker_color=color,
+            texttemplate="%{text:,} (%{x:.1f}%)",
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="%{y}<br>%{x:.1f}% (%{text:,} pacientes)<extra></extra>",
+        )
+        fig.update_yaxes(title=None)
+        fig.update_xaxes(title="% de pacientes", range=[0, max(d["pct"].max() * 1.25, 10)])
+        style_fig(fig, height=max(320, 34 * len(d)))
         return fig
 
     # =====================================================================
@@ -279,7 +359,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     [
                         html.I(className="bi bi-clipboard2-pulse", style={"fontSize": "30px", "color": brand}),
                         html.H2(
-                            "Modulo Ejecutivo de Patologias",
+                            "Perfil de Comorbilidades Asociadas al Paciente",
                             style={"color": brand, "fontFamily": font_family, "fontSize": "24px", "fontWeight": 800, "margin": 0},
                         ),
                     ],
@@ -304,16 +384,14 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
 
     def build_tab1():
         dropdown_style = {"width": "100%", "fontFamily": font_family, "fontSize": "13px"}
-        pat_opts = get_patologia_options()
         anio_opts = get_anio_options()
-        default_pat = pat_opts[0]["value"] if pat_opts else None
 
         shared_controls = html.Div(
             [
                 html.Div(
                     [
                         html.Small("Anio", style={"fontWeight": 600, "color": muted}),
-                        dcc.Dropdown(id="ejec-anio", options=anio_opts, value="TODOS", clearable=False, style=dropdown_style),
+                        dcc.Dropdown(id="ejec-anio", options=anio_opts, value=["TODOS"], multi=True, clearable=True, style=dropdown_style),
                     ],
                     style={"flex": "1 1 180px", "display": "flex", "flexDirection": "column", "gap": "4px"},
                 ),
@@ -326,63 +404,51 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 shared_controls,
                 html.Div(id="ejec-comp-feedback"),
                 html.Div(id="ejec-comp-kpis", style={"display": "flex", "gap": "14px", "flexWrap": "wrap"}),
+                html.Div(
+                    [
+                        graph_card(
+                            "Pacientes por patologia de alto costo: Raras / Oncologico / Renal",
+                            "ejec-fig-comorbilidad-total",
+                            height=340,
+                            subtitle="Total de pacientes por patologia (2019-2025)",
+                            flex="1 1 420px",
+                            figure=_build_pacientes_total_fig(),
+                        ),
+                        graph_card(
+                            "Evolucion anual · patologias de alto costo (Raras / Oncologico / Renal)",
+                            "ejec-fig-comorbilidad",
+                            height=340,
+                            subtitle="Pacientes por anio y patologia (2019-2025)",
+                            flex="2 1 560px",
+                            figure=_build_comorbilidad_global_fig(),
+                        ),
+                    ],
+                    style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
+                ),
                 graph_card(
-                    "Matriz de comorbilidad (patologia x patologia)",
-                    "ejec-fig-comorbilidad",
-                    height=440,
-                    subtitle="% de pacientes de la fila que tambien presentan la patologia de la columna · historico completo",
+                    "Ranking por red · patologias de alto costo",
+                    "ejec-fig-ranking-red",
+                    height=320,
+                    subtitle="Pacientes de Raras + Oncologico + Renal por red asistencial, distinguidos por patologia · top 15",
                     flex="1 1 100%",
-                    figure=_build_comorbilidad_fig(),
-                ),
-                graph_card("Ranking de pacientes unicos por patologia", "ejec-fig-ranking", height=340, flex="1 1 100%"),
-            ],
-            style={"display": "flex", "flexDirection": "column", "gap": "14px"},
-        )
-
-        detalle_controls = html.Div(
-            [
-                html.Div(
-                    [
-                        html.Small("Patologia", style={"fontWeight": 600, "color": muted}),
-                        dcc.Dropdown(id="ejec-pat", options=pat_opts, value=default_pat, clearable=False, style=dropdown_style),
-                    ],
-                    style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
                 ),
                 html.Div(
                     [
-                        html.Small("Red asistencial", style={"fontWeight": 600, "color": muted}),
-                        dcc.Dropdown(id="ejec-red-detalle", options=get_red_detalle_options(), value="TODAS", clearable=False, style=dropdown_style),
-                    ],
-                    style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
-                ),
-                html.Div(
-                    [
-                        html.Small("Centro asistencial", style={"fontWeight": 600, "color": muted}),
-                        dcc.Dropdown(id="ejec-centro-detalle", options=get_centro_detalle_options(), value="TODOS", clearable=False, style=dropdown_style),
-                    ],
-                    style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
-                ),
-            ],
-            style={**card_style, "display": "flex", "gap": "14px", "flexWrap": "wrap", "alignItems": "flex-end", "padding": "14px 16px"},
-        )
-
-        detalle = html.Div(
-            [
-                section_title("Detalle por patologia", "bi-search-heart"),
-                detalle_controls,
-                html.Div(id="ejec-feedback"),
-                html.Div(id="ejec-kpis", style={"display": "flex", "gap": "14px", "flexWrap": "wrap"}),
-                graph_card("Evolucion anual", "ejec-fig-tendencia", height=340, flex="1 1 100%"),
-                graph_card("Pacientes por servicio", "ejec-fig-servicio", height=380, flex="1 1 100%"),
-                html.Div(
-                    [
-                        graph_card("Piramide poblacional (sexo x edad)", "ejec-fig-piramide"),
-                        html.Div(
-                            [
-                                html.Div("Top diagnosticos (CIE-10)", style={"fontWeight": 700, "color": brand, "marginBottom": "8px", "fontSize": "15px"}),
-                                dcc.Loading(html.Div(id="ejec-tabla-diag"), type="default"),
-                            ],
-                            style={**card_style, "flex": "1 1 380px", "minWidth": "320px"},
+                        graph_card(
+                            "¿Que otras enfermedades tienen los pacientes de Oncologico? (alto costo)",
+                            "ejec-fig-comorb-oncologico",
+                            height=max(320, 34 * 14),
+                            subtitle="% de pacientes con Oncologico que en algun momento tambien tuvo cada diagnostico (2019 - 2025).",
+                            flex="1 1 480px",
+                            figure=_build_comorbilidad_grupo_fig("Oncologico", "Coomorbilidad Oncología", brand),
+                        ),
+                        graph_card(
+                            "¿Que otras enfermedades tienen los pacientes de Renal? (alto costo)",
+                            "ejec-fig-comorb-renal",
+                            height=max(320, 34 * 14),
+                            subtitle="% de pacientes con Renal que en algun momento tambien tuvo cada diagnostico (2019 - 2025).",
+                            flex="1 1 480px",
+                            figure=_build_comorbilidad_grupo_fig("Renal", "Coomorbilidad Renal", "#00A3A3"),
                         ),
                     ],
                     style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
@@ -395,10 +461,87 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             [
                 section_title("Vista comparativa (todas las patologias)", "bi-grid-3x3-gap-fill"),
                 comparativa,
-                html.Hr(style={"margin": "22px 0", "borderColor": border}),
-                detalle,
             ],
             style={"display": "flex", "flexDirection": "column", "gap": "10px"},
+        )
+
+    def build_tab_detalle():
+        dropdown_style = {"width": "100%", "fontFamily": font_family, "fontSize": "13px"}
+        pat_opts = get_patologia_options()
+        default_pat = pat_opts[0]["value"] if pat_opts else None
+
+        detalle_controls = html.Div(
+            [
+                html.Div(
+                    [
+                        html.Small("Anio", style={"fontWeight": 600, "color": muted}),
+                        dcc.Dropdown(id="ejec-anio-detalle", options=get_anio_options(), value=["TODOS"], multi=True, clearable=True, style=dropdown_style),
+                    ],
+                    style={"flex": "1 1 180px", "display": "flex", "flexDirection": "column", "gap": "4px"},
+                ),
+                html.Div(
+                    [
+                        html.Small("Patologia", style={"fontWeight": 600, "color": muted}),
+                        dcc.Dropdown(id="ejec-pat", options=pat_opts, value=[default_pat] if default_pat else [], multi=True, clearable=True, style=dropdown_style),
+                    ],
+                    style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
+                ),
+                html.Div(
+                    [
+                        html.Small("Grupo etario", style={"fontWeight": 600, "color": muted}),
+                        dcc.Dropdown(id="ejec-edad-detalle", options=get_edad_options(), value=["TODOS"], multi=True, clearable=True, style=dropdown_style),
+                    ],
+                    style={"flex": "2 1 220px", "display": "flex", "flexDirection": "column", "gap": "4px"},
+                ),
+                html.Div(
+                    [
+                        html.Small("Red asistencial", style={"fontWeight": 600, "color": muted}),
+                        dcc.Dropdown(id="ejec-red-detalle", options=get_red_detalle_options(), value=["TODAS"], multi=True, clearable=True, style=dropdown_style),
+                    ],
+                    style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
+                ),
+                html.Div(
+                    [
+                        html.Small("Centro asistencial", style={"fontWeight": 600, "color": muted}),
+                        dcc.Dropdown(id="ejec-centro-detalle", options=get_centro_detalle_options(), value=["TODOS"], multi=True, clearable=True, style=dropdown_style),
+                    ],
+                    style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
+                ),
+            ],
+            style={**card_style, "display": "flex", "gap": "14px", "flexWrap": "wrap", "alignItems": "flex-end", "padding": "14px 16px"},
+        )
+
+        return html.Div(
+            [
+                section_title("Detalle por patologia", "bi-search-heart"),
+                detalle_controls,
+                html.Div(id="ejec-feedback"),
+                html.Div(id="ejec-kpis", style={"display": "flex", "gap": "14px", "flexWrap": "wrap"}),
+                graph_card("Evolucion anual", "ejec-fig-tendencia", height=340, flex="1 1 100%"),
+                graph_card("Pacientes por servicio", "ejec-fig-servicio", height=380, flex="1 1 100%"),
+                graph_card(
+                    "Ranking por centro",
+                    "ejec-fig-centro",
+                    height=380,
+                    subtitle="Top 15 centros asistenciales · ignora el filtro de centro (para poder rankearlos) y de grupo etario",
+                    flex="1 1 100%",
+                ),
+                html.Div(
+                    [
+                        graph_card("Distribucion por sexo", "ejec-fig-sexo", height=320, flex="1 1 260px"),
+                        graph_card("Distribucion por grupo etario", "ejec-fig-edad", height=320, flex="1 1 300px"),
+                        html.Div(
+                            [
+                                html.Div("Top diagnosticos (CIE-10)", style={"fontWeight": 700, "color": brand, "marginBottom": "8px", "fontSize": "15px"}),
+                                dcc.Loading(html.Div(id="ejec-tabla-diag"), type="default"),
+                            ],
+                            style={**card_style, "flex": "1 1 380px", "minWidth": "320px"},
+                        ),
+                    ],
+                    style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
+                ),
+            ],
+            style={"display": "flex", "flexDirection": "column", "gap": "14px"},
         )
 
     def build_tab2():
@@ -464,7 +607,8 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 dcc.Tabs(
                     id="ejec-tabs", value="tab1",
                     children=[
-                        dcc.Tab(label="Analitica por patologia", value="tab1", children=[html.Div(build_tab1(), style={"paddingTop": "16px"})]),
+                        dcc.Tab(label="Analítica por patologia de alto costo", value="tab1", children=[html.Div(build_tab1(), style={"paddingTop": "16px"})]),
+                        dcc.Tab(label="Detalle por patologia", value="tab-detalle", children=[html.Div(build_tab_detalle(), style={"paddingTop": "16px"})]),
                         dcc.Tab(label="Comorbilidad del paciente", value="tab2", children=[html.Div(build_tab2(), style={"paddingTop": "16px"})]),
                     ],
                 ),
@@ -494,19 +638,20 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     @dash_app.callback(
         Output("ejec-comp-kpis", "children"),
         Output("ejec-comp-feedback", "children"),
-        Output("ejec-fig-ranking", "figure"),
+        Output("ejec-fig-ranking-red", "figure"),
         Input("ejec-anio", "value"),
     )
     def update_comparativa(anio):
-        if not anio:
+        anio_list = _as_list(anio)
+        if not anio_list:
             return [], None, empty_fig()
 
-        # --- Ranking / total general (mv_ejec_pat_resumen) ---
+        # --- Total general / patologias activas (mv_ejec_pat_resumen) ---
         rank_df, err = run_df(
-            f"SELECT patologia, pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
-            f"WHERE anio = :anio AND patologia NOT IN ('TOTAL GENERAL', 'TOTAL CATALOGADO', 'SIN PATOLOGIA') "
-            f"ORDER BY pacientes DESC",
-            {"anio": anio},
+            f"SELECT patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
+            f"WHERE anio = ANY(:anio) AND patologia NOT IN ('TOTAL GENERAL', 'TOTAL CATALOGADO', 'SIN PATOLOGIA') "
+            f"GROUP BY patologia ORDER BY pacientes DESC",
+            {"anio": anio_list},
         )
         if err:
             return [], dbc.Alert(err, color="warning"), empty_fig(err)
@@ -514,30 +659,24 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             return [], dbc.Alert("Sin datos para el filtro seleccionado.", color="info"), empty_fig()
 
         total_df, _ = run_df(
-            f"SELECT pacientes FROM {SCHEMA}.mv_ejec_pat_resumen WHERE anio = :anio AND patologia = 'TOTAL CATALOGADO'",
-            {"anio": anio},
+            f"SELECT COALESCE(SUM(pacientes),0) AS pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
+            f"WHERE anio = ANY(:anio) AND patologia = ANY(:pats)",
+            {"anio": anio_list, "pats": GLOBAL_PATOLOGIAS},
         )
         pac_total = int(total_df["pacientes"].iloc[0]) if total_df is not None and not total_df.empty else 0
 
         rd = rank_df.copy()
-        rd["label"] = rd["patologia"].map(_pat_label)
-        rd_sorted = rd.sort_values("pacientes")
-        fig_rank = px.bar(rd_sorted, x="pacientes", y="label", orientation="h", text="pacientes")
-        fig_rank.update_traces(marker_color=brand, texttemplate="%{text:,}", textposition="outside", cliponaxis=False)
-        fig_rank.update_yaxes(title=None)
-        fig_rank.update_xaxes(title="Pacientes")
-        style_fig(fig_rank, height=340)
 
         # --- KPIs: hotspots (top-1 por red y por centro = combinacion a identificar rapido) ---
         kpis = [
-            kpi_card("Pacientes con patologia catalogada", _fmt(pac_total), "bi-people-fill"),
+            kpi_card("Pacientes · Alto costo (Raras + Oncologico + Renal)", _fmt(pac_total), "bi-people-fill"),
             kpi_card("Patologias activas", _fmt(len(rd)), "bi-clipboard2-pulse", "#00A3A3"),
         ]
         top_red_df, _ = run_df(
-            f"SELECT patologia, redasisdes, pacientes FROM {SCHEMA}.mv_ejec_pat_red "
-            f"WHERE anio = :anio AND {EXCLUDE_COMPARATIVA_SQL} AND redasisdes IS NOT NULL "
-            f"ORDER BY pacientes DESC LIMIT 1",
-            {"anio": anio},
+            f"SELECT patologia, redasisdes, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_red "
+            f"WHERE anio = ANY(:anio) AND {EXCLUDE_COMPARATIVA_SQL} AND redasisdes IS NOT NULL "
+            f"GROUP BY patologia, redasisdes ORDER BY pacientes DESC LIMIT 1",
+            {"anio": anio_list},
         )
         if top_red_df is not None and not top_red_df.empty:
             top_red = top_red_df.iloc[0]
@@ -548,10 +687,10 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 subtitle=f"{_pat_label(top_red['patologia'])} en {top_red['redasisdes']}",
             ))
         top_centro_df, _ = run_df(
-            f"SELECT patologia, cenasides, pacientes FROM {SCHEMA}.mv_ejec_pat_centro "
-            f"WHERE anio = :anio AND {EXCLUDE_COMPARATIVA_SQL} AND cenasides IS NOT NULL "
-            f"ORDER BY pacientes DESC LIMIT 1",
-            {"anio": anio},
+            f"SELECT patologia, cenasides, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_centro "
+            f"WHERE anio = ANY(:anio) AND {EXCLUDE_COMPARATIVA_SQL} AND cenasides IS NOT NULL "
+            f"GROUP BY patologia, cenasides ORDER BY pacientes DESC LIMIT 1",
+            {"anio": anio_list},
         )
         if top_centro_df is not None and not top_centro_df.empty:
             top_centro = top_centro_df.iloc[0]
@@ -562,7 +701,39 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 subtitle=f"{_pat_label(top_centro['patologia'])} en {top_centro['cenasides']}",
             ))
 
-        return kpis, None, fig_rank
+        # --- Ranking por red: Raras + Oncologico + Renal, distinguidas por color ---
+        red_df, _ = run_df(
+            f"SELECT redasisdes, patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_red "
+            f"WHERE anio = ANY(:anio) AND patologia = ANY(:pats) AND redasisdes IS NOT NULL "
+            f"GROUP BY redasisdes, patologia",
+            {"anio": anio_list, "pats": GLOBAL_PATOLOGIAS},
+        )
+        if red_df is None or red_df.empty:
+            fig_ranking_red = empty_fig()
+        else:
+            rdf = red_df.copy()
+            rdf["patologia_label"] = rdf["patologia"].map(_pat_label)
+            totales_red = rdf.groupby("redasisdes")["pacientes"].sum().sort_values(ascending=False)
+            top_redes = totales_red.head(15).index.tolist()
+            rdf = rdf[rdf["redasisdes"].isin(top_redes)]
+            color_map = {_pat_label(k): v for k, v in GLOBAL_COLORS.items()}
+            fig_ranking_red = px.bar(
+                rdf, x="pacientes", y="redasisdes", color="patologia_label", orientation="h",
+                color_discrete_map=color_map, text="pacientes",
+            )
+            fig_ranking_red.update_traces(
+                texttemplate="%{text:,}",
+                textposition="inside",
+                insidetextanchor="middle",
+                textfont=dict(color="white", size=13),
+                hovertemplate="%{y}<br>%{fullData.name}: %{x:,} pacientes<extra></extra>",
+            )
+            fig_ranking_red.update_layout(barmode="stack", legend_title_text=None)
+            fig_ranking_red.update_yaxes(title=None, categoryorder="total ascending")
+            fig_ranking_red.update_xaxes(title="Pacientes")
+            style_fig(fig_ranking_red, height=max(320, 34 * len(top_redes)))
+
+        return kpis, None, fig_ranking_red
 
     @dash_app.callback(
         Output("ejec-centro-detalle", "options"),
@@ -570,74 +741,87 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         Input("ejec-red-detalle", "value"),
     )
     def sync_centro_detalle(red_value):
-        return get_centro_detalle_options(red_value), "TODOS"
+        return get_centro_detalle_options(red_value), ["TODOS"]
 
     @dash_app.callback(
         Output("ejec-kpis", "children"),
         Output("ejec-feedback", "children"),
         Output("ejec-fig-tendencia", "figure"),
         Output("ejec-fig-servicio", "figure"),
-        Output("ejec-fig-piramide", "figure"),
+        Output("ejec-fig-centro", "figure"),
+        Output("ejec-fig-sexo", "figure"),
+        Output("ejec-fig-edad", "figure"),
         Output("ejec-tabla-diag", "children"),
         Input("ejec-pat", "value"),
-        Input("ejec-anio", "value"),
+        Input("ejec-anio-detalle", "value"),
         Input("ejec-red-detalle", "value"),
         Input("ejec-centro-detalle", "value"),
+        Input("ejec-edad-detalle", "value"),
     )
-    def update_detalle(pat, anio, red_cod, centro_cod):
-        if not pat or not anio:
-            return [], None, empty_fig(), empty_fig(), empty_fig(), None
-        red_cod = red_cod or "TODAS"
-        centro_cod = centro_cod or "TODOS"
-        filtro_params = {"pat": pat, "anio": anio, "red": red_cod, "centro": centro_cod}
-        filtro_where = "patologia = :pat AND anio = :anio AND redasiscod = :red AND cod_centro = :centro"
+    def update_detalle(pat, anio, red_cod, centro_cod, edad_grupo):
+        pat_list = _as_list(pat)
+        anio_list = _as_list(anio)
+        if not pat_list or not anio_list:
+            return [], None, empty_fig(), empty_fig(), empty_fig(), empty_fig(), empty_fig(), None
+        red_list = _as_list(red_cod) or ["TODAS"]
+        centro_list = _as_list(centro_cod) or ["TODOS"]
+        edad_list = _as_list(edad_grupo) or ["TODOS"]
+        base_params = {"pat": pat_list, "anio": anio_list, "red": red_list, "centro": centro_list}
+        base_where = "patologia = ANY(:pat) AND anio = ANY(:anio) AND redasiscod = ANY(:red) AND cod_centro = ANY(:centro)"
+        filtro_params = {**base_params, "edad": edad_list}
+        filtro_where = f"{base_where} AND grupo_edad = ANY(:edad)"
 
         res_df, err = run_df(
-            f"SELECT pacientes, registros FROM {SCHEMA}.mv_ejec_pat_detalle WHERE {filtro_where}",
+            f"SELECT COALESCE(SUM(pacientes),0) AS pacientes FROM {SCHEMA}.mv_ejec_pat_detalle WHERE {filtro_where}",
             filtro_params,
         )
         if err:
-            return [], dbc.Alert(err, color="warning"), empty_fig(err), empty_fig(), empty_fig(), None
+            return [], dbc.Alert(err, color="warning"), empty_fig(err), empty_fig(), empty_fig(), empty_fig(), empty_fig(), None
 
-        pac_pat = reg_pat = 0
+        pac_pat = 0
         if res_df is not None and not res_df.empty:
             pac_pat = res_df["pacientes"].iloc[0]
-            reg_pat = res_df["registros"].iloc[0]
 
         diag_count_df, _ = run_df(
-            f"SELECT COUNT(*) AS n FROM {SCHEMA}.mv_ejec_pat_diag WHERE {filtro_where}",
+            f"SELECT COUNT(DISTINCT cod_diagnostico) AS n FROM {SCHEMA}.mv_ejec_pat_diag WHERE {filtro_where}",
             filtro_params,
         )
         n_diag = int(diag_count_df["n"].iloc[0]) if diag_count_df is not None and not diag_count_df.empty else 0
-        pat_label = _pat_label(pat)
+        pat_label = _pat_label(pat_list[0]) if len(pat_list) == 1 else f"{len(pat_list)} patologias"
         kpis = [
             kpi_card(f"Pacientes · {pat_label}", _fmt(pac_pat), "bi-person-badge", "#00A3A3"),
-            kpi_card(f"Registros · {pat_label}", _fmt(reg_pat), "bi-clipboard-data", "#F2A900"),
             kpi_card("Diagnosticos distintos", _fmt(n_diag), "bi-diagram-3", "#7B61FF"),
         ]
 
         # Evolucion anual (ignora el filtro de anio: se ve todo el historico;
-        # respeta patologia/red/centro)
+        # respeta patologia/red/centro/grupo_edad). Una linea por patologia
+        # seleccionada.
         trend_df, _ = run_df(
-            f"SELECT anio, pacientes FROM {SCHEMA}.mv_ejec_pat_detalle "
-            f"WHERE patologia = :pat AND anio <> 'TODOS' AND redasiscod = :red AND cod_centro = :centro "
-            f"ORDER BY anio",
-            {"pat": pat, "red": red_cod, "centro": centro_cod},
+            f"SELECT anio, patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_detalle "
+            f"WHERE patologia = ANY(:pat) AND anio <> 'TODOS' AND redasiscod = ANY(:red) "
+            f"AND cod_centro = ANY(:centro) AND grupo_edad = ANY(:edad) "
+            f"GROUP BY anio, patologia ORDER BY anio",
+            {"pat": pat_list, "red": red_list, "centro": centro_list, "edad": edad_list},
         )
         if trend_df is None or trend_df.empty:
             fig_trend = empty_fig()
         else:
-            fig_trend = px.line(trend_df, x="anio", y="pacientes", markers=True)
-            fig_trend.update_traces(line_color=brand, marker=dict(size=8))
+            trend_df = trend_df.copy()
+            trend_df["patologia"] = trend_df["patologia"].map(_pat_label)
+            if len(pat_list) > 1:
+                fig_trend = px.line(trend_df, x="anio", y="pacientes", color="patologia", markers=True, color_discrete_sequence=PALETTE)
+            else:
+                fig_trend = px.line(trend_df, x="anio", y="pacientes", markers=True)
+                fig_trend.update_traces(line_color=brand, marker=dict(size=8))
             fig_trend.update_yaxes(title="Pacientes")
             fig_trend.update_xaxes(title=None)
             style_fig(fig_trend, height=340)
 
         # Servicios
         serv_df, _ = run_df(
-            f"SELECT servhosdes, pacientes FROM {SCHEMA}.mv_ejec_pat_servicio "
+            f"SELECT servhosdes, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_servicio "
             f"WHERE {filtro_where} AND servhosdes IS NOT NULL "
-            f"ORDER BY pacientes DESC LIMIT 15",
+            f"GROUP BY servhosdes ORDER BY pacientes DESC LIMIT 15",
             filtro_params,
         )
         if serv_df is None or serv_df.empty:
@@ -650,49 +834,118 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             fig_serv.update_xaxes(title="Pacientes")
             style_fig(fig_serv, height=380)
 
-        # Piramide
-        pir_df, _ = run_df(
-            f"SELECT sexo, grupo_edad, pacientes FROM {SCHEMA}.mv_ejec_pat_sexo_edad WHERE {filtro_where}",
+        # Ranking por centro (ignora el filtro de centro, para poder
+        # rankearlos entre si, y el de grupo_edad, que mv_ejec_pat_centro no
+        # tiene; respeta patologia/anio/red). Top 15, apilado por patologia
+        # cuando hay mas de una seleccionada.
+        centro_df, _ = run_df(
+            f"SELECT cenasides, patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_centro "
+            f"WHERE patologia = ANY(:pat) AND anio = ANY(:anio) AND redasiscod = ANY(:red) "
+            f"AND cenasides IS NOT NULL "
+            f"GROUP BY cenasides, patologia",
+            {"pat": pat_list, "anio": anio_list, "red": red_list},
+        )
+        if centro_df is None or centro_df.empty:
+            fig_centro = empty_fig()
+        else:
+            cdf = centro_df.copy()
+            cdf["patologia_label"] = cdf["patologia"].map(_pat_label)
+            totales_centro = cdf.groupby("cenasides")["pacientes"].sum().sort_values(ascending=False)
+            top_centros = totales_centro.head(15).index.tolist()
+            cdf = cdf[cdf["cenasides"].isin(top_centros)]
+            if len(pat_list) > 1:
+                fig_centro = px.bar(
+                    cdf, x="pacientes", y="cenasides", color="patologia_label", orientation="h",
+                    color_discrete_sequence=PALETTE, text="pacientes",
+                )
+                fig_centro.update_traces(
+                    texttemplate="%{text:,}", textposition="inside", insidetextanchor="middle",
+                    textfont=dict(color="white", size=12),
+                    hovertemplate="%{y}<br>%{fullData.name}: %{x:,} pacientes<extra></extra>",
+                )
+                fig_centro.update_layout(barmode="stack", legend_title_text=None)
+            else:
+                fig_centro = px.bar(cdf, x="pacientes", y="cenasides", orientation="h", text="pacientes")
+                fig_centro.update_traces(
+                    marker_color=brand, texttemplate="%{text:,}", textposition="outside", cliponaxis=False,
+                    hovertemplate="%{y}<br>%{x:,} pacientes<extra></extra>",
+                )
+            fig_centro.update_yaxes(title=None, categoryorder="total ascending")
+            fig_centro.update_xaxes(title="Pacientes")
+            style_fig(fig_centro, height=max(320, 34 * len(top_centros)))
+
+        # Sexo: respeta el grupo etario seleccionado (si es "Todos", es el
+        # marginal exacto de siempre; si son grupos especificos, es el cruce
+        # sexo x grupo_edad de esos grupos).
+        sexo_df, _ = run_df(
+            f"SELECT sexo, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_sexo_edad "
+            f"WHERE {filtro_where} AND sexo <> 'TODOS' "
+            f"GROUP BY sexo",
             filtro_params,
         )
-        fig_pir = _build_piramide(pir_df)
+        fig_sexo = _build_pie(sexo_df, "sexo", SEXO_ORDER, SEXO_COLORS, label_map=SEXO_LABELS)
+
+        # Grupo etario: ignora el filtro de grupo etario (se ve la composicion
+        # completa, igual que la evolucion anual ignora el filtro de anio);
+        # respeta patologia/anio/red/centro. Marginal exacto (no la suma de
+        # las celdas cruzadas, que sobrecontaria pacientes que cambiaron de
+        # grupo_edad entre anios).
+        edad_df, _ = run_df(
+            f"SELECT grupo_edad, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_sexo_edad "
+            f"WHERE {base_where} AND sexo = 'TODOS' AND grupo_edad <> 'TODOS' "
+            f"GROUP BY grupo_edad",
+            base_params,
+        )
+        fig_edad = _build_pie(edad_df, "grupo_edad", EDAD_ORDER, EDAD_COLORS)
 
         # Tabla diagnosticos
         diag_df, _ = run_df(
-            f"SELECT cod_diagnostico, diagdes, tipodiagnom, pacientes, registros "
+            f"SELECT cod_diagnostico, diagdes, tipodiagnom, SUM(pacientes) AS pacientes, SUM(registros) AS registros "
             f"FROM {SCHEMA}.mv_ejec_pat_diag WHERE {filtro_where} "
-            f"ORDER BY pacientes DESC LIMIT 15",
+            f"GROUP BY cod_diagnostico, diagdes, tipodiagnom "
+            f"ORDER BY pacientes DESC",
             filtro_params,
         )
         tabla = _build_diag_table(diag_df)
 
-        return kpis, None, fig_trend, fig_serv, fig_pir, tabla
+        return kpis, None, fig_trend, fig_serv, fig_centro, fig_sexo, fig_edad, tabla
 
-    def _build_piramide(pir_df):
-        if pir_df is None or pir_df.empty:
+    def _build_pie(df, cat_col, order, color_map, label_map=None, height=320):
+        if df is None or df.empty:
             return empty_fig()
-        p = pir_df.copy()
-        p["grupo_edad"] = pd.Categorical(p["grupo_edad"], categories=EDAD_ORDER, ordered=True)
-        piv = p.pivot_table(index="grupo_edad", columns="sexo", values="pacientes", aggfunc="sum", fill_value=0, observed=False).reindex(EDAD_ORDER).fillna(0)
-        m = piv["M"] if "M" in piv.columns else pd.Series(0, index=piv.index)
-        f = piv["F"] if "F" in piv.columns else pd.Series(0, index=piv.index)
-        fig = go.Figure()
-        fig.add_bar(y=piv.index, x=-m.values, name="Masculino", orientation="h", marker_color=brand,
-                    hovertemplate="Masculino: %{customdata:,}<extra></extra>", customdata=m.values)
-        fig.add_bar(y=piv.index, x=f.values, name="Femenino", orientation="h", marker_color="#E4572E",
-                    hovertemplate="Femenino: %{x:,}<extra></extra>")
-        maxv = max(m.max(), f.max(), 1)
-        ticks = [-maxv, -maxv / 2, 0, maxv / 2, maxv]
-        fig.update_layout(barmode="relative")
-        fig.update_xaxes(tickvals=ticks, ticktext=[_fmt_abs(t) for t in ticks], title="Pacientes")
-        fig.update_yaxes(title=None)
-        style_fig(fig, height=340)
+        d = df.copy()
+        d[cat_col] = pd.Categorical(d[cat_col], categories=order, ordered=True)
+        d = d.sort_values(cat_col)
+        keys = d[cat_col].astype(str).tolist()
+        labels = [label_map.get(k, k) if label_map else k for k in keys]
+        colors = [color_map.get(k, "#C3C2B7") for k in keys]
+        fig = go.Figure(
+            data=go.Pie(
+                labels=labels,
+                values=d["pacientes"],
+                hole=0.45,
+                sort=False,
+                marker=dict(colors=colors, line=dict(color="white", width=2)),
+                textinfo="percent",
+                hovertemplate="%{label}<br>Pacientes: %{value:,}<br>%{percent}<extra></extra>",
+            )
+        )
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=10),
+            height=height,
+            paper_bgcolor="white",
+            font=dict(family=font_family, size=12, color="#374151"),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5),
+        )
         return fig
 
     def _build_diag_table(diag_df):
         if diag_df is None or diag_df.empty:
             return html.Div("Sin diagnosticos para el filtro seleccionado.", style={"color": muted, "padding": "10px"})
-        d = diag_df.fillna("").astype(str)
+        d = diag_df.copy()
+        d["pacientes"] = pd.to_numeric(d["pacientes"], errors="coerce").fillna(0).round().astype(int)
+        d = d.drop(columns=["registros"], errors="ignore").fillna("").astype(str)
         return dash_table.DataTable(
             columns=[
                 {"name": "CIE-10", "id": "cod_diagnostico"},
@@ -701,8 +954,9 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 {"name": "Pacientes", "id": "pacientes"},
             ],
             data=d.to_dict("records"),
-            page_size=15,
-            style_table={"overflowX": "auto"},
+            page_action="none",
+            fixed_rows={"headers": True},
+            style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "320px"},
             style_cell={"textAlign": "left", "fontFamily": font_family, "fontSize": "12px", "padding": "7px"},
             style_header={"backgroundColor": brand_soft, "fontWeight": 700, "border": f"1px solid {border}"},
             style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#F8FAFF"}],
@@ -843,13 +1097,6 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         return {"content": "﻿" + buffer.getvalue(), "filename": filename, "type": "text/csv"}
 
     return dash_app
-
-
-def _fmt_abs(n):
-    try:
-        return f"{abs(int(n)):,}".replace(",", " ")
-    except (TypeError, ValueError):
-        return "0"
 
 
 def _pat_label(value):

@@ -49,11 +49,16 @@ EDAD_EXPR = r"""
 
 BASE_SQL = f"""
 CREATE MATERIALIZED VIEW {SCHEMA}.mv_ejec_base AS
+-- INNER JOIN con mt_patologia: excluye desde la base a los registros sin
+-- patologia catalogada (antes quedaban como 'SIN PATOLOGIA'). Ya no hace
+-- falta el COALESCE porque el JOIN garantiza que patologia/patron nunca son
+-- NULL.
 SELECT
     l.doc_paciente,
     l.anio_busqueda                              AS anio,
     l.tipo_busqueda,
-    COALESCE(p.patologia, 'SIN PATOLOGIA')       AS patologia,
+    p.patologia                                  AS patologia,
+    p.patron                                     AS patron,
     {AREA_EXPR}                                  AS area,
     l.cod_oricentro,
     l.cod_centro,
@@ -70,12 +75,12 @@ SELECT
     l.anio_edad,
     {EDAD_EXPR}                                  AS grupo_edad
 FROM dssge.mtd_lista_unica_pacientes l
+JOIN dwsge.mt_patologia p ON p.tipo_busqueda = l.tipo_busqueda
 LEFT JOIN dwsge.sgss_cmcas10 c ON c.cenasicod = l.cod_centro AND c.oricenasicod = l.cod_oricentro
 LEFT JOIN dwsge.sgss_cmras10 r ON r.redasiscod = c.redasiscod
 LEFT JOIN dwsge.sgss_cmsho10 s ON s.servhoscod = l.cod_servicio
 LEFT JOIN dwsge.sgss_cbtid10 td ON td.tipodiagcod = l.cod_tipodiag
 LEFT JOIN dwsge.sgss_cmdia10 d ON d.diagcod = l.cod_diagnostico
-LEFT JOIN dwsge.mt_patologia p ON p.tipo_busqueda = l.tipo_busqueda
 """
 
 # Rollups para la Tab 1 (analitica por patologia). GROUPING SETS agrega la fila
@@ -83,26 +88,16 @@ LEFT JOIN dwsge.mt_patologia p ON p.tipo_busqueda = l.tipo_busqueda
 ROLLUPS = {
     "mv_ejec_pat_resumen": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_resumen AS
-        SELECT COALESCE(patologia, 'TOTAL GENERAL') AS patologia,
-               COALESCE(anio, 'TODOS')              AS anio,
-               COUNT(DISTINCT doc_paciente)         AS pacientes,
-               COUNT(*)                             AS registros
-        FROM dssge.mv_ejec_base
-        -- (pat,anio)=celda; (pat)=todos los anios; (anio)=TOTAL GENERAL por anio; ()=total absoluto
-        -- Cada COUNT(DISTINCT) es exacto para su nivel (no es la suma de los inferiores).
-        -- TOTAL GENERAL incluye a los pacientes con SIN PATOLOGIA (universo completo de la tabla base).
-        GROUP BY GROUPING SETS ((patologia, anio), (patologia), (anio), ())
-        UNION ALL
-        -- TOTAL CATALOGADO: mismo total pero excluyendo SIN PATOLOGIA, para el KPI
-        -- "pacientes con patologia catalogada" (no es TOTAL GENERAL menos SIN_PATOLOGIA,
-        -- porque un paciente puede tener filas en ambos grupos; se calcula aparte y exacto).
-        SELECT 'TOTAL CATALOGADO' AS patologia,
-               COALESCE(anio, 'TODOS') AS anio,
-               COUNT(DISTINCT doc_paciente) AS pacientes,
-               COUNT(*) AS registros
+        SELECT COALESCE(patologia, 'TOTAL CATALOGADO') AS patologia,
+               COALESCE(anio, 'TODOS')                 AS anio,
+               COUNT(DISTINCT doc_paciente)            AS pacientes,
+               COUNT(*)                                AS registros
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
-        GROUP BY GROUPING SETS ((anio), ())
+        -- (pat,anio)=celda; (pat)=todos los anios; (anio)=TOTAL CATALOGADO por anio; ()=total absoluto
+        -- Cada COUNT(DISTINCT) es exacto para su nivel (no es la suma de los inferiores).
+        -- Excluye SIN PATOLOGIA en todos los niveles (universo = solo patologias catalogadas).
+        GROUP BY GROUPING SETS ((patologia, anio), (patologia), (anio), ())
     """,
     "mv_ejec_pat_area": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_area AS
@@ -111,12 +106,14 @@ ROLLUPS = {
                area,
                COUNT(DISTINCT doc_paciente)       AS pacientes
         FROM dssge.mv_ejec_base
+        WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, area), (patologia, area))
     """,
-    # Filtrable por anio/red/centro (ademas de patologia) para la seccion
-    # "Detalle por patologia". CUBE(anio,red,centro) genera las 8 combinaciones
-    # (especifico/TODOS en cada una de las 3 dimensiones) por patologia+servicio,
-    # asi cualquier combinacion de filtros que arme la UI ya esta precalculada.
+    # Filtrable por anio/red/centro/grupo_edad (ademas de patologia) para la
+    # seccion "Detalle por patologia". CUBE(anio,red,centro,grupo_edad) genera
+    # las 16 combinaciones (especifico/TODOS en cada una de las 4 dimensiones)
+    # por patologia+servicio, asi cualquier combinacion de filtros que arme la
+    # UI ya esta precalculada.
     "mv_ejec_pat_servicio": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_servicio AS
         SELECT patologia,
@@ -125,36 +122,45 @@ ROLLUPS = {
                COALESCE(anio, 'TODOS')              AS anio,
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
+               COALESCE(grupo_edad, 'TODOS')        AS grupo_edad,
                COUNT(DISTINCT doc_paciente)         AS pacientes
         FROM dssge.mv_ejec_base
-        WHERE servhosdes IS NOT NULL
-        GROUP BY patologia, cod_servicio, servhosdes, CUBE(anio, redasiscod, cod_centro)
+        WHERE servhosdes IS NOT NULL AND patologia <> 'SIN PATOLOGIA'
+        GROUP BY patologia, cod_servicio, servhosdes, CUBE(anio, redasiscod, cod_centro, grupo_edad)
     """,
+    # Incluye marginales exactos (solo sexo / solo grupo_edad) ademas de la
+    # celda cruzada: un paciente puede cambiar de grupo_edad entre 2019-2024,
+    # asi que sumar las celdas de la piramide para anio='TODOS' sobreconta.
+    # GROUPING SETS calcula cada marginal como su propio COUNT(DISTINCT) exacto.
     "mv_ejec_pat_sexo_edad": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_sexo_edad AS
         SELECT patologia,
-               sexo,
-               grupo_edad,
+               COALESCE(sexo, 'TODOS')              AS sexo,
+               COALESCE(grupo_edad, 'TODOS')         AS grupo_edad,
                COALESCE(anio, 'TODOS')              AS anio,
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
                COUNT(DISTINCT doc_paciente)         AS pacientes
         FROM dssge.mv_ejec_base
-        GROUP BY patologia, sexo, grupo_edad, CUBE(anio, redasiscod, cod_centro)
+        WHERE patologia <> 'SIN PATOLOGIA'
+        GROUP BY patologia, GROUPING SETS ((sexo, grupo_edad), (sexo), (grupo_edad)),
+                 CUBE(anio, redasiscod, cod_centro)
     """,
     # KPIs (pacientes/registros) de la seccion "Detalle por patologia", filtrable
-    # por anio/red/centro. Distinto de mv_ejec_pat_resumen (que sirve la Vista
-    # comparativa y NO se debe filtrar por red/centro).
+    # por anio/red/centro/grupo_edad. Distinto de mv_ejec_pat_resumen (que sirve
+    # la Vista comparativa y NO se debe filtrar por red/centro).
     "mv_ejec_pat_detalle": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_detalle AS
         SELECT patologia,
                COALESCE(anio, 'TODOS')              AS anio,
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
+               COALESCE(grupo_edad, 'TODOS')        AS grupo_edad,
                COUNT(DISTINCT doc_paciente)         AS pacientes,
                COUNT(*)                             AS registros
         FROM dssge.mv_ejec_base
-        GROUP BY patologia, CUBE(anio, redasiscod, cod_centro)
+        WHERE patologia <> 'SIN PATOLOGIA'
+        GROUP BY patologia, CUBE(anio, redasiscod, cod_centro, grupo_edad)
     """,
     "mv_ejec_pat_red": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_red AS
@@ -164,6 +170,7 @@ ROLLUPS = {
                redasisdes,
                COUNT(DISTINCT doc_paciente)       AS pacientes
         FROM dssge.mv_ejec_base
+        WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, redasiscod, redasisdes),
                                 (patologia, redasiscod, redasisdes))
     """,
@@ -179,6 +186,7 @@ ROLLUPS = {
                cenasides,
                COUNT(DISTINCT doc_paciente)       AS pacientes
         FROM dssge.mv_ejec_base
+        WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, redasiscod, redasisdes, cod_centro, cenasides),
                                 (patologia, redasiscod, redasisdes, cod_centro, cenasides))
     """,
@@ -209,12 +217,24 @@ ROLLUPS = {
                COALESCE(anio, 'TODOS')              AS anio,
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
+               COALESCE(grupo_edad, 'TODOS')        AS grupo_edad,
                COUNT(DISTINCT doc_paciente)         AS pacientes,
                COUNT(*)                             AS registros
         FROM dssge.mv_ejec_base
+        WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY patologia, cod_diagnostico, diagdes, cod_tipodiag, tipodiagnom,
-                 CUBE(anio, redasiscod, cod_centro)
+                 CUBE(anio, redasiscod, cod_centro, grupo_edad)
     """,
+}
+
+# Indices de soporte para los filtros de "Detalle por patologia" (anio, red,
+# centro, grupo_edad). Estas MV no tenian indices propios; al sumar grupo_edad
+# al CUBE el numero de filas crece (~7-8x en la combinacion mas granular),
+# asi que conviene indexarlas para sostener la velocidad de los filtros.
+FILTER_INDEXES = {
+    "mv_ejec_pat_detalle": "patologia, anio, redasiscod, cod_centro, grupo_edad",
+    "mv_ejec_pat_servicio": "patologia, anio, redasiscod, cod_centro, grupo_edad",
+    "mv_ejec_pat_diag": "patologia, anio, redasiscod, cod_centro, grupo_edad",
 }
 
 ALL_MVS = ["mv_ejec_base"] + list(ROLLUPS.keys())
@@ -246,11 +266,15 @@ def main():
     for name, sql in ROLLUPS.items():
         run(cur, name, sql)
 
-    print(f"4) Transfiriendo OWNER a {APP_ROLE} (para REFRESH en runtime)...")
+    print("4) Creando indices de filtro (anio/red/centro/grupo_edad)...")
+    for mv, cols in FILTER_INDEXES.items():
+        run(cur, f"index filtro {mv}", f"CREATE INDEX ix_{mv}_filtro ON {SCHEMA}.{mv} ({cols})")
+
+    print(f"5) Transfiriendo OWNER a {APP_ROLE} (para REFRESH en runtime)...")
     for mv in ALL_MVS:
         cur.execute(f"ALTER MATERIALIZED VIEW {SCHEMA}.{mv} OWNER TO {APP_ROLE}")
 
-    print("\n5) Conteos:")
+    print("\n6) Conteos:")
     for mv in ALL_MVS:
         cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.{mv}")
         print(f"  {mv:26s} {cur.fetchone()[0]:>12,} filas")
