@@ -1,14 +1,3 @@
-"""
-Construccion de vistas materializadas para el Modulo Ejecutivo de Patologias.
-Se ejecuta UNA vez con credenciales de administrador (superusuario) del DW.
-Las MV quedan con OWNER = app_user para que la app pueda refrescarlas en runtime.
-
-Uso (PowerShell):
-    $env:DW_ADMIN_URI="postgresql://postgres:PASSWORD@10.0.29.117:5433/DW_ESTADISTICA"
-    python build_mvs.py
-
-Refresco posterior: refresh_mvs.py (corre como app_user).
-"""
 import os
 import time
 import psycopg2
@@ -20,7 +9,6 @@ if not ADMIN_URI:
 APP_ROLE = 'app_user'
 SCHEMA = 'dssge'
 
-# --- Expresiones reutilizables (se calculan una vez en mv_ejec_base) ---
 AREA_EXPR = """
     CASE l.area
         WHEN 'CEXT' THEN 'CONSULTA EXTERNA'
@@ -83,8 +71,6 @@ LEFT JOIN dwsge.sgss_cbtid10 td ON td.tipodiagcod = l.cod_tipodiag
 LEFT JOIN dwsge.sgss_cmdia10 d ON d.diagcod = l.cod_diagnostico
 """
 
-# Rollups para la Tab 1 (analitica por patologia). GROUPING SETS agrega la fila
-# 'TODOS' los anios con COUNT(DISTINCT) EXACTO (no es la suma de los anios).
 ROLLUPS = {
     "mv_ejec_pat_resumen": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_resumen AS
@@ -109,11 +95,7 @@ ROLLUPS = {
         WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, area), (patologia, area))
     """,
-    # Filtrable por anio/red/centro/grupo_edad (ademas de patologia) para la
-    # seccion "Detalle por patologia". CUBE(anio,red,centro,grupo_edad) genera
-    # las 16 combinaciones (especifico/TODOS en cada una de las 4 dimensiones)
-    # por patologia+servicio, asi cualquier combinacion de filtros que arme la
-    # UI ya esta precalculada.
+
     "mv_ejec_pat_servicio": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_servicio AS
         SELECT patologia,
@@ -128,10 +110,7 @@ ROLLUPS = {
         WHERE servhosdes IS NOT NULL AND patologia <> 'SIN PATOLOGIA'
         GROUP BY patologia, cod_servicio, servhosdes, CUBE(anio, redasiscod, cod_centro, grupo_edad)
     """,
-    # Incluye marginales exactos (solo sexo / solo grupo_edad) ademas de la
-    # celda cruzada: un paciente puede cambiar de grupo_edad entre 2019-2024,
-    # asi que sumar las celdas de la piramide para anio='TODOS' sobreconta.
-    # GROUPING SETS calcula cada marginal como su propio COUNT(DISTINCT) exacto.
+
     "mv_ejec_pat_sexo_edad": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_sexo_edad AS
         SELECT patologia,
@@ -146,9 +125,7 @@ ROLLUPS = {
         GROUP BY patologia, GROUPING SETS ((sexo, grupo_edad), (sexo), (grupo_edad)),
                  CUBE(anio, redasiscod, cod_centro)
     """,
-    # KPIs (pacientes/registros) de la seccion "Detalle por patologia", filtrable
-    # por anio/red/centro/grupo_edad. Distinto de mv_ejec_pat_resumen (que sirve
-    # la Vista comparativa y NO se debe filtrar por red/centro).
+
     "mv_ejec_pat_detalle": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_detalle AS
         SELECT patologia,
@@ -174,8 +151,7 @@ ROLLUPS = {
         GROUP BY GROUPING SETS ((patologia, anio, redasiscod, redasisdes),
                                 (patologia, redasiscod, redasisdes))
     """,
-    # Jerarquia Red -> Centro. Misma forma que mv_ejec_pat_red pero un nivel
-    # mas fino (cod_centro), usada para el drill-down del tablero comparativo.
+
     "mv_ejec_pat_centro": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_centro AS
         SELECT patologia,
@@ -190,9 +166,7 @@ ROLLUPS = {
         GROUP BY GROUPING SETS ((patologia, anio, redasiscod, redasisdes, cod_centro, cenasides),
                                 (patologia, redasiscod, redasisdes, cod_centro, cenasides))
     """,
-    # Matriz de comorbilidad: cuantos pacientes con patologia_a tambien tienen
-    # patologia_b (todo el historico, sin filtro de anio). Diagonal = total de
-    # la patologia (sirve de chequeo cruzado contra mv_ejec_pat_resumen).
+
     "mv_ejec_comorbilidad": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_comorbilidad AS
         WITH pac_pat AS (
@@ -227,10 +201,7 @@ ROLLUPS = {
     """,
 }
 
-# Indices de soporte para los filtros de "Detalle por patologia" (anio, red,
-# centro, grupo_edad). Estas MV no tenian indices propios; al sumar grupo_edad
-# al CUBE el numero de filas crece (~7-8x en la combinacion mas granular),
-# asi que conviene indexarlas para sostener la velocidad de los filtros.
+
 FILTER_INDEXES = {
     "mv_ejec_pat_detalle": "patologia, anio, redasiscod, cod_centro, grupo_edad",
     "mv_ejec_pat_servicio": "patologia, anio, redasiscod, cod_centro, grupo_edad",

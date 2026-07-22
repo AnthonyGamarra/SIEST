@@ -1,19 +1,3 @@
-"""
-Modulo Ejecutivo de Patologias (solo admin).
-
-Pestana 1 - Analitica por patologia: vista comparativa (todas las patologias)
-    y comorbilidad global, leidas desde las vistas materializadas de rollup
-    (dssge.mv_ejec_pat_*). Consultas parametrizadas y pequenas -> respuesta en
-    milisegundos.
-Pestana 2 - Detalle por patologia: filtro por patologia/red/centro con KPIs,
-    evolucion anual, servicios, sexo/edad y top diagnosticos.
-Pestana 3 - Comorbilidad del paciente: buscador por documento que arma una
-    matriz patologia x anio con checks y el detalle de diagnosticos asociados,
-    leido en vivo desde dssge.mv_ejec_base (indexado por doc_paciente).
-
-Requiere ejecutar build_mvs.py una vez (crea las MV). Mientras no existan, la
-UI muestra un aviso guiando a construirlas.
-"""
 import io
 from datetime import datetime
 from functools import lru_cache
@@ -34,12 +18,14 @@ SCHEMA = "dssge"
 ANIO_ORDER = ["2019", "2020", "2021", "2022", "2023", "2024"]
 EDAD_ORDER = ["0-11", "12-17", "18-29", "30-44", "45-59", "60+", "SIN DATO"]
 
-# Paleta accesible y consistente (claro). Colores por serie.
-PALETTE = ["#0064AF", "#00A3A3", "#F2A900", "#E4572E", "#7B61FF", "#2BB673", "#B23A48"]
+# Paleta categorica validada (orden fijo = mecanismo de seguridad CVD, no
+# cosmetico: no reordenar ni ciclar). Pasa lightness band, chroma floor,
+# separacion CVD y piso de vision normal en modo claro.
+PALETTE = ["#2A78D6", "#008300", "#E87BA4", "#EDA100", "#1BAF7A", "#EB6834", "#4A3AA7", "#E34948"]
 
 SEXO_ORDER = ["M", "F"]
 SEXO_LABELS = {"M": "Masculino", "F": "Femenino"}
-SEXO_COLORS = {"M": PALETTE[0], "F": PALETTE[3]}
+SEXO_COLORS = {"M": PALETTE[0], "F": PALETTE[7]}
 
 # Un color fijo por grupo etario (identidad, nunca por ranking). SIN DATO en
 # gris neutro porque no es una categoria demografica real.
@@ -182,9 +168,14 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     # =====================================================================
     # HELPERS DE UI
     # =====================================================================
+    def _tint(hex_color, alpha=0.14):
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def kpi_card(title, value, icon, color=brand, subtitle=None):
         body = [
-            html.Div(value, style={"fontSize": "26px", "fontWeight": 800, "color": "#111827", "lineHeight": "1.1"}),
+            html.Div(value, style={"fontSize": "28px", "fontWeight": 800, "color": "#111827", "lineHeight": "1.15", "fontVariantNumeric": "tabular-nums"}),
             html.Small(title, style={"color": muted, "fontWeight": 600}),
         ]
         if subtitle:
@@ -192,21 +183,28 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         return html.Div(
             [
                 html.Div(
-                    html.I(className=f"bi {icon}", style={"fontSize": "22px", "color": color}),
+                    html.I(className=f"bi {icon} ejec-kpi-icon", style={"fontSize": "22px", "color": color}),
                     style={
                         "width": "46px", "height": "46px", "borderRadius": "12px",
-                        "backgroundColor": brand_soft, "display": "flex",
+                        "backgroundColor": _tint(color), "display": "flex",
                         "alignItems": "center", "justifyContent": "center", "flexShrink": "0",
                     },
                 ),
                 html.Div(body, style={"display": "flex", "flexDirection": "column", "gap": "2px", "minWidth": 0}),
             ],
-            style={**card_style, "display": "flex", "alignItems": "center", "gap": "14px", "flex": "1 1 230px", "padding": "16px 18px"},
+            className="ejec-card",
+            style={
+                **card_style, "display": "flex", "alignItems": "center", "gap": "14px",
+                "flex": "1 1 230px", "padding": "16px 18px", "borderLeft": f"3px solid {color}",
+            },
         )
 
     def empty_fig(msg="Sin datos"):
         fig = go.Figure()
-        fig.add_annotation(text=msg, showarrow=False, font=dict(size=14, color=muted))
+        fig.add_annotation(
+            text=f"<span style='font-size:20px'>&#128202;</span><br>{msg}",
+            showarrow=False, font=dict(size=13, color=muted, family=font_family), align="center",
+        )
         fig.update_layout(
             xaxis={"visible": False}, yaxis={"visible": False},
             margin=dict(l=10, r=10, t=10, b=10), height=300,
@@ -221,28 +219,31 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             font=dict(family=font_family, size=12, color="#374151"),
             title=dict(text=title, font=dict(size=15, color=brand, family=font_family)) if title else None,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hoverlabel=dict(bgcolor="white", bordercolor="#E5E7EB", font=dict(family=font_family, size=12, color="#111827")),
         )
         fig.update_xaxes(showgrid=False)
-        fig.update_yaxes(showgrid=True, gridcolor="#F1F5F9")
+        fig.update_yaxes(showgrid=True, gridcolor="#F1F5F9", zerolinecolor="#F1F5F9")
         return fig
 
     def graph_card(title, graph_id, height=340, subtitle=None, flex="1 1 380px", figure=None):
         header = [html.Div(title, style={"fontWeight": 700, "color": brand, "fontSize": "15px"})]
         if subtitle:
-            header.append(html.Small(subtitle, style={"color": muted}))
+            header.append(html.Small(subtitle, style={"color": muted, "lineHeight": "1.4"}))
         return html.Div(
             [
-                html.Div(header, style={"marginBottom": "8px", "display": "flex", "flexDirection": "column", "gap": "2px"}),
+                html.Div(header, style={"marginBottom": "10px", "display": "flex", "flexDirection": "column", "gap": "3px"}),
                 dcc.Loading(
                     dcc.Graph(id=graph_id, figure=figure if figure is not None else {}, config={"displayModeBar": False}),
                     type="default",
+                    color=brand,
                 ),
             ],
+            className="ejec-card",
             style={**card_style, "flex": flex, "minWidth": "320px"},
         )
 
     GLOBAL_PATOLOGIAS = ["Raras", "Oncologico", "Renal"]
-    GLOBAL_COLORS = {"Oncologico": brand, "Renal": "#00A3A3", "Raras": "#F2A900"}
+    GLOBAL_COLORS = {"Oncologico": brand, "Renal": PALETTE[4], "Raras": PALETTE[3]}
 
     def _build_pacientes_total_fig():
         """Pacientes totales por patologia (Raras/Oncologico/Renal), historico
@@ -349,37 +350,50 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         style_fig(fig, height=max(320, 34 * len(d)))
         return fig
 
-    # =====================================================================
-    # LAYOUT
-    # =====================================================================
     def build_header():
         return html.Div(
             [
                 html.Div(
                     [
-                        html.I(className="bi bi-clipboard2-pulse", style={"fontSize": "30px", "color": brand}),
+                        html.Div(
+                            html.I(className="bi bi-clipboard2-pulse", style={"fontSize": "24px", "color": brand}),
+                            style={
+                                "width": "48px", "height": "48px", "borderRadius": "14px",
+                                "backgroundColor": brand_soft, "display": "flex",
+                                "alignItems": "center", "justifyContent": "center", "flexShrink": "0",
+                            },
+                        ),
                         html.H2(
                             "Perfil de Comorbilidades Asociadas al Paciente",
-                            style={"color": brand, "fontFamily": font_family, "fontSize": "24px", "fontWeight": 800, "margin": 0},
+                            style={"color": "#111827", "fontFamily": font_family, "fontSize": "23px", "fontWeight": 800, "margin": 0, "letterSpacing": "-0.01em"},
                         ),
                     ],
-                    style={"display": "flex", "alignItems": "center", "gap": "10px"},
+                    style={"display": "flex", "alignItems": "center", "gap": "14px"},
                 ),
                 html.P(
                     "Analitica por patologia y comorbilidad del paciente | Sistema de Gestion Estadistica",
-                    style={"color": muted, "fontFamily": font_family, "fontSize": "13px", "margin": "6px 0 0 0"},
+                    style={"color": muted, "fontFamily": font_family, "fontSize": "13px", "margin": "8px 0 0 62px"},
                 ),
             ],
-            style={"padding": "16px 20px", "backgroundColor": card_bg, "borderRadius": "16px", "boxShadow": "0 8px 20px rgba(0,0,0,0.08)"},
+            style={
+                "padding": "18px 22px", "backgroundColor": card_bg, "borderRadius": "16px",
+                "boxShadow": "0 8px 20px rgba(0,0,0,0.08)", "borderTop": f"3px solid {brand}",
+            },
         )
 
     def section_title(text_, icon):
         return html.Div(
             [
-                html.I(className=f"bi {icon}", style={"color": brand, "fontSize": "18px"}),
-                html.H4(text_, style={"color": brand, "fontFamily": font_family, "fontSize": "17px", "fontWeight": 800, "margin": 0}),
+                html.Div(
+                    [
+                        html.I(className=f"bi {icon}", style={"color": brand, "fontSize": "18px"}),
+                        html.H4(text_, style={"color": "#111827", "fontFamily": font_family, "fontSize": "17px", "fontWeight": 800, "margin": 0}),
+                    ],
+                    style={"display": "flex", "alignItems": "center", "gap": "8px"},
+                ),
+                html.Div(style={"flex": "1 1 auto", "height": "1px", "backgroundColor": border, "marginLeft": "12px"}),
             ],
-            style={"display": "flex", "alignItems": "center", "gap": "8px", "margin": "6px 0 2px 0"},
+            style={"display": "flex", "alignItems": "center", "margin": "6px 0 2px 0"},
         )
 
     def build_tab1():
@@ -448,7 +462,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                             height=max(320, 34 * 14),
                             subtitle="% de pacientes con Renal que en algun momento tambien tuvo cada diagnostico (2019 - 2025).",
                             flex="1 1 480px",
-                            figure=_build_comorbilidad_grupo_fig("Renal", "Coomorbilidad Renal", "#00A3A3"),
+                            figure=_build_comorbilidad_grupo_fig("Renal", "Coomorbilidad Renal", "#1BAF7A"),
                         ),
                     ],
                     style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
@@ -535,6 +549,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                                 html.Div("Top diagnosticos (CIE-10)", style={"fontWeight": 700, "color": brand, "marginBottom": "8px", "fontSize": "15px"}),
                                 dcc.Loading(html.Div(id="ejec-tabla-diag"), type="default"),
                             ],
+                            className="ejec-card",
                             style={**card_style, "flex": "1 1 380px", "minWidth": "320px"},
                         ),
                     ],
@@ -571,6 +586,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                         html.Small("Marca (v) los anios en que el paciente presento cada patologia.", style={"color": muted}),
                         dcc.Loading(html.Div(id="ejec-matriz", style={"marginTop": "10px"}), type="default"),
                     ],
+                    className="ejec-card",
                     style=card_style,
                 ),
                 html.Div(
@@ -583,6 +599,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                         dcc.Download(id="ejec-download"),
                         dcc.Store(id="ejec-detalle-store"),
                     ],
+                    className="ejec-card",
                     style=card_style,
                 ),
             ],
@@ -614,6 +631,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 ),
             ],
             fluid=True,
+            className="ejec-dashboard-root",
             style={
                 "backgroundColor": "#F3F6FB",
                 "minHeight": "100vh",
@@ -624,9 +642,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
 
     dash_app.layout = serve_layout
 
-    # =====================================================================
-    # CALLBACKS - TAB 1
-    # =====================================================================
+
     def _fmt(n):
         try:
             return f"{int(n):,}".replace(",", " ")
@@ -670,7 +686,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         # --- KPIs: hotspots (top-1 por red y por centro = combinacion a identificar rapido) ---
         kpis = [
             kpi_card("Pacientes · Alto costo (Raras + Oncologico + Renal)", _fmt(pac_total), "bi-people-fill"),
-            kpi_card("Patologias activas", _fmt(len(rd)), "bi-clipboard2-pulse", "#00A3A3"),
+            kpi_card("Patologias activas", _fmt(len(rd)), "bi-clipboard2-pulse", "#1BAF7A"),
         ]
         top_red_df, _ = run_df(
             f"SELECT patologia, redasisdes, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_red "
@@ -683,7 +699,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             kpis.append(kpi_card(
                 "Mayor concentracion · Red",
                 _fmt(top_red["pacientes"]),
-                "bi-diagram-3", "#F2A900",
+                "bi-diagram-3", "#EDA100",
                 subtitle=f"{_pat_label(top_red['patologia'])} en {top_red['redasisdes']}",
             ))
         top_centro_df, _ = run_df(
@@ -697,7 +713,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             kpis.append(kpi_card(
                 "Mayor concentracion · Centro",
                 _fmt(top_centro["pacientes"]),
-                "bi-hospital", "#E4572E",
+                "bi-hospital", "#EB6834",
                 subtitle=f"{_pat_label(top_centro['patologia'])} en {top_centro['cenasides']}",
             ))
 
@@ -789,13 +805,10 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         n_diag = int(diag_count_df["n"].iloc[0]) if diag_count_df is not None and not diag_count_df.empty else 0
         pat_label = _pat_label(pat_list[0]) if len(pat_list) == 1 else f"{len(pat_list)} patologias"
         kpis = [
-            kpi_card(f"Pacientes · {pat_label}", _fmt(pac_pat), "bi-person-badge", "#00A3A3"),
-            kpi_card("Diagnosticos distintos", _fmt(n_diag), "bi-diagram-3", "#7B61FF"),
+            kpi_card(f"Pacientes · {pat_label}", _fmt(pac_pat), "bi-person-badge", "#1BAF7A"),
+            kpi_card("Diagnosticos distintos", _fmt(n_diag), "bi-diagram-3", "#4A3AA7"),
         ]
 
-        # Evolucion anual (ignora el filtro de anio: se ve todo el historico;
-        # respeta patologia/red/centro/grupo_edad). Una linea por patologia
-        # seleccionada.
         trend_df, _ = run_df(
             f"SELECT anio, patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_detalle "
             f"WHERE patologia = ANY(:pat) AND anio <> 'TODOS' AND redasiscod = ANY(:red) "
@@ -834,10 +847,6 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             fig_serv.update_xaxes(title="Pacientes")
             style_fig(fig_serv, height=380)
 
-        # Ranking por centro (ignora el filtro de centro, para poder
-        # rankearlos entre si, y el de grupo_edad, que mv_ejec_pat_centro no
-        # tiene; respeta patologia/anio/red). Top 15, apilado por patologia
-        # cuando hay mas de una seleccionada.
         centro_df, _ = run_df(
             f"SELECT cenasides, patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_centro "
             f"WHERE patologia = ANY(:pat) AND anio = ANY(:anio) AND redasiscod = ANY(:red) "
@@ -874,9 +883,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             fig_centro.update_xaxes(title="Pacientes")
             style_fig(fig_centro, height=max(320, 34 * len(top_centros)))
 
-        # Sexo: respeta el grupo etario seleccionado (si es "Todos", es el
-        # marginal exacto de siempre; si son grupos especificos, es el cruce
-        # sexo x grupo_edad de esos grupos).
+
         sexo_df, _ = run_df(
             f"SELECT sexo, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_sexo_edad "
             f"WHERE {filtro_where} AND sexo <> 'TODOS' "
@@ -885,11 +892,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         )
         fig_sexo = _build_pie(sexo_df, "sexo", SEXO_ORDER, SEXO_COLORS, label_map=SEXO_LABELS)
 
-        # Grupo etario: ignora el filtro de grupo etario (se ve la composicion
-        # completa, igual que la evolucion anual ignora el filtro de anio);
-        # respeta patologia/anio/red/centro. Marginal exacto (no la suma de
-        # las celdas cruzadas, que sobrecontaria pacientes que cambiaron de
-        # grupo_edad entre anios).
+
         edad_df, _ = run_df(
             f"SELECT grupo_edad, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_sexo_edad "
             f"WHERE {base_where} AND sexo = 'TODOS' AND grupo_edad <> 'TODOS' "
@@ -962,9 +965,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#F8FAFF"}],
         )
 
-    # =====================================================================
-    # CALLBACKS - TAB 2
-    # =====================================================================
+
     @dash_app.callback(
         Output("ejec-paciente-info", "children"),
         Output("ejec-matriz", "children"),
@@ -1007,6 +1008,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 _pill("Patologias", str(n_pat), "bi-clipboard2-pulse"),
                 _pill("Centros", str(centros), "bi-hospital"),
             ],
+            className="ejec-card",
             style={**card_style, "display": "flex", "gap": "12px", "flexWrap": "wrap", "padding": "14px 16px"},
         )
 
@@ -1018,13 +1020,20 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     def _pill(label, value, icon):
         return html.Div(
             [
-                html.I(className=f"bi {icon}", style={"color": brand, "fontSize": "18px"}),
+                html.Div(
+                    html.I(className=f"bi {icon}", style={"color": brand, "fontSize": "16px"}),
+                    style={
+                        "width": "34px", "height": "34px", "borderRadius": "10px",
+                        "backgroundColor": brand_soft, "display": "flex",
+                        "alignItems": "center", "justifyContent": "center", "flexShrink": "0",
+                    },
+                ),
                 html.Div(
                     [html.Div(value, style={"fontWeight": 700, "color": "#111827"}), html.Small(label, style={"color": muted})],
                     style={"display": "flex", "flexDirection": "column"},
                 ),
             ],
-            style={"display": "flex", "alignItems": "center", "gap": "8px", "flex": "1 1 150px"},
+            style={"display": "flex", "alignItems": "center", "gap": "10px", "flex": "1 1 150px"},
         )
 
     def _build_matriz(df):
