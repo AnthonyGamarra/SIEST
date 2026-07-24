@@ -42,6 +42,7 @@ CREATE MATERIALIZED VIEW {SCHEMA}.mv_ejec_base AS
 -- falta el COALESCE porque el JOIN garantiza que patologia/patron nunca son
 -- NULL.
 SELECT
+    l.cod_tipdoc_paciente,
     l.doc_paciente,
     l.anio_busqueda                              AS anio,
     l.tipo_busqueda,
@@ -76,7 +77,7 @@ ROLLUPS = {
         CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_resumen AS
         SELECT COALESCE(patologia, 'TOTAL CATALOGADO') AS patologia,
                COALESCE(anio, 'TODOS')                 AS anio,
-               COUNT(DISTINCT doc_paciente)            AS pacientes,
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))            AS pacientes,
                COUNT(*)                                AS registros
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
@@ -90,7 +91,7 @@ ROLLUPS = {
         SELECT patologia,
                COALESCE(anio, 'TODOS')            AS anio,
                area,
-               COUNT(DISTINCT doc_paciente)       AS pacientes
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))       AS pacientes
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, area), (patologia, area))
@@ -105,7 +106,7 @@ ROLLUPS = {
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
                COALESCE(grupo_edad, 'TODOS')        AS grupo_edad,
-               COUNT(DISTINCT doc_paciente)         AS pacientes
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))         AS pacientes
         FROM dssge.mv_ejec_base
         WHERE servhosdes IS NOT NULL AND patologia <> 'SIN PATOLOGIA'
         GROUP BY patologia, cod_servicio, servhosdes, CUBE(anio, redasiscod, cod_centro, grupo_edad)
@@ -119,7 +120,7 @@ ROLLUPS = {
                COALESCE(anio, 'TODOS')              AS anio,
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
-               COUNT(DISTINCT doc_paciente)         AS pacientes
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))         AS pacientes
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY patologia, GROUPING SETS ((sexo, grupo_edad), (sexo), (grupo_edad)),
@@ -133,7 +134,7 @@ ROLLUPS = {
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
                COALESCE(grupo_edad, 'TODOS')        AS grupo_edad,
-               COUNT(DISTINCT doc_paciente)         AS pacientes,
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))         AS pacientes,
                COUNT(*)                             AS registros
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
@@ -145,7 +146,7 @@ ROLLUPS = {
                COALESCE(anio, 'TODOS')            AS anio,
                redasiscod,
                redasisdes,
-               COUNT(DISTINCT doc_paciente)       AS pacientes
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))       AS pacientes
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, redasiscod, redasisdes),
@@ -160,7 +161,7 @@ ROLLUPS = {
                redasisdes,
                cod_centro,
                cenasides,
-               COUNT(DISTINCT doc_paciente)       AS pacientes
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))       AS pacientes
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY GROUPING SETS ((patologia, anio, redasiscod, redasisdes, cod_centro, cenasides),
@@ -170,15 +171,15 @@ ROLLUPS = {
     "mv_ejec_comorbilidad": """
         CREATE MATERIALIZED VIEW dssge.mv_ejec_comorbilidad AS
         WITH pac_pat AS (
-            SELECT DISTINCT doc_paciente, patologia
+            SELECT DISTINCT cod_tipdoc_paciente, doc_paciente, patologia
             FROM dssge.mv_ejec_base
             WHERE patologia <> 'SIN PATOLOGIA'
         )
         SELECT a.patologia AS patologia_a,
                b.patologia AS patologia_b,
-               COUNT(DISTINCT a.doc_paciente) AS pacientes
+               COUNT(DISTINCT (a.cod_tipdoc_paciente, a.doc_paciente)) AS pacientes
         FROM pac_pat a
-        JOIN pac_pat b ON a.doc_paciente = b.doc_paciente
+        JOIN pac_pat b ON a.doc_paciente = b.doc_paciente AND a.cod_tipdoc_paciente = b.cod_tipdoc_paciente
         GROUP BY a.patologia, b.patologia
     """,
     "mv_ejec_pat_diag": """
@@ -192,14 +193,56 @@ ROLLUPS = {
                COALESCE(redasiscod, 'TODAS')        AS redasiscod,
                COALESCE(cod_centro, 'TODOS')         AS cod_centro,
                COALESCE(grupo_edad, 'TODOS')        AS grupo_edad,
-               COUNT(DISTINCT doc_paciente)         AS pacientes,
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente))         AS pacientes,
                COUNT(*)                             AS registros
         FROM dssge.mv_ejec_base
         WHERE patologia <> 'SIN PATOLOGIA'
         GROUP BY patologia, cod_diagnostico, diagdes, cod_tipodiag, tipodiagnom,
                  CUBE(anio, redasiscod, cod_centro, grupo_edad)
     """,
+
+    # --- Vistas para el treemap de diagnosticos y el Sankey de flujo por
+    # area del modulo ejecutivo. Llevan 'anio' (via GROUPING SETS, no CUBE
+    # completo: solo 2 conjuntos, no hace falta cruzarlo con nada mas) para
+    # que ambos graficos respondan al filtro de Anio de la pestana, igual que
+    # el Ranking por red.
+    "mv_ejec_pat_diag_servicio": """
+        CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_diag_servicio AS
+        SELECT patologia,
+               cod_diagnostico,
+               diagdes,
+               cod_servicio,
+               servhosdes,
+               COALESCE(anio, 'TODOS') AS anio,
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente)) AS pacientes
+        FROM dssge.mv_ejec_base
+        WHERE patologia <> 'SIN PATOLOGIA' AND servhosdes IS NOT NULL
+        GROUP BY GROUPING SETS (
+            (patologia, cod_diagnostico, diagdes, cod_servicio, servhosdes, anio),
+            (patologia, cod_diagnostico, diagdes, cod_servicio, servhosdes)
+        )
+    """,
+    "mv_ejec_pat_area_servicio": """
+        CREATE MATERIALIZED VIEW dssge.mv_ejec_pat_area_servicio AS
+        SELECT patologia,
+               area,
+               cod_servicio,
+               servhosdes,
+               COALESCE(anio, 'TODOS') AS anio,
+               COUNT(DISTINCT (cod_tipdoc_paciente, doc_paciente)) AS pacientes
+        FROM dssge.mv_ejec_base
+        WHERE patologia <> 'SIN PATOLOGIA' AND servhosdes IS NOT NULL
+        GROUP BY GROUPING SETS (
+            (patologia, area, cod_servicio, servhosdes, anio),
+            (patologia, area, cod_servicio, servhosdes)
+        )
+    """,
 }
+
+# Subconjunto de ROLLUPS que se puede crear de forma quirurgica (sin DROP ni
+# reconstruccion de las demas vistas) porque son nuevas y ninguna otra vista
+# depende de ellas. Usado por build_mvs_extra.py.
+EXTRA_ROLLUPS = ["mv_ejec_pat_diag_servicio", "mv_ejec_pat_area_servicio"]
 
 
 FILTER_INDEXES = {

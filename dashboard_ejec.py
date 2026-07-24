@@ -242,6 +242,25 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             style={**card_style, "flex": flex, "minWidth": "320px"},
         )
 
+    ALERT_STYLES = {
+        "warning": {"bg": "#FFF7E6", "border": "#F5C451", "ink": "#8A5B00", "icon": "bi-exclamation-triangle-fill"},
+        "info": {"bg": "#EFF6FF", "border": "#93C5FD", "ink": "#1D4ED8", "icon": "bi-info-circle-fill"},
+    }
+
+    def alert_box(msg, kind="info"):
+        s = ALERT_STYLES.get(kind, ALERT_STYLES["info"])
+        return html.Div(
+            [
+                html.I(className=f"bi {s['icon']}", style={"fontSize": "16px", "color": s["ink"], "flexShrink": "0", "marginTop": "1px"}),
+                html.Span(msg, style={"color": s["ink"], "fontFamily": font_family, "fontSize": "13px", "fontWeight": 600, "lineHeight": "1.4"}),
+            ],
+            style={
+                "display": "flex", "alignItems": "flex-start", "gap": "10px",
+                "backgroundColor": s["bg"], "border": f"1px solid {s['border']}",
+                "borderRadius": "12px", "padding": "12px 16px",
+            },
+        )
+
     GLOBAL_PATOLOGIAS = ["Raras", "Oncologico", "Renal"]
     GLOBAL_COLORS = {"Oncologico": brand, "Renal": PALETTE[4], "Raras": PALETTE[3]}
 
@@ -348,6 +367,246 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         fig.update_yaxes(title=None)
         fig.update_xaxes(title="% de pacientes", range=[0, max(d["pct"].max() * 1.25, 10)])
         style_fig(fig, height=max(320, 34 * len(d)))
+        return fig
+
+    def _build_comorbilidad_burbujas_fig():
+        """Todas las intersecciones entre patologias, con un solo eje
+        categorico (patologia en Y) para no terminar armando una grilla de
+        dos ejes (que en la practica ya es un heatmap). Cada fila muestra,
+        como una nube de burbujas horizontal, con que otras patologias se
+        cruza esa patologia; posicion en X, tamaño y color = pacientes en
+        comun. Diagonal excluida porque no es una interseccion real.
+        Historico completo, sin filtro de anio."""
+        df, err = run_df(
+            f"SELECT patologia_a, patologia_b, pacientes FROM {SCHEMA}.mv_ejec_comorbilidad "
+            f"WHERE patologia_a <> patologia_b AND pacientes > 0"
+        )
+        if err or df is None or df.empty:
+            return empty_fig(err or "Sin datos")
+
+        total_df, _ = run_df(
+            f"SELECT patologia_a, pacientes FROM {SCHEMA}.mv_ejec_comorbilidad WHERE patologia_a = patologia_b"
+        )
+        totals = total_df.set_index("patologia_a")["pacientes"] if total_df is not None and not total_df.empty else pd.Series(dtype=float)
+
+        order = sorted(set(df["patologia_a"]), key=lambda p: -totals.get(p, 0))
+        order_labels = [_pat_label(p) for p in order]
+
+        d = df.copy()
+        d["patologia_a_label"] = d["patologia_a"].map(_pat_label)
+        d["patologia_b_label"] = d["patologia_b"].map(_pat_label)
+
+        fig = go.Figure(
+            data=go.Scatter(
+                x=d["pacientes"],
+                y=d["patologia_a_label"],
+                mode="markers",
+                marker=dict(
+                    size=d["pacientes"],
+                    sizemode="area",
+                    sizeref=2.0 * d["pacientes"].max() / (40.0 ** 2),
+                    sizemin=3,
+                    color=d["pacientes"],
+                    colorscale=[[0, "#CDE2FB"], [1, "#104281"]],
+                    showscale=True,
+                    colorbar=dict(title="Pacientes", thickness=12, len=0.9),
+                    line=dict(width=0.5, color="white"),
+                ),
+                customdata=d["patologia_b_label"],
+                hovertemplate="%{y} ∩ %{customdata}<br>%{x:,} pacientes<extra></extra>",
+            )
+        )
+        fig.update_yaxes(
+            categoryorder="array", categoryarray=list(reversed(order_labels)),
+            automargin=True, showgrid=False, title=None,
+            tickfont=dict(size=13),
+        )
+        fig.update_xaxes(
+            title="Pacientes en comun", showgrid=True, gridcolor="#F1F5F9",
+            tickfont=dict(size=13),
+        )
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=10),
+            height=max(420, 26 * len(order_labels)),
+            paper_bgcolor="white", plot_bgcolor="white",
+            font=dict(family=font_family, size=13, color="#374151"),
+        )
+        return fig
+
+    def _soften(hex_color, alpha=0.45):
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
+    def _build_flujo_area_fig(anio_list, top_n_servicio=6):
+        """Sankey de 3 etapas: Patologia de alto costo -> Area asistencial ->
+        Servicio. Etapa 1->2: pacientes por patologia y area (Raras/
+        Oncologico/Renal). Etapa 2->3: dentro de cada area, sus servicios mas
+        frecuentes agregados entre las 3 patologias; top N_SERVICIO por area,
+        el resto plegado en 'Otros servicios' (hay areas con 40-97 servicios
+        distintos, sin plegar se satura). Responde al filtro de Anio.
+        Ojo: NO es una secuencia cronologica del paciente (mv_ejec_base no
+        tiene fecha, solo anio, asi que no se puede reconstruir el orden en
+        que un paciente paso por cada area/servicio) — es la distribucion
+        patologia -> area -> servicio, leida de mv_ejec_pat_area_servicio."""
+        df, err = run_df(
+            f"SELECT patologia, area, servhosdes, SUM(pacientes) AS pacientes "
+            f"FROM {SCHEMA}.mv_ejec_pat_area_servicio "
+            f"WHERE anio = ANY(:anio) AND patologia = ANY(:pats) AND area IS NOT NULL "
+            f"GROUP BY patologia, area, servhosdes",
+            {"anio": anio_list, "pats": GLOBAL_PATOLOGIAS},
+        )
+        if err or df is None or df.empty:
+            return empty_fig(err or "Sin datos")
+
+        d = df.copy()
+        d["patologia_label"] = d["patologia"].map(_pat_label)
+        pat_color_map = {_pat_label(p): GLOBAL_COLORS.get(p, brand) for p in GLOBAL_PATOLOGIAS}
+
+        # Etapa 1 -> 2: patologia -> area (suma sobre servicios)
+        pat_area = d.groupby(["patologia_label", "area"])["pacientes"].sum().reset_index()
+
+        # Etapa 2 -> 3: area -> servicio (suma sobre patologias), top N por area
+        area_serv = d.groupby(["area", "servhosdes"])["pacientes"].sum().reset_index()
+        rows = []
+        for area, grupo in area_serv.groupby("area"):
+            grupo = grupo.sort_values("pacientes", ascending=False)
+            rows.append(grupo.head(top_n_servicio))
+            resto = grupo.iloc[top_n_servicio:]
+            if not resto.empty:
+                rows.append(pd.DataFrame([{
+                    "area": area,
+                    "servhosdes": f"Otros servicios ({len(resto)})",
+                    "pacientes": resto["pacientes"].sum(),
+                }]))
+        area_serv2 = pd.concat(rows, ignore_index=True)
+        # Nodo scoped por area: el mismo nombre de servicio puede existir en mas de un area
+        area_serv2["servicio_nodo"] = area_serv2["area"] + " · " + area_serv2["servhosdes"]
+
+        pat_nodes = [p for p in pat_color_map if p in set(pat_area["patologia_label"])]
+        area_order = ["CONSULTA EXTERNA", "EMERGENCIA", "HOSPITALIZACION", "CENTRO QUIRURGICO"]
+        area_nodes = [a for a in area_order if a in set(pat_area["area"])]
+        serv_nodes = area_serv2["servicio_nodo"].tolist()
+
+        nodes = pat_nodes + area_nodes + serv_nodes
+        idx = {label: i for i, label in enumerate(nodes)}
+        node_labels = (
+            [n.title() for n in pat_nodes]
+            + [n.title() for n in area_nodes]
+            + [row["servhosdes"].title() for _, row in area_serv2.iterrows()]
+        )
+        node_colors = (
+            [pat_color_map[p] for p in pat_nodes]
+            + ["#D1D5DB"] * len(area_nodes)
+            + ["#E5E7EB"] * len(serv_nodes)
+        )
+
+        sources, targets, values, link_colors = [], [], [], []
+        for _, row in pat_area.iterrows():
+            pl, ar = row["patologia_label"], row["area"]
+            if pl not in idx or ar not in idx:
+                continue
+            sources.append(idx[pl])
+            targets.append(idx[ar])
+            values.append(row["pacientes"])
+            link_colors.append(_soften(pat_color_map.get(pl, brand)))
+        for _, row in area_serv2.iterrows():
+            ar, sv = row["area"], row["servicio_nodo"]
+            if ar not in idx or sv not in idx:
+                continue
+            sources.append(idx[ar])
+            targets.append(idx[sv])
+            values.append(row["pacientes"])
+            link_colors.append("rgba(156,163,175,0.45)")
+
+        fig = go.Figure(
+            data=go.Sankey(
+                node=dict(
+                    label=node_labels,
+                    color=node_colors,
+                    pad=14, thickness=16,
+                    line=dict(color="white", width=0.5),
+                ),
+                link=dict(
+                    source=sources, target=targets, value=values, color=link_colors,
+                    hovertemplate="%{source.label} → %{target.label}<br>%{value:,} pacientes<extra></extra>",
+                ),
+            )
+        )
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=10),
+            height=640,
+            paper_bgcolor="white", plot_bgcolor="white",
+            font=dict(family=font_family, size=11, color="#374151"),
+        )
+        return fig
+
+    def _build_diag_treemap_fig(anio_list, top_n=10, top_n_servicio=5):
+        """Treemap de 3 niveles: Patologia de alto costo -> Diagnostico
+        (CIE-10) -> Servicio. Top N diagnosticos por patologia (el resto se
+        pliega en 'Otros diagnosticos'); dentro de cada uno de esos top N,
+        top N_SERVICIO servicios (el resto se pliega en 'Otros servicios') —
+        hay patologias con 40-99 servicios distintos por diagnostico, asi que
+        sin plegar se satura. Responde al filtro de Anio. Tamaño = pacientes,
+        color = patologia (heredado por toda su rama)."""
+        df, err = run_df(
+            f"SELECT patologia, diagdes, servhosdes, SUM(pacientes) AS pacientes "
+            f"FROM {SCHEMA}.mv_ejec_pat_diag_servicio "
+            f"WHERE anio = ANY(:anio) AND patologia = ANY(:pats) "
+            f"GROUP BY patologia, diagdes, servhosdes",
+            {"anio": anio_list, "pats": GLOBAL_PATOLOGIAS},
+        )
+        if err or df is None or df.empty:
+            return empty_fig(err or "Sin datos")
+
+        d = df.copy()
+        d["patologia_label"] = d["patologia"].map(_pat_label)
+
+        totales_diag = d.groupby(["patologia_label", "diagdes"])["pacientes"].sum().reset_index()
+        rows = []
+        for pat_label, grupo_pat in totales_diag.groupby("patologia_label"):
+            grupo_pat = grupo_pat.sort_values("pacientes", ascending=False)
+            top_diags = grupo_pat.head(top_n)["diagdes"].tolist()
+            resto_diags = grupo_pat.iloc[top_n:]
+
+            for diag in top_diags:
+                sub = d[(d["patologia_label"] == pat_label) & (d["diagdes"] == diag)]
+                sub = sub.sort_values("pacientes", ascending=False)
+                rows.append(sub.head(top_n_servicio)[["patologia_label", "diagdes", "servhosdes", "pacientes"]])
+                resto_serv = sub.iloc[top_n_servicio:]
+                if not resto_serv.empty:
+                    rows.append(pd.DataFrame([{
+                        "patologia_label": pat_label, "diagdes": diag,
+                        "servhosdes": f"Otros servicios ({len(resto_serv)})",
+                        "pacientes": resto_serv["pacientes"].sum(),
+                    }]))
+
+            if not resto_diags.empty:
+                rows.append(pd.DataFrame([{
+                    "patologia_label": pat_label,
+                    "diagdes": f"Otros diagnosticos ({len(resto_diags)})",
+                    "servhosdes": "Varios servicios",
+                    "pacientes": resto_diags["pacientes"].sum(),
+                }]))
+        d2 = pd.concat(rows, ignore_index=True)
+
+        color_map = {_pat_label(k): v for k, v in GLOBAL_COLORS.items()}
+        fig = px.treemap(
+            d2, path=["patologia_label", "diagdes", "servhosdes"], values="pacientes",
+            color="patologia_label", color_discrete_map=color_map,
+        )
+        fig.update_traces(
+            texttemplate="%{label}<br>%{value:,}",
+            hovertemplate="%{parent} · %{label}<br>%{value:,} pacientes<extra></extra>",
+            marker=dict(line=dict(width=1, color="white")),
+            pathbar=dict(visible=True, thickness=28, textfont=dict(size=13)),
+        )
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=36, b=10),
+            height=560,
+            paper_bgcolor="white",
+            font=dict(family=font_family, size=12, color="#374151"),
+        )
         return fig
 
     def build_header():
@@ -466,6 +725,28 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                         ),
                     ],
                     style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
+                ),
+                graph_card(
+                    "Diagnosticos y servicios mas frecuentes por patologia de alto costo",
+                    "ejec-fig-diag-treemap",
+                    height=480,
+                    subtitle="Top 10 diagnosticos (CIE-10) por patologia y, dentro de cada uno, sus servicios mas frecuentes · tamaño = pacientes · responde al filtro de Anio",
+                    flex="1 1 100%",
+                ),
+                graph_card(
+                    "Todas las intersecciones entre comorbilidades",
+                    "ejec-fig-comorb-burbujas",
+                    height=560,
+                    subtitle="Cada fila = una patologia; posicion, tamaño y color de cada burbuja = pacientes que comparte con la otra patologia · historico completo (diagonal excluida)",
+                    flex="1 1 100%",
+                    figure=_build_comorbilidad_burbujas_fig(),
+                ),
+                graph_card(
+                    "Flujo de atencion: patologia de alto costo → area → servicio",
+                    "ejec-fig-flujo-area",
+                    height=640,
+                    subtitle="En que area y servicio se concentra la atencion de cada patologia de alto costo · responde al filtro de Anio. No representa el recorrido cronologico de un paciente (no hay fecha, solo anio).",
+                    flex="1 1 100%",
                 ),
             ],
             style={"display": "flex", "flexDirection": "column", "gap": "14px"},
@@ -655,12 +936,14 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         Output("ejec-comp-kpis", "children"),
         Output("ejec-comp-feedback", "children"),
         Output("ejec-fig-ranking-red", "figure"),
+        Output("ejec-fig-flujo-area", "figure"),
+        Output("ejec-fig-diag-treemap", "figure"),
         Input("ejec-anio", "value"),
     )
     def update_comparativa(anio):
         anio_list = _as_list(anio)
         if not anio_list:
-            return [], None, empty_fig()
+            return [], None, empty_fig(), empty_fig(), empty_fig()
 
         # --- Total general / patologias activas (mv_ejec_pat_resumen) ---
         rank_df, err = run_df(
@@ -670,9 +953,9 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             {"anio": anio_list},
         )
         if err:
-            return [], dbc.Alert(err, color="warning"), empty_fig(err)
+            return [], alert_box(err, "warning"), empty_fig(err), empty_fig(), empty_fig()
         if rank_df is None or rank_df.empty:
-            return [], dbc.Alert("Sin datos para el filtro seleccionado.", color="info"), empty_fig()
+            return [], alert_box("Sin datos para el filtro seleccionado.", "info"), empty_fig(), empty_fig(), empty_fig()
 
         total_df, _ = run_df(
             f"SELECT COALESCE(SUM(pacientes),0) AS pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
@@ -749,7 +1032,10 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             fig_ranking_red.update_xaxes(title="Pacientes")
             style_fig(fig_ranking_red, height=max(320, 34 * len(top_redes)))
 
-        return kpis, None, fig_ranking_red
+        fig_flujo_area = _build_flujo_area_fig(anio_list)
+        fig_diag_treemap = _build_diag_treemap_fig(anio_list)
+
+        return kpis, None, fig_ranking_red, fig_flujo_area, fig_diag_treemap
 
     @dash_app.callback(
         Output("ejec-centro-detalle", "options"),
@@ -792,7 +1078,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             filtro_params,
         )
         if err:
-            return [], dbc.Alert(err, color="warning"), empty_fig(err), empty_fig(), empty_fig(), empty_fig(), empty_fig(), None
+            return [], alert_box(err, "warning"), empty_fig(err), empty_fig(), empty_fig(), empty_fig(), empty_fig(), None
 
         pac_pat = 0
         if res_df is not None and not res_df.empty:
@@ -979,7 +1265,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     def buscar_paciente(n_clicks, n_submit, doc):
         doc = (doc or "").strip()
         if not doc:
-            return dbc.Alert("Ingrese un documento de paciente.", color="warning"), None, None, None
+            return alert_box("Ingrese un documento de paciente.", "warning"), None, None, None
 
         df, err = run_df(
             f"""SELECT anio, patologia, area, cenasides, servhosdes,
@@ -990,9 +1276,9 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             {"doc": doc},
         )
         if err:
-            return dbc.Alert(err, color="warning"), None, None, None
+            return alert_box(err, "warning"), None, None, None
         if df is None or df.empty:
-            return dbc.Alert(f"No se encontraron registros para el documento {doc}.", color="info"), None, None, None
+            return alert_box(f"No se encontraron registros para el documento {doc}.", "info"), None, None, None
 
         # Info del paciente
         sexo = df["sexo"].dropna().iloc[0] if df["sexo"].notna().any() else "-"
