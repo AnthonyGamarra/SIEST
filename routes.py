@@ -1309,4 +1309,16 @@ def register_routes(app):
 			dashboard_url='/tramas_embed/',
 		)
 
+	@bp.route('/patologias/')
+	@login_required
+	def modulo_patologias():
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden acceder al Modulo Ejecutivo de Patologias.', 'danger')
+			return redirect(url_for('main.index'))
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url='/dashboard_ejec_embed/',
+		)
+
 	app.register_blueprint(bp)

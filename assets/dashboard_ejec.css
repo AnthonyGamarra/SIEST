@@ -1,0 +1,94 @@
+/* Estilos exclusivos del Modulo Ejecutivo de Patologias.
+   Todo esta anidado bajo .ejec-dashboard-root para no afectar a otros
+   dashboards que comparten esta misma carpeta de assets. */
+
+.ejec-dashboard-root .ejec-card {
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.ejec-dashboard-root .ejec-card:hover {
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+    transform: translateY(-2px);
+    border-color: rgba(42, 120, 214, 0.25);
+}
+
+.ejec-dashboard-root .ejec-kpi-icon {
+    transition: transform 0.18s ease;
+}
+
+.ejec-dashboard-root .ejec-card:hover .ejec-kpi-icon {
+    transform: scale(1.06);
+}
+
+/* Tabs: subrayado mas marcado y transicion suave en el estado activo */
+.ejec-dashboard-root .tab--selected {
+    border-top: 3px solid #2A78D6 !important;
+    box-shadow: none !important;
+}
+
+.ejec-dashboard-root .tab {
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+/* Scrollbar mas fina y discreta para tablas con overflow */
+.ejec-dashboard-root *::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.ejec-dashboard-root *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ejec-dashboard-root *::-webkit-scrollbar-thumb {
+    background-color: #d7dce3;
+    border-radius: 8px;
+}
+
+.ejec-dashboard-root *::-webkit-scrollbar-thumb:hover {
+    background-color: #b7c0cc;
+}
+
+/* Resaltado sutil de fila al pasar el mouse en las tablas */
+.ejec-dashboard-root .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table tr:hover td {
+    background-color: #EFF6FF !important;
+}
+
+/* Botones: leve elevacion al pasar el mouse */
+.ejec-dashboard-root button.btn {
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.ejec-dashboard-root button.btn:hover {
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+    transform: translateY(-1px);
+}
+
+/* Dropdowns de filtro: bordes redondeados consistentes con las tarjetas,
+   anillo de foco de marca y chips de valor mas legibles. */
+.ejec-dashboard-root .dash-dropdown-wrapper {
+    border-radius: 10px !important;
+    border-color: #E5E7EB !important;
+    min-height: 38px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ejec-dashboard-root .dash-dropdown-wrapper:hover {
+    border-color: #B9CFEA !important;
+}
+
+.ejec-dashboard-root .dash-dropdown-wrapper:focus-within {
+    border-color: #2A78D6 !important;
+    box-shadow: 0 0 0 3px rgba(42, 120, 214, 0.14);
+}
+
+.ejec-dashboard-root .dash-dropdown-value-item {
+    background-color: #EFF6FF !important;
+    color: #1D4ED8 !important;
+    border-radius: 6px !important;
+    font-weight: 500;
+}
+
+.ejec-dashboard-root .dash-dropdown-option:hover {
+    background-color: #EFF6FF !important;
+}

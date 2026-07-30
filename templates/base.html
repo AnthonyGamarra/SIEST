@@ -336,6 +336,16 @@
           </a>
           {% endif %}
 
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.modulo_patologias') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='microscope_4712682.png') }}"
+              alt="Modulo Ejecutivo de Patologias"
+            />
+            <span>Patologías (Ejecutivo)</span>
+          </a>
+          {% endif %}
+
           <!-- Los gráficos de auditoría ahora están integrados en Reportes LOGS -->
         </div>
       </div>
