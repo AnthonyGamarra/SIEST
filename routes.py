@@ -4,7 +4,7 @@ import io
 
 import joblib
 import pandas as pd
-from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify, Response
+from flask import Blueprint, render_template, redirect, url_for, request, flash, session, current_app, jsonify, Response, send_from_directory
 from flask_login import login_user, logout_user, login_required, current_user
 from extensions import db
 from backend.models import User
@@ -1320,5 +1320,34 @@ def register_routes(app):
 			show_modules=False,
 			dashboard_url='/dashboard_ejec_embed/',
 		)
+
+	@bp.route('/busqueda-paciente/')
+	@login_required
+	def busqueda_paciente():
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden acceder a la Busqueda de Paciente.', 'danger')
+			return redirect(url_for('main.index'))
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url='/busqueda_paciente_embed/',
+		)
+
+	# Version beta (React + Nivo) de la pestaña "Analitica por patologia de
+	# alto costo". Ruta nueva e independiente: /patologias/ sigue sirviendo
+	# la version Dash completa (3 pestañas) sin cambios.
+	FRONTEND_EJEC_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend_ejec', 'dist')
+
+	@bp.route('/patologias-beta/')
+	@bp.route('/patologias-beta/<path:filename>')
+	@login_required
+	def modulo_patologias_beta(filename='index.html'):
+		if current_user.role != 'admin':
+			flash('Solo los administradores pueden acceder al Modulo Ejecutivo de Patologias.', 'danger')
+			return redirect(url_for('main.index'))
+		target = filename
+		if not os.path.isfile(os.path.join(FRONTEND_EJEC_DIST, target)):
+			target = 'index.html'
+		return send_from_directory(FRONTEND_EJEC_DIST, target)
 
 	app.register_blueprint(bp)

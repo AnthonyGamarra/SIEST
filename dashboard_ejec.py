@@ -264,9 +264,125 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     GLOBAL_PATOLOGIAS = ["Raras", "Oncologico", "Renal"]
     GLOBAL_COLORS = {"Oncologico": brand, "Renal": PALETTE[4], "Raras": PALETTE[3]}
 
+    GROWTH_GOOD_COLOR = "#1BAF7A"  # baja de pacientes = mejora (verde)
+    GROWTH_BAD_COLOR = "#E34948"   # sube de pacientes = empeora (rojo)
+    GROWTH_FLAT_COLOR = "#6B7280"
+
+    def _with_growth_labels(df, group_col, value_col="pacientes"):
+        """Agrega 'label_text' (valor + variacion vs el anio anterior dentro
+        del mismo grupo, con icono ▲/▼/►) y 'growth_color' (color de estado
+        del icono/porcentaje, independiente del color categorico de la
+        linea). Sin variacion en el primer anio de cada grupo, no hay anio
+        previo con que comparar."""
+        d = df.copy()
+        prev = d.groupby(group_col)[value_col].shift(1)
+
+        def _fmt_row(value, prev_value):
+            val_txt = f"{int(value):,}"
+            if pd.isna(prev_value) or prev_value == 0:
+                return val_txt, GROWTH_FLAT_COLOR
+            pct = (value - prev_value) / prev_value * 100
+            if pct > 0:
+                icon, sign, color = "▲", "+", GROWTH_BAD_COLOR
+            elif pct < 0:
+                icon, sign, color = "▼", "", GROWTH_GOOD_COLOR
+            else:
+                icon, sign, color = "►", "", GROWTH_FLAT_COLOR
+            return f"{val_txt}<br>{icon} {sign}{pct:.1f}%", color
+
+        formatted = [_fmt_row(v, p) for v, p in zip(d[value_col], prev)]
+        d["label_text"] = [f[0] for f in formatted]
+        d["growth_color"] = [f[1] for f in formatted]
+        return d
+
+    def _apply_growth_textcolor(fig, df, group_col, x_col="anio"):
+        """Colorea cada etiqueta de texto (icono + %%) con su color de estado
+        (verde/rojo/gris), independiente del color categorico de la linea,
+        que sigue identificando la patologia."""
+        for trace in fig.data:
+            sub = df[df[group_col] == trace.name] if trace.name in set(df[group_col]) else df
+            sub = sub.set_index(x_col).reindex(trace.x).reset_index()
+            trace.textfont = dict(size=11, color=sub["growth_color"].tolist())
+        return fig
+
+    TREND_ESTIMATE_UNTIL_YEAR = 2030
+
+    def _add_trendlines(fig, df, group_col, x_col="anio", y_col="pacientes", exclude_x=None):
+        """Agrega, por cada serie ya presente en el grafico, una recta de
+        tendencia (regresion lineal simple sobre el orden de los anios)
+        punteada del mismo color que su linea, visible por defecto (se puede
+        ocultar haciendo clic en la leyenda). Excluye 2019, 2020 y 2021 del
+        ajuste (y del propio trazo) por ser anios atipicos, y tambien el
+        anio en curso (calculado dinamicamente) por no ser un anio cerrado
+        todavia: la linea de datos real si los sigue mostrando, solo la
+        tendencia los ignora. Extiende la tendencia anio a anio desde el
+        ultimo anio considerado hasta TREND_ESTIMATE_UNTIL_YEAR y marca esos
+        puntos como estimados (simbolo distinto + etiqueta), sin
+        confundirlos con datos reales."""
+        if exclude_x is None:
+            exclude_x = {"2019", "2020", "2021", str(datetime.now().year)}
+        traces = list(fig.data)
+
+        def _color_for(group):
+            t = traces[0] if len(traces) == 1 else next((t for t in traces if t.name == group), None)
+            if t is None:
+                return "#9CA3AF"
+            if t.line and t.line.color:
+                return t.line.color
+            if t.marker and t.marker.color:
+                return t.marker.color
+            return "#9CA3AF"
+
+        for group, sub in df.groupby(group_col):
+            sub = sub.sort_values(x_col)
+            if exclude_x:
+                sub = sub[~sub[x_col].isin(exclude_x)]
+            if len(sub) < 2:
+                continue
+            color = _color_for(group)
+            x_idx = np.arange(len(sub))
+            slope, intercept = np.polyfit(x_idx, sub[y_col].astype(float), 1)
+            y_fit = slope * x_idx + intercept
+
+            try:
+                last_year_int = int(sub[x_col].iloc[-1])
+            except (TypeError, ValueError):
+                last_year_int = None
+
+            future_years = (
+                [str(y) for y in range(last_year_int + 1, TREND_ESTIMATE_UNTIL_YEAR + 1)]
+                if last_year_int is not None else []
+            )
+
+            if future_years:
+                y_future = [slope * (len(sub) + i) + intercept for i in range(len(future_years))]
+                x_line = list(sub[x_col]) + future_years
+                y_line = list(y_fit) + y_future
+            else:
+                x_line, y_line = list(sub[x_col]), list(y_fit)
+
+            fig.add_trace(go.Scatter(
+                x=x_line, y=y_line, mode="lines",
+                line=dict(dash="dot", width=2, color=color),
+                name=f"Tendencia {group}", legendgroup=str(group),
+                showlegend=True, visible=True, hoverinfo="skip",
+            ))
+
+            if future_years:
+                fig.add_trace(go.Scatter(
+                    x=future_years, y=y_future, mode="markers+text",
+                    marker=dict(symbol="diamond-open", size=11, color=color, line=dict(width=2, color=color)),
+                    text=[f"{v:,.0f}<br>(estimado)" for v in y_future], textposition="top center",
+                    textfont=dict(size=11, color=color),
+                    name=f"Tendencia {group}", legendgroup=str(group), showlegend=False,
+                    hovertemplate="%{x} (estimado)<br>%{y:,.0f} pacientes<extra></extra>",
+                ))
+        return fig
+
     def _build_pacientes_total_fig():
-        """Pacientes totales por patologia (Raras/Oncologico/Renal), historico
-        completo (anio='TODOS', igual criterio que el resto del modulo)."""
+        """% de pacientes por patologia de alto costo (Raras/Oncologico/
+        Renal) sobre el total de las 3, historico completo (anio='TODOS',
+        igual criterio que el resto del modulo)."""
         df, err = run_df(
             f"SELECT patologia, pacientes FROM {SCHEMA}.mv_ejec_pat_resumen "
             f"WHERE anio = 'TODOS' AND patologia = ANY(:pats)",
@@ -280,19 +396,18 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         labels = [_pat_label(p) for p in d["patologia"]]
         colors = [GLOBAL_COLORS.get(p, brand) for p in d["patologia"]]
         fig = go.Figure(
-            data=go.Bar(
-                x=labels,
-                y=d["pacientes"],
-                text=d["pacientes"],
-                texttemplate="%{text:,}",
+            data=go.Pie(
+                labels=labels,
+                values=d["pacientes"],
+                hole=0.5,
+                marker=dict(colors=colors, line=dict(color="white", width=2)),
+                texttemplate="%{label}<br>%{percent:.1%} (%{value:,})",
                 textposition="outside",
-                marker_color=colors,
-                hovertemplate="%{x}<br>%{y:,} pacientes<extra></extra>",
+                hovertemplate="%{label}<br>%{value:,} pacientes (%{percent:.1%})<extra></extra>",
+                sort=False,
             )
         )
-        fig.update_yaxes(title="Pacientes")
-        fig.update_xaxes(title=None)
-        style_fig(fig, height=340)
+        style_fig(fig, height=480)
         fig.update_layout(showlegend=False)
         return fig
 
@@ -310,23 +425,26 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
 
         d = df.copy()
         d["patologia_label"] = d["patologia"].map(_pat_label)
+        d = _with_growth_labels(d, "patologia_label")
         color_map = {_pat_label(k): v for k, v in GLOBAL_COLORS.items()}
         fig = px.line(
             d, x="anio", y="pacientes", color="patologia_label", markers=True,
-            color_discrete_map=color_map, text="pacientes",
+            color_discrete_map=color_map, text="label_text",
         )
         fig.update_traces(
-            texttemplate="%{text:,}",
+            texttemplate="%{text}",
             textposition="top center",
             textfont=dict(size=11),
             marker=dict(size=8),
             line=dict(width=3),
             hovertemplate="%{x}<br>%{fullData.name}: %{y:,} pacientes<extra></extra>",
         )
+        _apply_growth_textcolor(fig, d, "patologia_label")
+        _add_trendlines(fig, d, "patologia_label")
         fig.update_yaxes(title="Pacientes")
         fig.update_xaxes(title=None)
-        style_fig(fig, height=340)
-        fig.update_layout(legend_title_text=None)
+        style_fig(fig, height=480)
+        fig.update_layout(legend_title_text=None, margin=dict(t=50))
         return fig
 
     def _build_comorbilidad_grupo_fig(patologia_global, patron_comorbilidad, color=brand):
@@ -404,12 +522,12 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 marker=dict(
                     size=d["pacientes"],
                     sizemode="area",
-                    sizeref=2.0 * d["pacientes"].max() / (40.0 ** 2),
-                    sizemin=3,
+                    sizeref=2.0 * d["pacientes"].max() / (64.0 ** 2),
+                    sizemin=6,
                     color=d["pacientes"],
                     colorscale=[[0, "#CDE2FB"], [1, "#104281"]],
                     showscale=True,
-                    colorbar=dict(title="Pacientes", thickness=12, len=0.9),
+                    colorbar=dict(title="Pacientes", thickness=14, len=0.9, tickfont=dict(size=13), title_font=dict(size=14)),
                     line=dict(width=0.5, color="white"),
                 ),
                 customdata=d["patologia_b_label"],
@@ -419,17 +537,17 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         fig.update_yaxes(
             categoryorder="array", categoryarray=list(reversed(order_labels)),
             automargin=True, showgrid=False, title=None,
-            tickfont=dict(size=13),
+            tickfont=dict(size=16),
         )
         fig.update_xaxes(
-            title="Pacientes en comun", showgrid=True, gridcolor="#F1F5F9",
-            tickfont=dict(size=13),
+            title="Pacientes en común", showgrid=True, gridcolor="#F1F5F9",
+            tickfont=dict(size=15), title_font=dict(size=15),
         )
         fig.update_layout(
             margin=dict(l=10, r=10, t=10, b=10),
-            height=max(420, 26 * len(order_labels)),
+            height=max(460, 30 * len(order_labels)),
             paper_bgcolor="white", plot_bgcolor="white",
-            font=dict(family=font_family, size=13, color="#374151"),
+            font=dict(family=font_family, size=15, color="#374151"),
         )
         return fig
 
@@ -630,7 +748,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     style={"display": "flex", "alignItems": "center", "gap": "14px"},
                 ),
                 html.P(
-                    "Analitica por patologia y comorbilidad del paciente | Sistema de Gestion Estadistica",
+                    "Analitica por patología y comorbilidad del paciente | Sistema de Gestion Estadistica",
                     style={"color": muted, "fontFamily": font_family, "fontSize": "13px", "margin": "8px 0 0 62px"},
                 ),
             ],
@@ -680,18 +798,18 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 html.Div(
                     [
                         graph_card(
-                            "Pacientes por patologia de alto costo: Raras / Oncologico / Renal",
+                            "Pacientes por patología de alto costo: Raras / Oncológico / Renal",
                             "ejec-fig-comorbilidad-total",
-                            height=340,
-                            subtitle="Total de pacientes por patologia (2019-2025)",
+                            height=480,
+                            subtitle="Total de pacientes por patología (2019-2026)",
                             flex="1 1 420px",
                             figure=_build_pacientes_total_fig(),
                         ),
                         graph_card(
-                            "Evolucion anual · patologias de alto costo (Raras / Oncologico / Renal)",
+                            "Evolucion anual · patologías de alto costo (Raras / Oncológico / Renal)",
                             "ejec-fig-comorbilidad",
-                            height=340,
-                            subtitle="Pacientes por anio y patologia (2019-2025)",
+                            height=480,
+                            subtitle="Pacientes por anio y patología (2019-2026)",
                             flex="2 1 560px",
                             figure=_build_comorbilidad_global_fig(),
                         ),
@@ -699,27 +817,27 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
                 ),
                 graph_card(
-                    "Ranking por red · patologias de alto costo",
+                    "Ranking por red · patologías de alto costo",
                     "ejec-fig-ranking-red",
                     height=320,
-                    subtitle="Pacientes de Raras + Oncologico + Renal por red asistencial, distinguidos por patologia · top 15 (2019 - 2025)",
+                    subtitle="Pacientes de Raras + Oncológico + Renal por red asistencial, distinguidos por patología · top 15 . Responde al filtro de año",
                     flex="1 1 100%",
                 ),
                 html.Div(
                     [
                         graph_card(
-                            "¿Que otras enfermedades tienen los pacientes de Oncologico? (alto costo)",
+                            "Comorbilidades asociadas a Oncológico (alto costo)",
                             "ejec-fig-comorb-oncologico",
                             height=max(320, 34 * 14),
-                            subtitle="% de pacientes con Oncologico que en algun momento tambien tuvo cada diagnostico (2019 - 2025).",
+                            subtitle="% de pacientes con Oncológico que en algun momento también tuvo cada comorbilidad asociada (lista según comorbilidades) · 2019-2026.",
                             flex="1 1 480px",
                             figure=_build_comorbilidad_grupo_fig("Oncologico", "Coomorbilidad Oncología", brand),
                         ),
                         graph_card(
-                            "¿Que otras enfermedades tienen los pacientes de Renal? (alto costo)",
+                            "Comorbilidades asociadas a Renal (alto costo)",
                             "ejec-fig-comorb-renal",
                             height=max(320, 34 * 14),
-                            subtitle="% de pacientes con Renal que en algun momento tambien tuvo cada diagnostico (2019 - 2025).",
+                            subtitle="% de pacientes con Renal que en algun momento también tuvo cada comorbilidad asociada (lista según comorbilidades) · 2019-2026.",
                             flex="1 1 480px",
                             figure=_build_comorbilidad_grupo_fig("Renal", "Coomorbilidad Renal", "#1BAF7A"),
                         ),
@@ -727,25 +845,25 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
                 ),
                 graph_card(
-                    "Diagnosticos y servicios mas frecuentes por patologia de alto costo",
+                    "Diagnosticos y servicios mas frecuentes por patología de alto costo",
                     "ejec-fig-diag-treemap",
                     height=480,
-                    subtitle="Top 10 diagnosticos (CIE-10) por patologia y, dentro de cada uno, sus servicios mas frecuentes · tamaño = pacientes · responde al filtro de Anio",
+                    subtitle="Top 10 diagnosticos (CIE-10) por patología y, dentro de cada uno, sus servicios mas frecuentes · tamaño = pacientes · responde al filtro de Anio",
                     flex="1 1 100%",
                 ),
                 graph_card(
                     "Todas las intersecciones entre comorbilidades",
                     "ejec-fig-comorb-burbujas",
                     height=560,
-                    subtitle="Cada fila = una patologia; posicion, tamaño y color de cada burbuja = pacientes que comparte con la otra patologia · (2019-2025)",
+                    subtitle="Cada fila = una patologia; posicion, tamaño y color de cada burbuja = pacientes que comparte con la otra patología · (2019-2026)",
                     flex="1 1 100%",
                     figure=_build_comorbilidad_burbujas_fig(),
                 ),
                 graph_card(
-                    "Flujo de atencion: patologia de alto costo → area → servicio",
+                    "Flujo de atencion: patología de alto costo → area → servicio",
                     "ejec-fig-flujo-area",
                     height=640,
-                    subtitle="En que area y servicio se concentra la atencion de cada patologia de alto costo · responde al filtro de Anio.",
+                    subtitle="En que area y servicio se concentra la atencion de cada patología de alto costo · responde al filtro de Anio.",
                     flex="1 1 100%",
                 ),
             ],
@@ -754,7 +872,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
 
         return html.Div(
             [
-                section_title("Vista comparativa (todas las patologias)", "bi-grid-3x3-gap-fill"),
+                section_title("Vista comparativa (todas las patologías)", "bi-grid-3x3-gap-fill"),
                 comparativa,
             ],
             style={"display": "flex", "flexDirection": "column", "gap": "10px"},
@@ -827,13 +945,13 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     ],
                     style={"display": "flex", "gap": "14px", "flexWrap": "wrap"},
                 ),
-                graph_card("Evolucion anual", "ejec-fig-tendencia", height=340, flex="1 1 100%"),
+                graph_card("Evolucion anual", "ejec-fig-tendencia", height=400, flex="1 1 100%"),
                 graph_card("Pacientes por servicio", "ejec-fig-servicio", height=380, flex="1 1 100%"),
                 graph_card(
                     "Ranking por centro",
                     "ejec-fig-centro",
                     height=380,
-                    subtitle="Top 15 centros asistenciales · ignora el filtro de centro (para poder rankearlos) y de grupo etario",
+                    subtitle="Top 15 centros asistenciales · ignora el filtro de centro (para poder rankearlos) y de grupo etario · sin filtro de red asistencial, suma entre todas",
                     flex="1 1 100%",
                 ),
             ],
@@ -863,7 +981,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 html.Div(id="ejec-paciente-info"),
                 html.Div(
                     [
-                        html.Div("Matriz de patologias por anio", style={"fontWeight": 700, "color": brand, "marginBottom": "8px", "fontSize": "15px"}),
+                        html.Div("Matriz de patologías por anio", style={"fontWeight": 700, "color": brand, "marginBottom": "8px", "fontSize": "15px"}),
                         html.Small("Marca (v) los anios en que el paciente presento cada patologia.", style={"color": muted}),
                         dcc.Loading(html.Div(id="ejec-matriz", style={"marginTop": "10px"}), type="default"),
                     ],
@@ -903,10 +1021,10 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 build_header(),
                 html.Br(),
                 dcc.Tabs(
-                    id="ejec-tabs", value="tab1",
+                    id="ejec-tabs", value="tab-detalle",
                     children=[
-                        dcc.Tab(label="Analítica por patologia de alto costo", value="tab1", children=[html.Div(build_tab1(), style={"paddingTop": "16px"})]),
-                        dcc.Tab(label="Detalle por patologia", value="tab-detalle", children=[html.Div(build_tab_detalle(), style={"paddingTop": "16px"})]),
+                        dcc.Tab(label="Detalle por patología", value="tab-detalle", children=[html.Div(build_tab_detalle(), style={"paddingTop": "16px"})]),
+                        dcc.Tab(label="Analítica por patología de alto costo", value="tab1", children=[html.Div(build_tab1(), style={"paddingTop": "16px"})]),
                         dcc.Tab(label="Comorbilidad del paciente", value="tab2", children=[html.Div(build_tab2(), style={"paddingTop": "16px"})]),
                     ],
                 ),
@@ -968,8 +1086,8 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
 
         # --- KPIs: hotspots (top-1 por red y por centro = combinacion a identificar rapido) ---
         kpis = [
-            kpi_card("Pacientes · Alto costo (Raras + Oncologico + Renal)", _fmt(pac_total), "bi-people-fill"),
-            kpi_card("Patologias activas", _fmt(len(rd)), "bi-clipboard2-pulse", "#1BAF7A"),
+            kpi_card("Pacientes · Alto costo (Raras + Oncológico + Renal)", _fmt(pac_total), "bi-people-fill"),
+            kpi_card("Patologías activas", _fmt(len(rd)), "bi-clipboard2-pulse", "#1BAF7A"),
         ]
         top_red_df, _ = run_df(
             f"SELECT patologia, redasisdes, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_red "
@@ -1089,7 +1207,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             filtro_params,
         )
         n_diag = int(diag_count_df["n"].iloc[0]) if diag_count_df is not None and not diag_count_df.empty else 0
-        pat_label = _pat_label(pat_list[0]) if len(pat_list) == 1 else f"{len(pat_list)} patologias"
+        pat_label = _pat_label(pat_list[0]) if len(pat_list) == 1 else f"{len(pat_list)} patologías"
         kpis = [
             kpi_card(f"Pacientes · {pat_label}", _fmt(pac_pat), "bi-person-badge", "#1BAF7A"),
             kpi_card("Diagnosticos distintos", _fmt(n_diag), "bi-diagram-3", "#4A3AA7"),
@@ -1107,14 +1225,26 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         else:
             trend_df = trend_df.copy()
             trend_df["patologia"] = trend_df["patologia"].map(_pat_label)
+            trend_df = _with_growth_labels(trend_df, "patologia")
             if len(pat_list) > 1:
-                fig_trend = px.line(trend_df, x="anio", y="pacientes", color="patologia", markers=True, color_discrete_sequence=PALETTE)
+                fig_trend = px.line(trend_df, x="anio", y="pacientes", color="patologia", markers=True, color_discrete_sequence=PALETTE, text="label_text")
+                fig_trend.update_traces(
+                    texttemplate="%{text}", textposition="top center", textfont=dict(size=11),
+                    marker=dict(size=8), line=dict(width=3),
+                )
             else:
-                fig_trend = px.line(trend_df, x="anio", y="pacientes", markers=True)
-                fig_trend.update_traces(line_color=brand, marker=dict(size=8))
-            fig_trend.update_yaxes(title="Pacientes")
+                fig_trend = px.line(trend_df, x="anio", y="pacientes", markers=True, text="label_text")
+                fig_trend.update_traces(
+                    line_color=brand, marker=dict(size=8),
+                    texttemplate="%{text}", textposition="top center", textfont=dict(size=11),
+                )
+            _apply_growth_textcolor(fig_trend, trend_df, "patologia")
+            _add_trendlines(fig_trend, trend_df, "patologia")
+            max_pacientes = max(v for trace in fig_trend.data for v in (trace.y if trace.y is not None else []) if v is not None)
+            fig_trend.update_yaxes(title="Pacientes", range=[0, max_pacientes * 1.22])
             fig_trend.update_xaxes(title=None)
-            style_fig(fig_trend, height=340)
+            style_fig(fig_trend, height=400)
+            fig_trend.update_layout(margin=dict(t=30))
 
         # Servicios
         serv_df, _ = run_df(
@@ -1133,9 +1263,14 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             fig_serv.update_xaxes(title="Pacientes")
             style_fig(fig_serv, height=380)
 
+        # mv_ejec_pat_centro no tiene fila colapsada 'TODAS' para redasiscod
+        # (a diferencia de mv_ejec_pat_servicio/_detalle, que sí la tienen via
+        # CUBE): si no se filtra una red especifica, se omite el predicado y
+        # se suma entre todas las redes (top de centros en general).
+        red_filter_sql = "AND redasiscod = ANY(:red) " if "TODAS" not in red_list else ""
         centro_df, _ = run_df(
             f"SELECT cenasides, patologia, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_centro "
-            f"WHERE patologia = ANY(:pat) AND anio = ANY(:anio) AND redasiscod = ANY(:red) "
+            f"WHERE patologia = ANY(:pat) AND anio = ANY(:anio) {red_filter_sql}"
             f"AND cenasides IS NOT NULL "
             f"GROUP BY cenasides, patologia",
             {"pat": pat_list, "anio": anio_list, "red": red_list},
@@ -1235,6 +1370,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         d = diag_df.copy()
         d["pacientes"] = pd.to_numeric(d["pacientes"], errors="coerce").fillna(0).round().astype(int)
         d = d.drop(columns=["registros"], errors="ignore").fillna("").astype(str)
+        d["pacientes"] = d["pacientes"].apply(lambda v: f"{int(v):,}")
         return dash_table.DataTable(
             columns=[
                 {"name": "CIE-10", "id": "cod_diagnostico"},
@@ -1244,9 +1380,18 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             ],
             data=d.to_dict("records"),
             page_action="none",
-            fixed_rows={"headers": True},
+            css=[{"selector": ".dash-spreadsheet-container table", "rule": "table-layout: fixed; width: 100%;"}],
             style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "320px"},
-            style_cell={"textAlign": "left", "fontFamily": font_family, "fontSize": "12px", "padding": "7px"},
+            style_cell={
+                "textAlign": "left", "fontFamily": font_family, "fontSize": "12px", "padding": "7px",
+                "overflow": "hidden", "textOverflow": "ellipsis",
+            },
+            style_cell_conditional=[
+                {"if": {"column_id": "cod_diagnostico"}, "width": "14%", "minWidth": "14%", "maxWidth": "14%"},
+                {"if": {"column_id": "diagdes"}, "width": "48%", "minWidth": "48%", "maxWidth": "48%", "whiteSpace": "normal", "textOverflow": "clip"},
+                {"if": {"column_id": "tipodiagnom"}, "width": "20%", "minWidth": "20%", "maxWidth": "20%"},
+                {"if": {"column_id": "pacientes"}, "width": "18%", "minWidth": "18%", "maxWidth": "18%"},
+            ],
             style_header={"backgroundColor": brand_soft, "fontWeight": 700, "border": f"1px solid {border}"},
             style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#F8FAFF"}],
         )
@@ -1325,7 +1470,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     def _build_matriz(df):
         pat_df = df[df["patologia"] != "SIN PATOLOGIA"]
         if pat_df.empty:
-            return html.Div("El paciente no presenta patologias catalogadas.", style={"color": muted, "padding": "10px"})
+            return html.Div("El paciente no presenta patologías catalogadas.", style={"color": muted, "padding": "10px"})
         presence = pat_df.groupby(["patologia", "anio"]).size().reset_index(name="n")
         anios = [a for a in ANIO_ORDER if a in presence["anio"].unique()] or sorted(presence["anio"].unique())
         rows = []

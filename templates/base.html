@@ -346,6 +346,17 @@
           </a>
           {% endif %}
 
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.busqueda_paciente') }}" class="module">
+            <img
+              src="{{ url_for('static', filename='examination_12772954.png') }}"
+              alt="Busqueda de Paciente"
+            />
+            <span>Seguimiento de paciente por DNI</span>
+          </a>
+          {% endif %}
+
+
           <!-- Los gráficos de auditoría ahora están integrados en Reportes LOGS -->
         </div>
       </div>

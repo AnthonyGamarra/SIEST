@@ -4,6 +4,7 @@ Flask-Login>=0.6
 SQLAlchemy>=2.0
 pandas>=2.0
 joblib>=1.4
+scikit-learn==1.8.0
 python-dotenv>=1.0
 dash>=2.16
 dash-bootstrap-components>=1.6
@@ -13,3 +14,4 @@ Werkzeug>=3.0
 itsdangerous>=2.1
 psycopg2-binary>=2.9
 oracledb>=2.0
+openpyxl>=3.1

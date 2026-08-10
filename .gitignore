@@ -8,3 +8,4 @@ __pycache__/
 *.sqlite3
 instance/
 .pytest_cache/
+frontend_ejec/node_modules/

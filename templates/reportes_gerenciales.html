@@ -67,6 +67,15 @@
     </a>
     {% endif %}
 
+    {% if current_user.role == 'admin' %}
+    <a href="https://app.powerbi.com/view?r=eyJrIjoiNjgyZjM5YWUtMTY0OC00NTc2LWE4NWMtNjcxZmE4MDczYTliIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiNjgyZjM5YWUtMTY0OC00NTc2LWE4NWMtNjcxZmE4MDczYTliIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9">
+      <div class="module">
+        <img src="{{ url_for('static', filename='report_7041785.png') }}" alt="Cambios SES">
+        <span>Espera de lista quirúrgica</span>
+      </div>
+    </a>
+    {% endif %}
+
     <a style="display: none;" href="https://app.powerbi.com/view?r=eyJrIjoiZGU0YTAxMzktMDdiMi00NDEyLThjMmYtMTQ3ZGIwMmQ0MTIyIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" class="module-link" data-url="https://app.powerbi.com/view?r=eyJrIjoiZGU0YTAxMzktMDdiMi00NDEyLThjMmYtMTQ3ZGIwMmQ0MTIyIiwidCI6IjM0ZjMyNDE5LTFjMDUtNDc1Ni04OTZlLTQ1ZDYzMzcyNjU5YiIsImMiOjR9" data-title="Accidentes">
       <div class="module">
         <img src="{{ url_for('static', filename='work-injury_13301328.png') }}" alt="Accidentes">

@@ -20,6 +20,8 @@ from dashboard_hosp import create_dash_app as create_dash_hosp
 from dashboard_proc import create_dash_app as create_dash_proc
 from dashboard_ejec import create_dash_app as create_dash_ejec
 from tramas import create_dash_app as create_dash_tramas
+from busqueda_paciente import create_dash_app as create_dash_busqueda_paciente
+from api_ejec import register_api_ejec
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -70,6 +72,7 @@ def create_app():
     # =============================
     register_routes(app)
     register_logs_blueprint(app)
+    register_api_ejec(app)
 
     # =============================
     # INICIALIZACIÓN DE BD
@@ -98,6 +101,7 @@ def create_app():
     create_dash_proc(app, url_base_pathname='/dashboard_proc_embed/')
     create_dash_ejec(app, url_base_pathname='/dashboard_ejec_embed/')
     create_dash_tramas(app, url_base_pathname='/tramas_embed/')
+    create_dash_busqueda_paciente(app, url_base_pathname='/busqueda_paciente_embed/')
 
     # =============================
     # HELPER DE PASSWORD
