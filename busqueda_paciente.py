@@ -1,15 +1,3 @@
-"""
-Modulo de Busqueda de Paciente (Seguimiento). Combina dos fuentes:
-- Atenciones medicas: en vivo desde la base ESSI (Oracle), via las
-  credenciales ORACLE_* del .env, sobre las tablas sgss.*.
-- Alerta de hipertension: desde el Data Warehouse (Postgres, dssge, via la
-  misma DW_DATABASE_URI de solo lectura que usa el resto de la app), contra
-  dssge.mtd_lista_unica_pacientes_2 (lista de pacientes hipertensos ya
-  deduplicada por paciente).
-
-Busca por documento del paciente (tipo + numero) y lista sus atenciones
-medicas ordenadas de la mas antigua a la mas reciente.
-"""
 import io
 import os
 from datetime import datetime
