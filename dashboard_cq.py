@@ -48,7 +48,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         'SIN_CODIGO': '#6c757d',
         'EMERGENCIA': '#0d6efd',
         'HORAS_ELECTIVAS': '#198754',
-        'HORAS_EMERGENCIA': '#0dcaf0'
+        'HORAS_EMERGENCIA': '#0dcaf0',
+        'SUSPENDIDAS': '#b02a37'
     }
 
     CARD_STYLE = {
@@ -736,6 +737,20 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             ORDER BY cq.acto_med, cq.cod_cpms, cq.fec_oper DESC;
         """
 
+        query_suspendidas = f"""
+            SELECT DISTINCT ON (cq.cod_cps, cq.num_solicitud)
+                cq.*
+            FROM dssge.dw_cq_sus_{anio_str}_{periodo} cq
+            WHERE cq.cod_centro = '{codcas}'
+                AND (
+                        CASE
+                            WHEN cq.cod_tipo_paciente = '4' THEN '2'
+                            ELSE '1'
+                        END
+                    ) IN ('1', '2')
+            ORDER BY cq.cod_cps, cq.num_solicitud
+        """
+
         df_base = pd.read_sql(query_base, engine)
         if df_base.empty:
             return html.Div([
@@ -773,6 +788,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
         df_emergencia = df_base[df_base['cod_tipo_programacion'] == '2'].copy()
 
         df_horas = pd.read_sql(query_horas, engine)
+        df_suspendidas = pd.read_sql(query_suspendidas, engine)
+        total_suspendidas = len(df_suspendidas)
 
         def _parse_horas(df_h, programacion=None):
             if programacion is not None:
@@ -905,6 +922,15 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             "title": "Horas quirúrgicas realizadas IQ emergencia",
             "value": f"{horas_emergencia:,.2f}",
             "border_color": PRIORIDAD_COLORS.get('HORAS_EMERGENCIA', BRAND),
+            "href": None,
+            "subtitle": f"Año {anio_str} | Periodo {periodo} | {nombre_centro}",
+            "side_component": None
+        })
+
+        cards.append({
+            "title": "Intervenciones Quirúrgicas Suspendidas",
+            "value": f"{total_suspendidas:,.0f}",
+            "border_color": PRIORIDAD_COLORS.get('SUSPENDIDAS', BRAND),
             "href": None,
             "subtitle": f"Año {anio_str} | Periodo {periodo} | {nombre_centro}",
             "side_component": None

@@ -1,6 +1,7 @@
 import io
+import time
+from collections import OrderedDict
 from datetime import datetime
-from functools import lru_cache
 
 import dash
 import dash_bootstrap_components as dbc
@@ -15,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 SCHEMA = "dssge"
-ANIO_ORDER = ["2019", "2020", "2021", "2022", "2023", "2024"]
+ANIO_ORDER = ["2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"]
 EDAD_ORDER = ["0-11", "12-17", "18-29", "30-44", "45-59", "60+", "SIN DATO"]
 
 # Paleta categorica validada (orden fijo = mecanismo de seguridad CVD, no
@@ -82,7 +83,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         from extensions import get_dw_engine
         return get_dw_engine()
 
-    def run_df(sql, params=None):
+    def _run_df_uncached(sql, params=None):
         """Devuelve (df, error_str). error_str no nulo si la MV no existe u otro fallo."""
         try:
             engine = get_engine()
@@ -101,6 +102,39 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         except Exception as exc:  # pragma: no cover
             print(f"[Ejec] Error: {exc}")
             return None, "Ocurrio un error inesperado."
+
+    # Cache en memoria del proceso para las lecturas del modulo: las MV solo
+    # cambian cuando se corre refresh_mvs.py (manual, poco frecuente), asi que
+    # un TTL corto absorbe el trafico repetido (misma pestana/filtro entre
+    # usuarios, opciones de los dropdowns recalculadas en cada serve_layout)
+    # sin arriesgar servir datos desactualizados por mucho tiempo tras un
+    # refresh. LRU simple con tope de tamano para no crecer sin limite.
+    _QUERY_CACHE = OrderedDict()
+    _QUERY_CACHE_MAX = 500
+    _QUERY_CACHE_TTL = 300  # 5 min
+
+    def _cache_key(sql, params):
+        frozen = tuple(sorted(
+            (k, tuple(v) if isinstance(v, list) else v) for k, v in (params or {}).items()
+        ))
+        return (sql, frozen)
+
+    def run_df(sql, params=None, cache=True):
+        key = _cache_key(sql, params) if cache else None
+        if key is not None:
+            cached = _QUERY_CACHE.get(key)
+            if cached is not None:
+                df, err, ts = cached
+                if time.time() - ts < _QUERY_CACHE_TTL:
+                    _QUERY_CACHE.move_to_end(key)
+                    return (df.copy() if df is not None else None), err
+        df, err = _run_df_uncached(sql, params)
+        if key is not None and err is None:
+            _QUERY_CACHE[key] = (df, err, time.time())
+            _QUERY_CACHE.move_to_end(key)
+            if len(_QUERY_CACHE) > _QUERY_CACHE_MAX:
+                _QUERY_CACHE.popitem(last=False)
+        return (df.copy() if df is not None else None), err
 
     def get_patologia_options():
         df, err = run_df(
@@ -124,11 +158,11 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     def get_edad_options():
         return [{"label": "Todos los grupos", "value": "TODOS"}] + [{"label": a, "value": a} for a in EDAD_ORDER]
 
-    @lru_cache(maxsize=1)
     def load_red_centro_df():
-        """Dimension red/centro (activos), cargada directamente y cacheada en
-        memoria del proceso: es pequena (unos cientos de filas) y ya viene
-        indexada por PK en el DW, no amerita una vista materializada."""
+        """Dimension red/centro (activos): pequena (unos cientos de filas) y
+        ya viene indexada por PK en el DW, no amerita una vista materializada.
+        Cacheada via el TTL de run_df, no con lru_cache (que la dejaria fija
+        hasta reiniciar el proceso)."""
         sql = (
             "SELECT c.redasiscod, r.redasisdes, c.cenasicod, c.cenasides "
             "FROM dwsge.sgss_cmcas10 c "
@@ -175,7 +209,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
 
     def kpi_card(title, value, icon, color=brand, subtitle=None):
         body = [
-            html.Div(value, style={"fontSize": "28px", "fontWeight": 800, "color": "#111827", "lineHeight": "1.15", "fontVariantNumeric": "tabular-nums"}),
+            html.Div(value, style={"fontSize": "28px", "fontWeight": 800, "color": "#111827", "lineHeight": "1.15"}),
             html.Small(title, style={"color": muted, "fontWeight": 600}),
         ]
         if subtitle:
@@ -748,7 +782,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     style={"display": "flex", "alignItems": "center", "gap": "14px"},
                 ),
                 html.P(
-                    "Analitica por patología y comorbilidad del paciente | Sistema de Gestion Estadistica",
+                    "Analitica por patología y comorbilidad del paciente | Sistema de Gestion Estadistica | Información actualizada al 31/07/2026",
                     style={"color": muted, "fontFamily": font_family, "fontSize": "13px", "margin": "8px 0 0 62px"},
                 ),
             ],
@@ -920,16 +954,26 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                     ],
                     style={"flex": "2 1 260px", "display": "flex", "flexDirection": "column", "gap": "4px"},
                 ),
+                html.Div(
+                    dbc.Button(
+                        [html.I(className="bi bi-funnel-fill", style={"marginRight": "6px"}), "Aplicar filtros"],
+                        id="ejec-aplicar-detalle", color="primary", style={"whiteSpace": "nowrap"},
+                    ),
+                    style={"flex": "0 0 auto", "display": "flex", "flexDirection": "column", "justifyContent": "flex-end"},
+                ),
             ],
             style={**card_style, "display": "flex", "gap": "14px", "flexWrap": "wrap", "alignItems": "flex-end", "padding": "14px 16px"},
         )
 
         return html.Div(
             [
-                section_title("Detalle por patologia", "bi-search-heart"),
+                section_title("Detalle por patologia - Primer contacto del paciente", "bi-search-heart"),
                 detalle_controls,
                 html.Div(id="ejec-feedback"),
-                html.Div(id="ejec-kpis", style={"display": "flex", "gap": "14px", "flexWrap": "wrap"}),
+                dcc.Loading(
+                    html.Div(id="ejec-kpis", style={"display": "flex", "gap": "14px", "flexWrap": "wrap"}),
+                    type="default", color=brand,
+                ),
                 html.Div(
                     [
                         graph_card("Distribucion por sexo", "ejec-fig-sexo", height=320, flex="1 1 260px"),
@@ -1023,8 +1067,8 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
                 dcc.Tabs(
                     id="ejec-tabs", value="tab-detalle",
                     children=[
-                        dcc.Tab(label="Detalle por patología", value="tab-detalle", children=[html.Div(build_tab_detalle(), style={"paddingTop": "16px"})]),
-                        dcc.Tab(label="Analítica por patología de alto costo", value="tab1", children=[html.Div(build_tab1(), style={"paddingTop": "16px"})]),
+                        dcc.Tab(label="Detalle por patología - Primer contacto del paciente", value="tab-detalle", children=[html.Div(build_tab_detalle(), style={"paddingTop": "16px"})]),
+                        dcc.Tab(label="Análisis por patología de alto costo", value="tab1", children=[html.Div(build_tab1(), style={"paddingTop": "16px"})]),
                         dcc.Tab(label="Comorbilidad del paciente", value="tab2", children=[html.Div(build_tab2(), style={"paddingTop": "16px"})]),
                     ],
                 ),
@@ -1172,13 +1216,14 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         Output("ejec-fig-sexo", "figure"),
         Output("ejec-fig-edad", "figure"),
         Output("ejec-tabla-diag", "children"),
-        Input("ejec-pat", "value"),
-        Input("ejec-anio-detalle", "value"),
-        Input("ejec-red-detalle", "value"),
-        Input("ejec-centro-detalle", "value"),
-        Input("ejec-edad-detalle", "value"),
+        Input("ejec-aplicar-detalle", "n_clicks"),
+        State("ejec-pat", "value"),
+        State("ejec-anio-detalle", "value"),
+        State("ejec-red-detalle", "value"),
+        State("ejec-centro-detalle", "value"),
+        State("ejec-edad-detalle", "value"),
     )
-    def update_detalle(pat, anio, red_cod, centro_cod, edad_grupo):
+    def update_detalle(_n_clicks, pat, anio, red_cod, centro_cod, edad_grupo):
         pat_list = _as_list(pat)
         anio_list = _as_list(anio)
         if not pat_list or not anio_list:
@@ -1207,9 +1252,27 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
             filtro_params,
         )
         n_diag = int(diag_count_df["n"].iloc[0]) if diag_count_df is not None and not diag_count_df.empty else 0
+
+        # Pacientes por tipo de diagnostico (presuntivo/definitivo), desde el
+        # rollup mv_ejec_pat_diag (pacientes ya viene como COUNT(DISTINCT) por
+        # combinacion patologia+diagnostico+tipo, asi que sumar por tipodiagnom
+        # puede duplicar pacientes con mas de un diagnostico del mismo tipo).
+        tipodiag_df, _ = run_df(
+            f"SELECT tipodiagnom, SUM(pacientes) AS pacientes FROM {SCHEMA}.mv_ejec_pat_diag "
+            f"WHERE {filtro_where} GROUP BY tipodiagnom",
+            filtro_params,
+        )
+        pac_presuntivo = pac_definitivo = 0
+        if tipodiag_df is not None and not tipodiag_df.empty:
+            tdf = tipodiag_df.set_index("tipodiagnom")["pacientes"]
+            pac_presuntivo = int(tdf.get("PRESUNTIVO", 0))
+            pac_definitivo = int(tdf.get("DEFINITIVO", 0))
+
         pat_label = _pat_label(pat_list[0]) if len(pat_list) == 1 else f"{len(pat_list)} patologías"
         kpis = [
             kpi_card(f"Pacientes · {pat_label}", _fmt(pac_pat), "bi-person-badge", "#1BAF7A"),
+            kpi_card("Con diagnostico definitivo", _fmt(pac_definitivo), "bi-check2-circle", PALETTE[0]),
+            kpi_card("Con diagnostico presuntivo", _fmt(pac_presuntivo), "bi-question-diamond", PALETTE[3]),
             kpi_card("Diagnosticos distintos", _fmt(n_diag), "bi-diagram-3", "#4A3AA7"),
         ]
 
@@ -1472,7 +1535,8 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
         if pat_df.empty:
             return html.Div("El paciente no presenta patologías catalogadas.", style={"color": muted, "padding": "10px"})
         presence = pat_df.groupby(["patologia", "anio"]).size().reset_index(name="n")
-        anios = [a for a in ANIO_ORDER if a in presence["anio"].unique()] or sorted(presence["anio"].unique())
+        presentes = presence["anio"].unique()
+        anios = [a for a in ANIO_ORDER if a in presentes] + sorted(a for a in presentes if a not in ANIO_ORDER)
         rows = []
         for pat in sorted(presence["patologia"].unique()):
             row = {"patologia": pat.replace("_", " ").title()}
