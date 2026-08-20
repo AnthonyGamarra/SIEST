@@ -72,6 +72,19 @@
 			</div>
 			{% endif %}
 
+			{% if current_user.role == 'admin' %}
+			<a href="{{ farm_url }}" class="module">
+				<img src="{{ url_for('static', filename='pill_4877761.png') }}" alt="Farmacia" />
+				<span>Farmacia</span>
+			</a>
+			{% else %}
+			<div class="module inactive" title="En desarrollo">
+				<img src="{{ url_for('static', filename='pill_4877761.png') }}" alt="Farmacia" />
+				<span>Farmacia</span>
+				<small style="font-size:10px; color:#aaa; display:block; margin-top:2px;">En desarrollo</small>
+			</div>
+			{% endif %}
+
 		</div>
 		<div class="modules-footer" style="margin-top: 2rem; text-align: center">
 			<a class="pill-btn pill-btn--ghost" href="javascript:history.back();">Volver al inicio</a>

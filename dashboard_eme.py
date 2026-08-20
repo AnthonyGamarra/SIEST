@@ -717,7 +717,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                         dg.diagdes,
 
                         CASE 
-                            WHEN a.cod_estandar = '04' THEN '1'
+                            WHEN a.cod_estandar = '04' AND cod_prioridad <> '0' THEN '1' 
                             WHEN a.cod_prioridad = '1' THEN '2'
                             ELSE a.cod_prioridad
                         END AS cod_prioridad_n
