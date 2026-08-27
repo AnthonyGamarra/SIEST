@@ -1,3 +1,20 @@
+/* Pestañas dcc.Tabs de los indicadores (Indicadores/*.py, className="custom-tabs"):
+   el color inline de las pestañas no seleccionadas (TAB_STYLE.color = MUTED,
+   pensado para fondo blanco) queda casi invisible sobre el fondo oscuro
+   (/static/76824.jpg) que dashboard.py le pone al contenedor de
+   dash.page_container. Necesita !important porque el color inline de Dash
+   tiene mas especificidad que una clase. */
+.custom-tabs .tab:not(.tab--selected) {
+    color: rgba(255, 255, 255, 0.9) !important;
+    background: rgba(255, 255, 255, 0.14) !important;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+}
+.custom-tabs .tab:not(.tab--selected):hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.24) !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
 /* Horizontal navigation stack for dashboard modules */
 .dashboard-tab-wrapper {
     display: flex;

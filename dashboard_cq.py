@@ -651,7 +651,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             return html.Div("Error de conexión a la base de datos."), html.Div()
 
         query_base = f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.cod_cpms, cq.fec_oper)
+            SELECT DISTINCT ON (cq.cod_tipdoc_paciente, cq.doc_paciente, cq.cod_cpms, cq.fec_oper)
                 cq.cod_oricentro,
                 cq.cod_centro,
                 ca.cenasides AS cenasides,

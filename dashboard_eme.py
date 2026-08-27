@@ -739,6 +739,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_alt/'):
                     WHERE 
                         a.cod_diagnostico IS NOT NULL
                         AND a.cod_estandar IN ('04','05','06','07','08','09','10','11','12','13','14')
+                        AND a.cod_estado_homologacion <> '0'
                         AND (
                             CASE 
                                 WHEN a.cod_tipo_paciente = '4' THEN '2'
