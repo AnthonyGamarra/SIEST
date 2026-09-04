@@ -28,8 +28,7 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         "backgroundColor": card_bg,
         "border": f"1px solid {border}",
         "padding": "14px 16px",
-        "borderBottomLeftRadius": "14px",
-        "borderBottomRightRadius": "14px",
+        "borderRadius": "14px",
         "boxShadow": "0 4px 10px rgba(0,0,0,0.05)",
         "backdropFilter": "blur(3px)",
         "overflow": "visible",
@@ -43,6 +42,26 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         "backgroundColor": card_bg,
         "boxShadow": "0 8px 20px rgba(0,0,0,0.08)",
         "padding": "18px",
+    }
+
+    TAB_STYLE = {
+        "padding": "10px 18px",
+        "fontFamily": font_family,
+        "fontSize": "13px",
+        "fontWeight": "600",
+        "color": muted,
+        "borderRadius": "10px",
+        "margin": "4px 6px",
+        "cursor": "pointer",
+        "transition": "all .25s",
+        "border": "1px solid transparent",
+    }
+    TAB_SELECTED_STYLE = {
+        **TAB_STYLE,
+        "color": brand,
+        "background": "linear-gradient(145deg,#ffffff,#F3F8FC)",
+        "boxShadow": "0 2px 6px rgba(0,0,0,0.08)",
+        "border": f"1px solid {brand}",
     }
 
     external_stylesheets = [
@@ -228,6 +247,167 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
     def create_connection():
         from extensions import get_dw_engine
         return get_dw_engine()
+
+    # =====================================================================
+    # VISTA DINAMICA (pivot self-service) — solo anio 2026
+    # =====================================================================
+    # Lista blanca: el usuario nunca elige nombres de tabla/columna libres,
+    # solo claves de estos diccionarios. Igual que report_filters mas abajo,
+    # pero acá también fija a qué MV pre-agregada apunta cada combinación
+    # (nunca se arma un GROUP BY dinámico contra la tabla particionada cruda).
+    PIVOT_ANIO = "2026"
+    PIVOT_DIMENSIONS = {
+        "servicio": {"label": "Servicio", "mv": f"mv_diag_{PIVOT_ANIO}_servicio", "code_col": "cod_servicio", "desc_col": "servicio"},
+        "red": {"label": "Red asistencial", "mv": f"mv_diag_{PIVOT_ANIO}_red", "code_col": "redasiscod", "desc_col": "redasisdes"},
+        "centro": {"label": "Centro asistencial", "mv": f"mv_diag_{PIVOT_ANIO}_centro", "code_col": "cod_centro", "desc_col": "cenasides"},
+        "actividad": {"label": "Actividad", "mv": f"mv_diag_{PIVOT_ANIO}_actividad", "code_col": "cod_actividad", "desc_col": "actividad"},
+        "subactividad": {"label": "Subactividad", "mv": f"mv_diag_{PIVOT_ANIO}_subactividad", "code_col": "cod_subactividad", "desc_col": "subactividad"},
+        "variable": {"label": "Variable", "mv": f"mv_diag_{PIVOT_ANIO}_variable", "code_col": "cod_variable", "desc_col": "variable"},
+        "capitulo": {"label": "Capítulo CIE-10", "mv": f"mv_diag_{PIVOT_ANIO}_capitulo", "code_col": "capitulo", "desc_col": None},
+        "sexo": {"label": "Sexo", "mv": f"mv_diag_{PIVOT_ANIO}_sexo", "code_col": "sexo", "desc_col": None},
+        "grupo_edad": {"label": "Grupo etario", "mv": f"mv_diag_{PIVOT_ANIO}_edad", "code_col": "grupo_edad", "desc_col": None},
+    }
+    # (filas, columnas) -> MV de cruce. Solo se puede pivotear en estas
+    # combinaciones porque son las únicas que build_mvs_diag.py construyó;
+    # el resto queda disponible solo como "Filas" sin "Columnas".
+    PIVOT_CROSSES = {
+        ("servicio", "sexo"): f"mv_diag_{PIVOT_ANIO}_servicio_sexo",
+        ("capitulo", "grupo_edad"): f"mv_diag_{PIVOT_ANIO}_capitulo_edad",
+        ("red", "servicio"): f"mv_diag_{PIVOT_ANIO}_red_servicio",
+    }
+    PIVOT_METRICS = {
+        "registros": "Atenciones (registros)",
+        "pacientes": "Pacientes distintos",
+    }
+    PIVOT_NO_COLUMNAS = "__none__"
+
+    def run_pivot_df(sql, params=None):
+        try:
+            engine = create_connection()
+            with engine.connect() as conn:
+                df = pd.read_sql_query(text(sql), conn, params=params or {})
+            return df, None
+        except Exception as exc:  # pragma: no cover
+            print(f"[Diag Pivot] Error: {exc}")
+            return None, "Ocurrió un error al ejecutar la consulta."
+
+    def build_pivot_query(filas_key, columnas_key, desglose_mes):
+        filas = PIVOT_DIMENSIONS.get(filas_key)
+        if not filas:
+            return None, None, "Elegí una dimensión válida para las filas."
+
+        cross_mv = None
+        columnas = None
+        if columnas_key and columnas_key != PIVOT_NO_COLUMNAS:
+            columnas = PIVOT_DIMENSIONS.get(columnas_key)
+            cross_mv = PIVOT_CROSSES.get((filas_key, columnas_key))
+            if not columnas or not cross_mv:
+                return None, None, "Esa combinación de filas/columnas todavía no tiene una vista cruzada construida."
+
+        mv = cross_mv or filas["mv"]
+        select_cols = [filas["code_col"]]
+        if filas["desc_col"]:
+            select_cols.append(filas["desc_col"])
+        if columnas:
+            select_cols.append(columnas["code_col"])
+            if columnas["desc_col"]:
+                select_cols.append(columnas["desc_col"])
+
+        # Con columnas (cruce 2D) el desglose mensual no es seguro: sumar los
+        # meses en pandas duplicaría pacientes distintos presentes en mas de
+        # un mes. El desglose por mes solo aplica sin columnas.
+        usar_desglose = desglose_mes and not columnas
+        sql = f"""
+            SELECT {', '.join(select_cols)}, periodo, registros, pacientes
+            FROM dssge.{mv}
+            WHERE periodo {'<>' if usar_desglose else '='} 'TODOS'
+        """
+        return sql, {"filas": filas, "columnas": columnas, "desglose": usar_desglose}, None
+
+    def build_pivot_table(df, meta, metric_key):
+        metric_col = metric_key if metric_key in PIVOT_METRICS else "registros"
+        filas_label = meta["filas"]["desc_col"] or meta["filas"]["code_col"]
+        columnas_meta = meta.get("columnas")
+
+        if columnas_meta:
+            columnas_label = columnas_meta["desc_col"] or columnas_meta["code_col"]
+            pivot_df = df.pivot_table(
+                index=filas_label, columns=columnas_label, values=metric_col,
+                aggfunc="sum", fill_value=0,
+            ).reset_index()
+            pivot_df.columns = [str(c) for c in pivot_df.columns]
+            display_df = pivot_df
+        else:
+            keep = [filas_label, "periodo", metric_col] if meta.get("desglose") else [filas_label, metric_col]
+            display_df = df[keep].rename(columns={metric_col: PIVOT_METRICS.get(metric_col, metric_col)})
+
+        return dash_table.DataTable(
+            columns=[{"name": c, "id": c} for c in display_df.columns],
+            data=display_df.to_dict("records"),
+            page_size=20,
+            style_table={"overflowX": "auto"},
+            style_cell={"textAlign": "left", "fontFamily": font_family, "fontSize": "12px", "padding": "8px"},
+            style_header={"backgroundColor": brand_soft, "fontWeight": "700", "border": f"1px solid {border}"},
+            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#F8FAFF"}],
+            sort_action="native",
+            filter_action="native",
+        )
+
+    def build_pivot_controls():
+        dropdown_style = {"width": "100%", "fontFamily": font_family, "fontSize": "13px"}
+        filas_options = [{"label": v["label"], "value": k} for k, v in PIVOT_DIMENSIONS.items()]
+        metric_options = [{"label": v, "value": k} for k, v in PIVOT_METRICS.items()]
+        return html.Div(
+            [
+                field_wrapper(
+                    "Filas",
+                    dcc.Dropdown(id="diag-pivot-filas", options=filas_options, value="servicio", clearable=False, style=dropdown_style),
+                ),
+                field_wrapper(
+                    "Columnas (opcional)",
+                    dcc.Dropdown(id="diag-pivot-columnas", options=[{"label": "(Sin columnas)", "value": PIVOT_NO_COLUMNAS}], value=PIVOT_NO_COLUMNAS, clearable=False, style=dropdown_style),
+                ),
+                field_wrapper(
+                    "Métrica",
+                    dcc.Dropdown(id="diag-pivot-metrica", options=metric_options, value="registros", clearable=False, style=dropdown_style),
+                ),
+                html.Div(
+                    [
+                        html.Small("", style={"fontFamily": font_family}),
+                        dcc.Checklist(
+                            id="diag-pivot-desglose",
+                            options=[{"label": " Desglosar por mes", "value": "on"}],
+                            value=[],
+                            style={"fontFamily": font_family, "fontSize": "13px", "marginTop": "22px"},
+                        ),
+                    ],
+                    style={"display": "flex", "flexDirection": "column", "flex": "1 1 200px", "minWidth": "180px"},
+                ),
+                html.Div(
+                    dbc.Button(
+                        [html.I(className="bi bi-table me-2"), "Generar"],
+                        id="diag-pivot-generar", color="primary",
+                        style={"backgroundColor": brand, "borderColor": brand, "fontFamily": font_family, "fontWeight": "600", "borderRadius": "8px"},
+                    ),
+                    style={"flex": "0 0 auto", "display": "flex", "alignItems": "flex-end"},
+                ),
+            ],
+            className="dashboard-control-bar",
+            style={**control_bar_style},
+        )
+
+    def build_pivot_section():
+        return html.Div(
+            [
+                build_pivot_controls(),
+                html.Div(id="diag-pivot-feedback"),
+                html.Div(
+                    dcc.Loading(html.Div(id="diag-pivot-table"), type="default"),
+                    style=card_style,
+                ),
+            ],
+            style={"display": "flex", "flexDirection": "column", "gap": "10px"},
+        )
 
     def field_wrapper(label_text, component):
         return html.Div(
@@ -633,7 +813,17 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
                 dcc.Location(id="url", refresh=True),
                 build_header(),
                 html.Br(),
-                build_report_section(),
+                dcc.Tabs(
+                    id="diag-main-tabs",
+                    value="tab-detalle",
+                    style={"border": "none"},
+                    parent_style={"marginBottom": "16px", "overflow": "visible"},
+                    className="custom-tabs",
+                    children=[
+                        dcc.Tab(label="Consulta detallada", value="tab-detalle", style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE, children=html.Div(build_report_section(), style={"paddingTop": "12px"})),
+                        dcc.Tab(label="Vista dinámica (2026)", value="tab-pivot", style=TAB_STYLE, selected_style=TAB_SELECTED_STYLE, children=html.Div(build_pivot_section(), style={"paddingTop": "12px"})),
+                    ],
+                ),
                 dcc.Store(id="diag-report-store"),
                 dcc.Download(id="diag-report-download"),
             ],
@@ -822,5 +1012,45 @@ def create_dash_app(flask_app, url_base_pathname="/diag_cap/"):
         buffer.seek(0)
         filename = f"reporte_diag_{datetime.now():%Y%m%d_%H%M%S}.csv"
         return {"content": buffer.getvalue(), "filename": filename, "type": "text/csv"}, ""
+
+    @dash_app.callback(
+        Output("diag-pivot-columnas", "options"),
+        Output("diag-pivot-columnas", "value"),
+        Input("diag-pivot-filas", "value"),
+    )
+    def sync_pivot_columnas(filas_key):
+        opciones = [{"label": "(Sin columnas)", "value": PIVOT_NO_COLUMNAS}]
+        for (f, c) in PIVOT_CROSSES:
+            if f == filas_key:
+                opciones.append({"label": PIVOT_DIMENSIONS[c]["label"], "value": c})
+        return opciones, PIVOT_NO_COLUMNAS
+
+    @dash_app.callback(
+        Output("diag-pivot-table", "children"),
+        Output("diag-pivot-feedback", "children"),
+        Input("diag-pivot-generar", "n_clicks"),
+        State("diag-pivot-filas", "value"),
+        State("diag-pivot-columnas", "value"),
+        State("diag-pivot-metrica", "value"),
+        State("diag-pivot-desglose", "value"),
+        prevent_initial_call=True,
+    )
+    def run_pivot(n_clicks, filas_key, columnas_key, metrica_key, desglose_value):
+        if not n_clicks:
+            return no_update, no_update
+
+        desglose_mes = bool(desglose_value) and "on" in desglose_value
+        sql, meta, error = build_pivot_query(filas_key, columnas_key, desglose_mes)
+        if error:
+            return html.Div(), dbc.Alert(error, color="warning", dismissable=True)
+
+        df, db_error = run_pivot_df(sql)
+        if db_error:
+            return html.Div(), dbc.Alert(db_error, color="danger", dismissable=True)
+        if df is None or df.empty:
+            return html.Div(), dbc.Alert("Sin datos para esa combinación.", color="info", dismissable=True)
+
+        table = build_pivot_table(df, meta, metrica_key)
+        return table, None
 
     return dash_app

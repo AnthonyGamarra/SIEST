@@ -203,6 +203,20 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             "bi-activity",
             "#0064AF",
         ),
+
+        (
+            "Ecografía",
+            ("76512","76604.02","76700.02","76811","76830","93976.01",
+            "76513","76604.04","76705","76812","76856","93976.03",
+            "76514","76645","76706","76813","76872","93985",
+            "76536","76646","76802","76815","76880","93990",
+            "76604","76700","76805","76816","76999.01","76820.01",
+            "76700.01","76810",	"76817","93971.01"		 
+            ),
+            "bi-activity",
+            "#0064AF",
+        ),
+
         (
             "Electrocardiografía",
             ("93000","93005","93010"),
@@ -418,6 +432,112 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         ),
     ]
 
+    # ========== CONFIGURACIÓN DE TARJETAS · IMÁGENES (dssge.dw_lab_*) ==========
+    # Misma convención que TARJETAS, pero estas se consultan contra la tabla
+    # dssge.dw_lab_{anio}_{periodo} (build_lab_query), no dssge.dw_proc_*.
+    IMG_COLOR = "#00AEEF"
+    TARJETAS_IMAGENES = [
+        (
+            "Resonancia Simple",
+            ("70540.01", "70540.03", "70544", "70551", "71550.02",
+             "72141", "72146", "72148", "72195", "72195.01", "73218.01", "73218.02",
+             "73218.04", "73218.05", "73718.01", "73718.02", "73718.03", "73718.04",
+             "73721.01", "73721.02", "73721.03", "73725", "74181", "74181.01", "74185",
+             "74485.01", "77059"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Resonancia Magnética - Con Contraste",
+            ("70336.02", "70542", "70542.01", "70542.02", "70542.03",
+             "70545", "70548", "70551.05", "70552", "71551", "71551.01",
+             "71551.02", "72142", "72147", "72149", "72196", "73219.01",
+             "73219.02", "73219.03", "73219.04", "73219.05", "73222.01",
+             "73222.02", "73222.03", "73719.01", "73719.02", "73719.03",
+             "73722.01", "73722.02", "73722.03", "74182", "74182.01", "74485.02", "75553"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Tomografía Con Contraste",
+            ("70460", "70481", "70482.01", "70482.02", "70482.03", "70488.01",
+             "70491", "70498", "71260", "72126", "72129", "72132", "72132.01",
+             "72191", "72193", "73201", "73201.01", "73201.02", "73201.03",
+             "73201.05", "73201.06", "73701.01", "73701.02", "73701.03", "73701.04",
+             "73701.05", "74160", "74160.01", "74160.02", "75572", "75574"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Tomografía Sin Contraste",
+            ("70450", "70480.01", "70480.02", "70480.03", "70480.04", "70480.05",
+             "70486.01", "70490", "71250", "71250.01", "72125", "72128", "72131",
+             "72131.01", "72192", "73200.01", "73200.02", "73200.03", "73200.04",
+             "73200.05", "73200.06", "73206", "73700.01", "73700.02", "73700.03",
+             "73700.04", "73700.05", "73706", "74150.01", "75571"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Doppler Vascular",
+            ("76776", "76831", "93882", "93922", "93926", "93965",
+             "93971", "93975", "93976", "93980"),
+            "bi-activity",
+            IMG_COLOR,
+        ),
+        (
+            "Ecografía",
+            ("76536", "76536.01", "76536.03", "76604", "76604.02", "76645", "76700",
+             "76700.01", "76700.02", "76770", "76770.01", "76775", "76775.01", "76778",
+             "76800", "76801", "76802", "76805", "76813", "76814", "76817", "76830",
+             "76856", "76870", "76872", "76873", "76880", "76880.04", "76880.05", "76881",
+             "76882", "76885", "76886", "76937", "76970", "76999.01", "78821"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Rayos X / Radiografía",
+            ("70110", "70140", "70150", "70240", "70260", "70300", "70328", "70330",
+             "70355", "70360", "70370", "71010", "71010.01", "71022", "71035",
+             "71035.01", "71101", "71110", "71130", "72010", "72020", "72040.01",
+             "72040.03", "72067", "72068", "72069", "72074", "72081", "72082", "72090",
+             "72100", "72170", "72190", "72202", "72220", "73011", "73020", "73030", "73050",
+             "73060", "73070", "73080", "73090", "73092", "73100", "73110", "73120", "73130",
+             "73131", "73140", "73500", "73520", "73540", "73550", "73560", "73562", "73565",
+             "73567", "73590", "73592", "73600", "73610", "73615", "73620", "73630", "73650",
+             "73660", "74000", "74000.01", "74010", "74020", "74020.01", "74022", "74210",
+             "74210.01", "74220", "74230", "74241", "74246", "74247.01", "74247.02", "74249",
+             "74250", "74251", "74270", "74280", "74305", "74320", "74363", "74425", "74430",
+             "74450", "74455", "74475", "74740", "74930", "75630", "75671", "75710", "75716",
+             "75726", "75743", "75822", "75825", "75827", "75885", "75894", "75894.01", "75940",
+             "75962", "75978", "75980", "75982", "75984", "76080", "76096", "76140", "76499",
+             "76934", "76942", "77031", "77071", "77075", "77076"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Mamografía",
+            ("77055", "77056"),
+            "bi-clipboard2-pulse-fill",
+            IMG_COLOR,
+        ),
+        (
+            "Gammagrafía / SPECT",
+            ("76390", "78031", "78079", "78320", "78362",
+             "78363", "78364", "78451", "78501", "78514",
+             "78521", "78528", "78585"),
+            "bi-activity",
+            IMG_COLOR,
+        ),
+        (
+            "PET / Tomografía por Emisión de Positrones",
+            ("78608", "78810", "78811",
+             "78812", "78813", "78814", "78815"),
+            "bi-activity",
+            IMG_COLOR,
+        ),
+    ]
+
     # ========== DASH INSTANCE ==========
     app_name = f"dash_{url_base_pathname.strip('/').replace('/', '_') or 'proc'}"
     assets_path = os.path.join(os.path.dirname(__file__), "assets")
@@ -497,6 +617,51 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                 html.Td(str(r.get('servicio') or 'Sin descripción'),
                         style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px'}),
                 html.Td(str(r.get('area_hosp') or '-'),
+                        style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px'}),
+                html.Td(
+                    '-' if pd.isna(r.get('counts')) else f"{r['counts']:,.0f}",
+                    style={'textAlign': 'right', 'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px', 'fontWeight': '600'}
+                )
+            ])
+            for _, r in dataframe.iterrows()
+        ])
+        return dbc.Card(
+            dbc.CardBody(
+                [dbc.Table([table_head, table_body], bordered=False, hover=True,
+                                    responsive=True, striped=True,
+                                    className="mb-0", style={'fontSize': '13px'})],
+                style={**CARD_BODY_STYLE, 'padding': '14px'}
+            ),
+            style={**CARD_STYLE, "borderLeft": f"5px solid {SIDE_COLOR}", "height": "100%"}
+        )
+
+    def render_area_table(dataframe):
+        """Desglose simple Área hospitalaria + Conteo, solo para las
+        tarjetas de imágenes (TARJETAS_IMAGENES)."""
+        SIDE_COLOR = "#00AEEF"
+        heading = html.H6(
+            "Área Hosp.",
+            className="fw-semibold",
+            style={'fontSize': '11px', 'color': BRAND, 'letterSpacing': '0.6px', 'marginBottom': '8px'}
+        )
+        if dataframe.empty:
+            return dbc.Card(
+                dbc.CardBody(
+                    [heading, html.P("Sin registros", className="text-muted mb-0",
+                                     style={'fontFamily': FONT_FAMILY, 'fontSize': '12px'})],
+                    style={**CARD_BODY_STYLE, 'padding': '14px'}
+                ),
+                style={**CARD_STYLE, "borderLeft": f"5px solid {SIDE_COLOR}", "height": "100%"}
+            )
+        table_head = html.Thead([
+            html.Tr([
+                html.Th('Área Hosp.', style={'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'}),
+                html.Th('Cantidad', style={'textAlign': 'right', 'padding': '6px 8px', 'fontSize': '11px', 'color': BRAND, 'fontWeight': '600', 'borderBottom': f'2px solid {BORDER}'})
+            ])
+        ])
+        table_body = html.Tbody([
+            html.Tr([
+                html.Td(str(r.get('area_hosp') or 'Sin área'),
                         style={'padding': '4px 8px', 'lineHeight': '1.1', 'fontSize': '11px'}),
                 html.Td(
                     '-' if pd.isna(r.get('counts')) else f"{r['counts']:,.0f}",
@@ -616,6 +781,35 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                   AND b.cod_cpms     = p.codproced
                   AND b.fec_oper     = p.fecha_aten
             )
+        """
+
+    def build_lab_query(anio_str, periodo, codcas, codasegu_clause, codes):
+        # OJO: cod_cpms se resuelve a descripcion aparte (ver cpms_desc_map en
+        # on_search), NO con un JOIN aca. Un JOIN directo contra
+        # dwsge.sgss_cmcpp10 (12,906 filas, sin indice util para el planner)
+        # fuerza un Nested Loop que reescanea esa tabla completa por cada fila
+        # de dw_lab -> con tarjetas de miles de filas (p.ej. Tomografia) eso
+        # solo se midio en ~10-14s. Sin el JOIN, la misma tarjeta baja a
+        # ~0.6s. No hay permisos de CREATE INDEX sobre esa tabla compartida
+        # (ver dw-app-user-sin-create.md), asi que se evita el problema en vez
+        # de intentar resolverlo con un indice.
+        codes_str = "'" + "','".join(codes) + "'"
+        return f"""
+            SELECT DISTINCT ON (acto_med, cod_cpms, fecha_examen)
+                anio, periodo, cod_cpms,
+                c.cenasides, ar.arehosdes AS area_hosp,
+                s.servhosdes AS servicio, a.actdes AS actividad,
+                areaexades, acto_med
+            FROM dssge.dw_lab_{anio_str}_{periodo}
+            LEFT JOIN dwsge.sgss_emaea10 ON cod_arealab = areaexacod AND cod_tipoexamen = tipexacod
+            LEFT JOIN dwsge.sgss_cmaho10 ar ON ar.arehoscod = cod_area
+            LEFT JOIN dwsge.sgss_cmsho10 s ON s.servhoscod = cod_servicio
+            LEFT JOIN dwsge.sgss_cmcas10 c ON cod_oricentro = c.oricenasicod AND cod_centro = c.cenasicod
+            LEFT JOIN dwsge.sgss_cmact10 a ON a.actcod = cod_actividad
+            WHERE cod_cpms IN ({codes_str})
+              AND cod_centro = '{codcas}'
+              AND cod_tipoexamen = '1'
+              AND (CASE WHEN cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
         """
 
     # ========== LAYOUT ==========
@@ -858,6 +1052,76 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                     style={'marginBottom': '10px'}
                 )
             )
+
+        img_sections = []
+        for item in TARJETAS_IMAGENES:
+            if isinstance(item, dict):
+                continue
+            titulo, codes, _, color = item
+            try:
+                df_card = pd.read_sql(
+                    build_lab_query(anio_str, periodo, codcas, codasegu_clause, codes),
+                    engine
+                )
+                total = len(df_card)
+
+                if not df_card.empty and 'area_hosp' in df_card.columns:
+                    df_breakdown = (
+                        df_card.groupby('area_hosp', dropna=False)
+                        .size()
+                        .reset_index(name='counts')
+                        .sort_values('counts', ascending=False)
+                    )
+                else:
+                    df_breakdown = pd.DataFrame(columns=['area_hosp', 'counts'])
+            except Exception:
+                total = 0
+                df_breakdown = pd.DataFrame(columns=['area_hosp', 'counts'])
+
+            if total == 0:
+                continue
+
+            img_sections.append(
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            render_card(titulo, f"{total:,.0f}", color, subtitle),
+                            width=12, lg=4,
+                            style={'display': 'flex'}
+                        ),
+                        dbc.Col(
+                            html.Div(render_area_table(df_breakdown), style={'width': '100%'}),
+                            width=12, lg=4,
+                            style={'display': 'flex'}
+                        ),
+                    ],
+                    justify="center",
+                    style={'marginBottom': '10px'}
+                )
+            )
+
+        if img_sections:
+            sections.append(
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            html.H4(
+                                "Exámenes de Imágenes",
+                                style={'color': '#FFFFFF', 'fontFamily': FONT_FAMILY, 'fontWeight': '700',
+                                       'margin': '24px 0 10px 0'}
+                            ),
+                            width=12, lg=4,
+                        ),
+                        # Columna vacia con el mismo ancho que la tarjeta de la
+                        # derecha: con justify="center" replica exactamente el
+                        # mismo offset izquierdo que usan las filas de tarjetas
+                        # de abajo, sin tener que calcular el % a mano.
+                        dbc.Col(width=12, lg=4),
+                    ],
+                    justify="center",
+                )
+            )
+            sections.extend(img_sections)
 
         return html.Div(sections)
 

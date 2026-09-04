@@ -654,6 +654,11 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": BRAND,
             "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ts/{codcas}"
         },
+        {
+            "title": "Total procedimientos de trabajo social",
+            "stat_key": "total_trasocial_procedimientos",
+            "border_color": ACCENT,
+        },
     ]
     build_trasocial_cards = create_cards_builder(TRASOCIAL_CARD_TEMPLATE)
 
@@ -1623,9 +1628,10 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         ON ce.cod_oricentro = ca.oricenasicod
                         AND ce.cod_centro = ca.cenasicod
                         WHERE cod_centro = :codcas
-                        AND cod_servicio ='F51'
-                        AND cod_actividad ='B1'
-                        AND ce.cod_subactividad ='055'
+                        AND (   (cod_servicio ='F51' AND cod_actividad ='B1' AND ce.cod_subactividad ='055')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='A1' AND ce.cod_subactividad ='055')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='A6' AND ce.cod_subactividad ='688')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='A6' AND ce.cod_subactividad ='440'))
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1634,6 +1640,35 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                                 ) IN {codasegu}
             """),
             params.copy()),
+
+            ("proc_trasocial_total", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND (   (cod_servicio ='F51' AND cod_actividad ='B1' AND ce.cod_subactividad ='978')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='B1' AND ce.cod_subactividad ='979')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='B1' AND ce.cod_subactividad ='980')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='B1' AND ce.cod_subactividad ='416'))
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy())
         ]
         return {
             "queries": queries,
@@ -1789,8 +1824,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_psicologia_medicos = total_medicos_psicologia_df['dni_medico'].nunique() if 'dni_medico' in total_medicos_psicologia_df else 0
 
         atenciones_trasocial_df = results.get("trasocial_total", pd.DataFrame())
+        atenciones_proc_trasocial_df = results.get("proc_trasocial_total", pd.DataFrame())
 
-        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())       
+        atenciones_proc_tera_df = results.get("proc_tera_total", pd.DataFrame())
         atenciones_proc_diag_df = results.get("proc_diag_total", pd.DataFrame())
 
         
@@ -1858,6 +1894,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
 
         total_atenciones_trasocial_df = len(atenciones_trasocial_df)
+        total_proc_trasocial_df = len(atenciones_proc_trasocial_df)
 
         total_atenciones_proc_tera_df = len(atenciones_proc_tera_df)
         total_proc_diag_df = len(atenciones_proc_diag_df)
@@ -1883,6 +1920,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_prev_anemia_df,
             atenciones_psicologia_df,
             atenciones_trasocial_df,
+            atenciones_proc_trasocial_df,
             atenciones_proc_diag_df,
             atenciones_cred_df,    
             
@@ -1914,6 +1952,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_psicologia_horas_programadas': total_psicologia_horas_programadas,
             'total_psicologia_medicos': total_psicologia_medicos,
             'total_trasocial_atenciones': total_atenciones_trasocial_df,
+            'total_trasocial_procedimientos': total_proc_trasocial_df,
             'total_psicologia_procedimiento_terapeutico':total_atenciones_proc_tera_df,
             'total_psicologia_procedimiento_diagnostico':total_proc_diag_df,
             'total_cred_atenciones': total_atenciones_cred,

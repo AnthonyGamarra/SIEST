@@ -318,9 +318,10 @@ def build_nm_ts_base_query(anio: str, periodo: str, codasegu_clause: str, select
                     ON ce.cod_oricentro = ca.oricenasicod
                     AND ce.cod_centro = ca.cenasicod
                 WHERE ce.cod_centro = :codcas
-                AND ce.cod_servicio = 'F51'
-                AND ce.cod_actividad = 'B1'
-                AND ce.cod_subactividad = '055'
+                        AND (   (cod_servicio ='F51' AND cod_actividad ='B1' AND ce.cod_subactividad ='055')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='A1' AND ce.cod_subactividad ='055')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='A6' AND ce.cod_subactividad ='688')
+                        OR   (cod_servicio ='F51' AND	cod_actividad ='A6' AND ce.cod_subactividad ='440'))
                 AND (
                         CASE
                             WHEN ce.cod_tipo_paciente = '4' THEN '2'
