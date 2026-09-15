@@ -1198,7 +1198,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WHERE cod_centro = :codcas
                         AND cod_servicio ='F31'
                         AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('050', '056', '093', '322','471','609','692','693','975')
+                        AND ce.cod_subactividad in ('050', '056', '609','692','693','695','821','822','823','824','825','826','828','827')
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
