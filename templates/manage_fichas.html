@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  /* Sin esto, al desplegar una seccion la pagina pasa a medir mas que la
+     ventana y aparece la barra de scroll vertical del navegador, que le
+     resta ~15-17px de ancho a todo el contenido -- eso hace que, al
+     comparar una captura con una seccion abierta contra otra sin ninguna
+     abierta, TODO se vea ligeramente mas angosto/chico en la primera.
+     Reservando el espacio de la barra siempre (haya o no scroll) evita ese
+     salto de tamaño entre estados. */
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  .manage-fichas-wrapper {
+    max-width: 2000px;
+    margin: 0 auto;
+    padding: 2rem 1rem 3rem;
+  }
+
+  .manage-fichas-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .manage-fichas-header h2 {
+    color: #0f2b46;
+    font-weight: 700;
+  }
+
+  .search-card,
+  .upload-card {
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid #e1e6ef;
+    padding: 1.5rem;
+    box-shadow: 0 16px 30px rgba(15, 43, 70, 0.08);
+    margin-bottom: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+  }
+
+  .search-card label,
+  .upload-card label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #4a5672;
+    margin-bottom: 0.35rem;
+  }
+
+  .search-card select,
+  .search-card input,
+  .upload-card input,
+  .upload-card select {
+    border-radius: 12px;
+    border: 1px solid #cfd8e7;
+    padding: 0.6rem 0.8rem;
+    min-width: 320px;
+    font-size: 0.95rem;
+    background: #fff;
+  }
+
+  .search-card button,
+  .upload-card button {
+    border: none;
+    border-radius: 999px;
+    background: #0064af;
+    color: #ffffff;
+    padding: 0.65rem 1.6rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .upload-card h5 {
+    width: 100%;
+    margin: 0 0 0.25rem 0;
+    color: #0f2b46;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .ficha-section {
+    margin-bottom: 1.25rem;
+  }
+
+  .ficha-section-summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.9rem 1.25rem;
+    border-radius: 16px;
+    background: #eef2ff;
+    border: 1px solid #dbe3f5;
+    color: #0f2b46;
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .ficha-section-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ficha-section-summary:before {
+    content: "▶";
+    display: inline-block;
+    margin-right: 0.6rem;
+    font-size: 0.75rem;
+    color: #0064af;
+    transition: transform 0.15s ease;
+  }
+
+  details[open] > .ficha-section-summary:before {
+    transform: rotate(90deg);
+  }
+
+  .ficha-section-count {
+    color: #6b7280;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .ficha-section-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin: -0.4rem 0 0.6rem 0;
+  }
+
+  .btn-download-section {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 0.35rem 1rem;
+    background: #eafaf1;
+    color: #198754;
+    border: 1px solid #bfe8d1;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-decoration: none;
+  }
+
+  .fichas-table-wrapper {
+    overflow-x: auto;
+    border-radius: 24px;
+    border: 1px solid #e1e6ef;
+    background: #ffffff;
+    box-shadow: 0 24px 40px rgba(15, 43, 70, 0.07);
+  }
+
+  table.manage-fichas-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9rem;
+  }
+
+  /* table-layout:fixed + el mismo colgroup en cada seccion es lo que
+     garantiza que las columnas midan siempre lo mismo. Sin esto, cada
+     <table> (una por seccion) calcula su ancho de forma independiente
+     segun el contenido de ESA seccion (auto layout), asi que una seccion
+     con nombres largos terminaba mas ancha que otra con nombres cortos. */
+  .manage-fichas-table col.col-id { width: 4%; }
+  .manage-fichas-table col.col-nombre { width: 26%; }
+  .manage-fichas-table col.col-seccion { width: 16%; }
+  .manage-fichas-table col.col-archivo { width: 12%; }
+  .manage-fichas-table col.col-tamano { width: 7%; }
+  .manage-fichas-table col.col-subida { width: 11%; }
+  .manage-fichas-table col.col-acciones { width: 24%; }
+
+  table.manage-fichas-table thead {
+    background: #f6f9ff;
+  }
+
+  table.manage-fichas-table th,
+  table.manage-fichas-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #eef2f7;
+    vertical-align: middle;
+  }
+
+  table.manage-fichas-table th {
+    font-weight: 700;
+    color: #4a5672;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* Sin min-width en px aca: con table-layout:fixed + colgroup, el ancho
+     de columna YA es fijo y consistente entre secciones. Un min-width en
+     px en el contenido de la celda competiria con eso y podria forzar la
+     tabla (y por overflow, toda la pagina) a ensancharse mas que el
+     contenedor -- eso es lo que hacia que una seccion se viera "mas chica"
+     que otra. Los inputs simplemente ocupan el 100% de su columna. */
+  table.manage-fichas-table input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: 1px solid #d9e2ef;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.9rem;
+  }
+
+  table.manage-fichas-table input[type="file"] {
+    width: 100%;
+    font-size: 0.78rem;
+  }
+
+  table.manage-fichas-table select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: 1px solid #d9e2ef;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+    background: #fff;
+  }
+
+  .table-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  /* El sitio define una regla global "button { width:100%; background:
+     gradiente; box-shadow; font-size:16px; ... }" pensada para el boton de
+     login (static/css/styles.css), mas un brillo animado en ::before y un
+     efecto en :hover/:active. Como una clase (.btn-save-row) YA tiene mas
+     especificidad que un simple selector de elemento (button), alcanza con
+     redeclarar aqui, explicitamente, cada una de esas propiedades para que
+     nuestra version gane -- sin usar "all: unset", que en un intento
+     anterior termino compitiendo mal y dejaba los botones sin click. */
+  .btn-save-row,
+  .btn-preview-row,
+  .btn-download-row,
+  .btn-delete-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    margin: 0;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 999px;
+    padding: 0.4rem 1rem;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.82rem;
+    line-height: 1.2;
+    letter-spacing: normal;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: none;
+    position: static;
+    overflow: visible;
+    transition: none;
+  }
+
+  .btn-save-row::before,
+  .btn-preview-row::before,
+  .btn-download-row::before,
+  .btn-delete-row::before {
+    content: none;
+  }
+
+  .btn-save-row:hover,
+  .btn-preview-row:hover,
+  .btn-download-row:hover,
+  .btn-delete-row:hover,
+  .btn-save-row:active,
+  .btn-preview-row:active,
+  .btn-download-row:active,
+  .btn-delete-row:active {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .btn-save-row {
+    background: #0064af;
+    color: #ffffff;
+  }
+
+  .btn-preview-row,
+  .btn-download-row {
+    background: #eef2ff;
+    color: #0064af;
+    border: 1px solid #cfd8e7;
+  }
+
+  .btn-delete-row {
+    background: #fdecea;
+    color: #b3261e;
+  }
+
+  .btn-download-all {
+    display: inline-block;
+    border: none;
+    border-radius: 999px;
+    padding: 0.65rem 1.6rem;
+    background: #198754;
+    color: #ffffff;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .ficha-size {
+    color: #6b7280;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .note-text {
+    color: #6b7280;
+    font-size: 0.8rem;
+    margin-top: 1rem;
+  }
+
+  .manage-footer {
+    margin-top: 1rem;
+    text-align: center;
+  }
+
+  .manage-footer a {
+    font-weight: 600;
+    color: #0064af;
+    text-decoration: none;
+  }
+</style>
+
+<div class="manage-fichas-wrapper">
+  <div class="manage-fichas-header">
+    <h2>Gestión de fichas técnicas</h2>
+  </div>
+
+  <form class="upload-card" method="post" action="{{ url_for('main.manage_fichas') }}" enctype="multipart/form-data">
+    <h5>Subir nueva ficha</h5>
+    <div>
+      <label for="nueva-nombre">Nombre</label>
+      <input id="nueva-nombre" type="text" name="nombre" placeholder="Opcional: usa el nombre del archivo si se deja vacío" />
+    </div>
+    <div>
+      <label for="nueva-seccion">Sección</label>
+      <select id="nueva-seccion" name="seccion">
+        {% for section in section_options %}
+        <option value="{{ section }}" {% if section == section_options[-1] %}selected{% endif %}>{{ section }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="nueva-archivo">Archivo PDF</label>
+      <input id="nueva-archivo" type="file" name="archivo_pdf" accept="application/pdf" required />
+    </div>
+    <div>
+      <button type="submit">Subir ficha</button>
+    </div>
+  </form>
+
+  <form class="search-card" method="get" action="{{ url_for('main.manage_fichas') }}">
+    <div>
+      <label for="search-query">Buscar por nombre</label>
+      <input
+        id="search-query"
+        type="text"
+        name="q"
+        placeholder="Ingresa el texto a buscar"
+        value="{{ search_query or '' }}"
+      />
+    </div>
+    <div>
+      <button type="submit">Buscar</button>
+    </div>
+    {% if search_query %}
+    <div>
+      <a href="{{ url_for('main.manage_fichas') }}" style="color:#0064af; font-weight:600;">Limpiar búsqueda</a>
+    </div>
+    {% endif %}
+    <div style="margin-left: auto;">
+      <a class="btn-download-all" href="{{ url_for('main.download_all_fichas') }}">Descargar todas (ZIP)</a>
+    </div>
+  </form>
+
+  {% if secciones %}
+  {% for label, fichas in secciones %}
+  {% for ficha in fichas %}
+  <form
+    id="update-form-{{ ficha.id }}"
+    method="post"
+    action="{{ url_for('main.update_ficha', ficha_id=ficha.id) }}"
+    enctype="multipart/form-data"
+    class="sr-only"
+  >
+    <input type="hidden" name="q" value="{{ search_query }}" />
+  </form>
+  <form
+    id="delete-form-{{ ficha.id }}"
+    method="post"
+    action="{{ url_for('main.delete_ficha', ficha_id=ficha.id) }}"
+    class="sr-only"
+    onsubmit="return confirm('¿Eliminar la ficha #{{ ficha.id }} ({{ ficha.nombre }})? Si alguna tarjeta la referencia, su botón de Ficha técnica dejará de funcionar.');"
+  >
+    <input type="hidden" name="q" value="{{ search_query }}" />
+  </form>
+  {% endfor %}
+  {% endfor %}
+
+  {% for label, fichas in secciones %}
+  <details class="ficha-section" {% if search_query or secciones|length == 1 %}open{% endif %}>
+    <summary class="ficha-section-summary">{{ label }} <span class="ficha-section-count">({{ fichas|length }})</span></summary>
+    <div class="ficha-section-toolbar">
+      <a class="btn-download-section" href="{{ url_for('main.download_section_fichas', seccion=label) }}">Descargar sección (ZIP)</a>
+    </div>
+    <div class="fichas-table-wrapper">
+      <table class="manage-fichas-table">
+        <colgroup>
+          <col class="col-id">
+          <col class="col-nombre">
+          <col class="col-seccion">
+          <col class="col-archivo">
+          <col class="col-tamano">
+          <col class="col-subida">
+          <col class="col-acciones">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Sección</th>
+            <th>Reemplazar archivo</th>
+            <th>Tamaño</th>
+            <th>Subida</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ficha in fichas %}
+          <tr>
+            <td>{{ ficha.id }}</td>
+            <td>
+              <input form="update-form-{{ ficha.id }}" type="text" name="nombre" value="{{ ficha.nombre or '' }}" title="{{ ficha.nombre or '' }}" required />
+            </td>
+            <td>
+              <select form="update-form-{{ ficha.id }}" name="seccion">
+                {% for section in section_options %}
+                <option value="{{ section }}" {% if section == (ficha.seccion or section_options[-1]) %}selected{% endif %}>{{ section }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              <input form="update-form-{{ ficha.id }}" type="file" name="archivo_pdf" accept="application/pdf" />
+            </td>
+            <td class="ficha-size">{{ (ficha.size_bytes / 1024) | round(0, 'ceil') | int }} KB</td>
+            <td class="ficha-size">{{ ficha.fecha_subida.strftime('%d/%m/%Y %H:%M') if ficha.fecha_subida else '-' }}</td>
+            <td class="table-actions">
+              <button form="update-form-{{ ficha.id }}" type="submit" class="btn-save-row">Guardar</button>
+              <a class="btn-preview-row" href="{{ url_for('main.preview_ficha', ficha_id=ficha.id) }}" target="_blank" rel="noopener">Ver PDF</a>
+              <a class="btn-download-row" href="{{ url_for('main.download_ficha', ficha_id=ficha.id) }}">Descargar</a>
+              <button form="delete-form-{{ ficha.id }}" type="submit" class="btn-delete-row">Eliminar</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endfor %}
+  {% elif search_query %}
+  <p>No encontramos fichas que coincidan con tu búsqueda.</p>
+  {% else %}
+  <p>Todavía no hay fichas técnicas registradas.</p>
+  {% endif %}
+
+  <div class="manage-footer">
+    <a href="{{ url_for('main.index') }}">← Volver al inicio</a>
+  </div>
+</div>
+{% endblock %}

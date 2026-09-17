@@ -1,0 +1,31 @@
+/* Modal de "Ficha técnica" (PDF embebido) usado en dashboard.py,
+   dashboard_nm.py y dashboard_proc.py: fija la altura del dialogo para que
+   el iframe del PDF no empuje el modal fuera de la pantalla. */
+.ficha-modal-content {
+    height: 90vh;
+    max-height: 90vh;
+}
+
+/* La barra de control (año/periodo/tipo/buscar) usa z-index hasta 4000
+   !important (ver dashboard_tabs.css / dashboard_nm_controls.css), por
+   encima del z-index por defecto de Bootstrap para el fondo oscuro del
+   modal (~1040). Sin esto, la barra "atraviesa" el oscurecido y se ve
+   blanca y brillante encima del modal. El dialogo del modal ya se fuerza
+   a zIndex 5000 desde Python, asi que el backdrop debe quedar debajo de
+   eso pero por encima de la barra de control. */
+.modal-backdrop.show {
+    z-index: 4990 !important;
+}
+
+/* Insignia junto al botón "Ficha técnica" para avisar que se reemplazó el
+   PDF de una tarjeta (p.ej. "Ficha actualizada" en Nutrición). */
+.ficha-badge-pulse {
+    display: inline-flex;
+    align-items: center;
+    animation: ficha-badge-pulse-anim 1.8s ease-in-out infinite;
+}
+
+@keyframes ficha-badge-pulse-anim {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}

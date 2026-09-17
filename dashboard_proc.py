@@ -2,7 +2,7 @@ import os
 
 import dash_bootstrap_components as dbc
 import pandas as pd
-from dash import Dash, dcc, html, Input, Output, State, no_update, MATCH
+from dash import Dash, dcc, html, Input, Output, State, no_update, ALL
 from flask import has_request_context
 from flask_login import current_user
 
@@ -648,7 +648,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             title_row_children.append(
                 html.Div([
                     dbc.Button(
-                        [html.I(className="bi bi-file-earmark-arrow-down me-1"), "Ficha técnica"],
+                        [html.I(className="bi bi-file-earmark-text me-1"), "Ficha técnica"],
                         id={'type': 'ficha-btn-proc', 'ficha_id': ficha_id},
                         color='light', outline=True, size='sm',
                         style={
@@ -658,7 +658,6 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
                             'padding': '4px 10px', 'whiteSpace': 'nowrap', 'flexShrink': 0,
                         }
                     ),
-                    dcc.Download(id={'type': 'ficha-download-proc', 'ficha_id': ficha_id}),
                 ], style={'marginLeft': '10px'})
             )
         body_children = [
@@ -805,33 +804,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
             return None
         return (row.get('fecha_act') or row.get('fecha_Act')) if row else None
 
-    def _build_safe_pdf_name(raw_name):
-        base = (raw_name or "ficha_tecnica").strip()
-        safe_chars = [ch if ch.isalnum() or ch in (" ", "-", "_") else "_" for ch in base]
-        normalized = ''.join(safe_chars).strip().replace(' ', '_').lower()
-        normalized = normalized or "ficha_tecnica"
-        return normalized if normalized.endswith('.pdf') else f"{normalized}.pdf"
-
-    def fetch_ficha_tecnica(engine, ficha_id):
-        if engine is None or ficha_id is None:
-            return None
-        try:
-            from sqlalchemy import text
-            with engine.connect() as connection:
-                row = connection.execute(
-                    text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
-                    {"id": ficha_id}
-                ).mappings().first()
-        except Exception as exc:
-            print(f"[Dashboard PROC] fetch_ficha_tecnica error: {exc}")
-            return None
-
-        if not row or not row.get('archivo_pdf'):
-            return None
-
-        filename = _build_safe_pdf_name(row.get('nombre'))
-        pdf_bytes = bytes(row['archivo_pdf'])
-        return filename, pdf_bytes
+    from ficha_tecnica_utils import fetch_ficha_row, build_pdf_data_uri
 
     # ========== QUERY ==========
     def build_proc_query(anio_str, periodo, codcas, codasegu_clause, codes):
@@ -1050,6 +1023,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
 
         return dbc.Container([
             dcc.Location(id='url-proc', refresh=False),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(dbc.ModalTitle(id='ficha-modal-title-proc'), close_button=True),
+                    dbc.ModalBody(
+                        html.Iframe(
+                            id='ficha-modal-iframe-proc',
+                            style={'width': '100%', 'height': '100%', 'border': 'none'}
+                        ),
+                        style={'padding': 0, 'height': 'calc(90vh - 56px)'}
+                    ),
+                ],
+                id='ficha-modal-proc',
+                is_open=False,
+                size='xl',
+                centered=True,
+                scrollable=False,
+                style={'zIndex': 5000},
+                contentClassName='ficha-modal-content',
+            ),
+            dcc.Store(id='ficha-clicks-store-proc', data={}),
             html.Div([
                 header,
                 html.Br(),
@@ -1405,24 +1398,48 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_proc_embed/'):
         filename = f"procedimientos_{anio_str}_{periodo}_{codcas}.xlsx"
         return dcc.send_data_frame(df.to_excel, filename, index=False, sheet_name="Procedimientos")
 
-    # ========== CALLBACK DESCARGA FICHA TÉCNICA POR TARJETA ==========
+    # ========== CALLBACK MODAL FICHA TÉCNICA POR TARJETA ==========
+    # OJO: no usar solo ctx.triggered_id / "any(n_clicks_list)" aca. Los
+    # callbacks pattern-matching con ALL se vuelven a disparar cuando el
+    # conjunto de componentes que matchea el patron cambia de forma (p.ej.
+    # cada vez que se rehacen las tarjetas tras una nueva busqueda), no solo
+    # cuando el usuario hace clic. Como Dash conserva el n_clicks de un boton
+    # cuyo id (mismo ficha_id) ya existia, ese re-disparo "estructural" trae
+    # n_clicks > 0 para cualquier ficha que se haya abierto alguna vez en la
+    # sesion y reabre el modal solo. Por eso se compara contra el conteo
+    # anterior guardado en un dcc.Store, y solo se reacciona al id cuyo
+    # n_clicks realmente aumento respecto de esa ultima foto.
     @dash_app.callback(
-        Output({'type': 'ficha-download-proc', 'ficha_id': MATCH}, 'data'),
-        Input({'type': 'ficha-btn-proc', 'ficha_id': MATCH}, 'n_clicks'),
-        State({'type': 'ficha-btn-proc', 'ficha_id': MATCH}, 'id'),
+        Output('ficha-modal-proc', 'is_open'),
+        Output('ficha-modal-iframe-proc', 'src'),
+        Output('ficha-modal-title-proc', 'children'),
+        Output('ficha-clicks-store-proc', 'data'),
+        Input({'type': 'ficha-btn-proc', 'ficha_id': ALL}, 'n_clicks'),
+        State({'type': 'ficha-btn-proc', 'ficha_id': ALL}, 'id'),
+        State('ficha-clicks-store-proc', 'data'),
         prevent_initial_call=True,
     )
-    def download_ficha_tecnica_proc(n_clicks, btn_id):
-        if not n_clicks:
-            return no_update
+    def show_ficha_tecnica_proc(n_clicks_list, ids_list, prev_clicks):
+        prev_clicks = prev_clicks or {}
+        new_clicks = {}
+        clicked_ficha_id = None
+        for id_dict, n in zip(ids_list, n_clicks_list):
+            key = str(id_dict['ficha_id'])
+            n = n or 0
+            new_clicks[key] = n
+            if n > prev_clicks.get(key, 0):
+                clicked_ficha_id = id_dict['ficha_id']
+
+        if clicked_ficha_id is None:
+            return no_update, no_update, no_update, new_clicks
 
         engine = create_connection()
-        ficha = fetch_ficha_tecnica(engine, btn_id['ficha_id'])
+        ficha = fetch_ficha_row(engine, clicked_ficha_id)
         if not ficha:
-            return no_update
+            return no_update, no_update, no_update, new_clicks
 
-        filename, pdf_bytes = ficha
-        return dcc.send_bytes(lambda buffer: buffer.write(pdf_bytes), filename)
+        nombre, pdf_bytes = ficha
+        return True, build_pdf_data_uri(pdf_bytes), nombre, new_clicks
 
     dash_app.layout = serve_layout
     return dash_app

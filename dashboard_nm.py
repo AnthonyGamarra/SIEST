@@ -156,7 +156,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     subtitle_text=card.get("subtitle", subtitle),
                     href=card.get("href"),
                     link_refresh=card.get("link_refresh", False),
-                    extra_style=card.get("extra_style")
+                    extra_style=card.get("extra_style"),
+                    ficha_id=card.get("ficha_id"),
+                    ficha_badge=card.get("ficha_badge")
                 ),
                 style={'width': '100%'}
             )
@@ -420,7 +422,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                 "title": card['title'],
                 "value": f"{stats.get(card['stat_key'], 0):,.0f}",
                 "border_color": card.get('border_color', ACCENT),
-                "side_component": side_component
+                "side_component": side_component,
+                "ficha_id": card.get('ficha_id'),
+                "ficha_badge": card.get('ficha_badge'),
             })
         return cards
 
@@ -464,7 +468,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de atenciones Obstétricas",
             "stat_key": "total_atenciones",
             "border_color": ACCENT,
-            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ob/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ob/{codcas}",
+            "ficha_id": 148,
         },
         {
             "title": "Atenciones prenatales",
@@ -501,7 +506,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de atenciones preventivo promocional",
             "stat_key": "total_atenciones_p",
             "border_color": BRAND,
-            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_pp/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_pp/{codcas}",
+            "ficha_id": 152,
         },
         {
             "title": "Visitas domiciliarias",
@@ -542,7 +548,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": BRAND,
             "table_key": "nutricion_individual_por_sub_act",
             "table_title": "Atenciones por subactividad",
-            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_nu/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_nu/{codcas}",
+            "ficha_id": 146,
+            "ficha_badge": "Ficha actualizada",
         },
         # {
         #     "title": "Total de atenciones integral Anemia",
@@ -561,7 +569,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de enfermería",
             "stat_key": "total_enfermeria_atenciones",
             "border_color": BRAND,
-            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_en/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_en/{codcas}",
+            "ficha_id": 144,
         },
         {
             "title": "Atenciones en tuberculosis",
@@ -615,7 +624,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total de consultas de psicología",
             "stat_key": "total_psicologia_atenciones",
             "border_color": BRAND,
-            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ps/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ps/{codcas}",
+            "ficha_id": 149,
         },
 
         {
@@ -638,11 +648,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total procedimiento terapéutico",
             "stat_key": "total_psicologia_procedimiento_terapeutico",
             "border_color": BRAND,
+            "ficha_id": 151,
         },
         {
             "title": "Número de procedimiento diagnóstico",
             "stat_key": "total_psicologia_procedimiento_diagnostico",
             "border_color": ACCENT,
+            "ficha_id": 150,
         },
     ]
     build_psicologia_cards = create_cards_builder(PSICOLOGIA_CARD_TEMPLATE)
@@ -652,7 +664,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "title": "Total atenciones de trabajo social",
             "stat_key": "total_trasocial_atenciones",
             "border_color": BRAND,
-            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ts/{codcas}"
+            "link_target": "/dashboard_nm_embed/dash/total_atenciones_nm_ts/{codcas}",
+            "ficha_id": 158,
         },
         {
             "title": "Total procedimientos de trabajo social",
@@ -669,6 +682,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "border_color": BRAND,
             "table_key": "atenciones_cred_por_sub_act",
             "table_title": "Detalle CRED",
+            "ficha_id": 143,
         },
     ]
     build_cred_cards = create_cards_builder(CRED_CARD_TEMPLATE)
@@ -736,7 +750,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
         return fecha_col_value
 
-    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None, link_refresh=False):
+    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None, link_refresh=False, ficha_id=None, ficha_badge=None):
         link_content = html.H5(
             title,
             className="card-title",
@@ -757,13 +771,50 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             )
         ) if href else link_content
 
+        title_row_children = [heading]
+        if ficha_id is not None:
+            ficha_group_children = [
+                dbc.Button(
+                    [html.I(className="bi bi-file-earmark-text me-1"), "Ficha técnica"],
+                    id={'type': 'ficha-btn-nm', 'ficha_id': ficha_id},
+                    color='light', outline=True, size='sm',
+                    style={
+                        'borderColor': BRAND, 'color': BRAND,
+                        'backgroundColor': '#F7FBFF', 'fontFamily': FONT_FAMILY,
+                        'fontWeight': '600', 'fontSize': '11px', 'borderRadius': '10px',
+                        'padding': '4px 10px', 'whiteSpace': 'nowrap', 'flexShrink': 0,
+                    }
+                )
+            ]
+            if ficha_badge:
+                ficha_group_children.append(
+                    html.Span(
+                        [html.I(className="bi bi-stars me-1"), ficha_badge],
+                        className='ficha-badge-pulse',
+                        style={
+                            'color': '#dc3545', 'fontFamily': FONT_FAMILY,
+                            'fontWeight': '600', 'fontSize': '10px',
+                            'marginLeft': '8px', 'whiteSpace': 'nowrap',
+                        }
+                    )
+                )
+            title_row_children.append(
+                html.Div(
+                    ficha_group_children,
+                    style={'display': 'flex', 'alignItems': 'center', 'marginLeft': '10px'}
+                )
+            )
+
         card_style = {**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
         if extra_style:
             card_style.update(extra_style)
 
         return dbc.Card(
             dbc.CardBody([
-                heading,
+                html.Div(title_row_children, style={
+                    'display': 'flex', 'alignItems': 'center',
+                    'justifyContent': 'space-between', 'marginBottom': '6px'
+                }),
                 html.H2(value, style={
                     'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0,
                     'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
@@ -2319,6 +2370,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
             content = html.Div([
                 dcc.Location(id='url', refresh=True),
+                dbc.Modal(
+                    [
+                        dbc.ModalHeader(dbc.ModalTitle(id='ficha-modal-title-nm'), close_button=True),
+                        dbc.ModalBody(
+                            html.Iframe(
+                                id='ficha-modal-iframe-nm',
+                                style={'width': '100%', 'height': '100%', 'border': 'none'}
+                            ),
+                            style={'padding': 0, 'height': 'calc(90vh - 56px)'}
+                        ),
+                    ],
+                    id='ficha-modal-nm',
+                    is_open=False,
+                    size='xl',
+                    centered=True,
+                    scrollable=False,
+                    style={'zIndex': 5000},
+                    contentClassName='ficha-modal-content',
+                ),
+                dcc.Store(id='ficha-clicks-store-nm', data={}),
                 main_dashboard,
                 html.Div(
                     children=dash.page_container,
@@ -2512,6 +2583,49 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
 
         filename, pdf_bytes = ficha
         return dcc.send_bytes(pdf_bytes, filename)
+
+    # OJO: no basta con ctx.triggered_id / "any(n_clicks_list)" aca. Los
+    # callbacks pattern-matching con ALL se vuelven a disparar cuando el
+    # conjunto de componentes que matchea el patron cambia de forma (p.ej.
+    # cada vez que se rehacen las tarjetas tras una nueva busqueda en
+    # cualquier pestana), no solo cuando el usuario hace clic. Como Dash
+    # conserva el n_clicks de un boton cuyo id (mismo ficha_id) ya existia,
+    # ese re-disparo "estructural" trae n_clicks > 0 para cualquier ficha
+    # que se haya abierto alguna vez en la sesion y reabre el modal solo.
+    # Por eso se compara contra el conteo anterior guardado en un
+    # dcc.Store, y solo se reacciona al id cuyo n_clicks realmente aumento.
+    @dash_app.callback(
+        Output('ficha-modal-nm', 'is_open'),
+        Output('ficha-modal-iframe-nm', 'src'),
+        Output('ficha-modal-title-nm', 'children'),
+        Output('ficha-clicks-store-nm', 'data'),
+        Input({'type': 'ficha-btn-nm', 'ficha_id': ALL}, 'n_clicks'),
+        State({'type': 'ficha-btn-nm', 'ficha_id': ALL}, 'id'),
+        State('ficha-clicks-store-nm', 'data'),
+        prevent_initial_call=True,
+    )
+    def show_ficha_tecnica_nm(n_clicks_list, ids_list, prev_clicks):
+        from ficha_tecnica_utils import fetch_ficha_row, build_pdf_data_uri
+        prev_clicks = prev_clicks or {}
+        new_clicks = {}
+        clicked_ficha_id = None
+        for id_dict, n in zip(ids_list, n_clicks_list):
+            key = str(id_dict['ficha_id'])
+            n = n or 0
+            new_clicks[key] = n
+            if n > prev_clicks.get(key, 0):
+                clicked_ficha_id = id_dict['ficha_id']
+
+        if clicked_ficha_id is None:
+            return dash.no_update, dash.no_update, dash.no_update, new_clicks
+
+        engine = create_connection()
+        ficha = fetch_ficha_row(engine, clicked_ficha_id)
+        if not ficha:
+            return dash.no_update, dash.no_update, dash.no_update, new_clicks
+
+        nombre, pdf_bytes = ficha
+        return True, build_pdf_data_uri(pdf_bytes), nombre, new_clicks
 
     dash_app.layout = serve_layout
     return dash_app

@@ -1,6 +1,7 @@
 import os
 import csv
 import io
+import zipfile
 
 import joblib
 import pandas as pd
@@ -31,6 +32,78 @@ DESERCION_MODEL_FILENAME = 'modelo_desercion.pkl'
 def _get_dw_engine():
 	from extensions import get_dw_engine
 	return get_dw_engine()
+
+
+def _safe_pdf_filename(raw_name, fallback_id=None):
+	base = (raw_name or '').strip() or f"ficha_{fallback_id or 'sin_nombre'}"
+	safe_chars = [ch if ch.isalnum() or ch in (' ', '-', '_', '.') else '_' for ch in base]
+	normalized = ''.join(safe_chars).strip()
+	normalized = normalized or f"ficha_{fallback_id or 'sin_nombre'}"
+	return normalized if normalized.lower().endswith('.pdf') else f"{normalized}.pdf"
+
+
+def _zip_response(rows, zip_filename):
+	buffer = io.BytesIO()
+	used_names = set()
+	with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+		for row in rows:
+			if not row.get('archivo_pdf'):
+				continue
+			filename = _safe_pdf_filename(row.get('nombre'), row['id'])
+			if filename in used_names:
+				stem = filename[:-4] if filename.lower().endswith('.pdf') else filename
+				filename = f"{stem}_{row['id']}.pdf"
+			used_names.add(filename)
+			zf.writestr(filename, bytes(row['archivo_pdf']))
+	buffer.seek(0)
+
+	response = Response(buffer.read(), mimetype='application/zip')
+	response.headers['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+	return response
+
+
+FICHA_SECTION_ORDER = [
+	'Procedimientos',
+	'Consulta Externa / Personal No Médico',
+	'Odontología',
+	'Emergencia',
+	'Centro Quirúrgico',
+	'Otras / Generales',
+]
+
+
+def _guess_section_from_nombre(nombre):
+	"""Solo como respaldo para filas sin 'seccion' asignada todavia."""
+	n = (nombre or '').strip().upper()
+	if n.startswith('PRO'):
+		return 'Procedimientos'
+	if n.startswith('SOD'):
+		return 'Odontología'
+	if n.startswith('EME'):
+		return 'Emergencia'
+	if n.startswith('CQX'):
+		return 'Centro Quirúrgico'
+	if n.startswith('CE'):
+		return 'Consulta Externa / Personal No Médico'
+	return 'Otras / Generales'
+
+
+def _group_fichas_by_section(fichas):
+	buckets = {label: [] for label in FICHA_SECTION_ORDER}
+	for ficha in fichas:
+		label = ficha.get('seccion') or _guess_section_from_nombre(ficha.get('nombre'))
+		if label not in buckets:
+			buckets[label] = []
+		buckets[label].append(ficha)
+	ordered = [
+		(label, buckets.pop(label))
+		for label in FICHA_SECTION_ORDER
+		if buckets.get(label)
+	]
+	# Por si alguna fila quedo con una seccion "libre" no listada en
+	# FICHA_SECTION_ORDER (ej. cargada a mano), se muestra igual al final.
+	ordered.extend((label, rows) for label, rows in buckets.items() if rows)
+	return ordered
 
 
 def _fetch_tabla_homologada_rows(codcas):
@@ -707,6 +780,282 @@ def register_routes(app):
 			search_field=search_field,
 			search_query=search_query,
 		)
+
+	@bp.route('/manage_fichas', methods=['GET', 'POST'])
+	@login_required
+	def manage_fichas():
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		engine = _get_dw_engine()
+
+		if request.method == 'POST':
+			nombre = request.form.get('nombre', '').strip()
+			seccion = request.form.get('seccion', '').strip() or FICHA_SECTION_ORDER[-1]
+			archivo = request.files.get('archivo_pdf')
+
+			if not archivo or not archivo.filename:
+				flash('Selecciona un archivo PDF para subir.', 'warning')
+				return redirect(url_for('main.manage_fichas'))
+
+			if not archivo.filename.lower().endswith('.pdf') or archivo.mimetype not in (
+				'application/pdf', 'application/octet-stream'
+			):
+				flash('El archivo debe ser un PDF.', 'danger')
+				return redirect(url_for('main.manage_fichas'))
+
+			data = archivo.read()
+			if not data:
+				flash('El archivo está vacío.', 'danger')
+				return redirect(url_for('main.manage_fichas'))
+			if len(data) > 20 * 1024 * 1024:
+				flash('El archivo supera el límite de 20 MB.', 'danger')
+				return redirect(url_for('main.manage_fichas'))
+
+			nombre_final = nombre or archivo.filename
+
+			try:
+				with engine.begin() as conn:
+					conn.execute(
+						text(
+							"INSERT INTO dwsge.f_tecnicas (nombre, seccion, archivo_pdf, fecha_subida) "
+							"VALUES (:nombre, :seccion, :data, now())"
+						),
+						{'nombre': nombre_final, 'seccion': seccion, 'data': data},
+					)
+				flash(f'Ficha "{nombre_final}" subida correctamente en "{seccion}".', 'success')
+			except Exception as exc:
+				current_app.logger.exception('Error al subir ficha técnica: %s', exc)
+				flash('No se pudo subir la ficha técnica.', 'danger')
+
+			return redirect(url_for('main.manage_fichas'))
+
+		search_query = request.args.get('q', '').strip()
+		sql = "SELECT id, nombre, seccion, length(archivo_pdf) AS size_bytes, fecha_subida FROM dwsge.f_tecnicas"
+		params = {}
+		if search_query:
+			sql += " WHERE nombre ILIKE :q"
+			params['q'] = f"%{search_query}%"
+		sql += " ORDER BY id"
+
+		try:
+			with engine.connect() as conn:
+				fichas = conn.execute(text(sql), params).mappings().all()
+		except Exception as exc:
+			current_app.logger.exception('Error al listar fichas técnicas: %s', exc)
+			flash('No se pudieron cargar las fichas técnicas.', 'danger')
+			fichas = []
+
+		secciones = _group_fichas_by_section(fichas)
+
+		return render_template(
+			'manage_fichas.html',
+			show_modules=False,
+			secciones=secciones,
+			total_fichas=len(fichas),
+			search_query=search_query,
+			section_options=FICHA_SECTION_ORDER,
+		)
+
+	@bp.route('/manage_fichas/<int:ficha_id>/update', methods=['POST'])
+	@login_required
+	def update_ficha(ficha_id):
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		engine = _get_dw_engine()
+		nombre = request.form.get('nombre', '').strip()
+		seccion = request.form.get('seccion', '').strip() or FICHA_SECTION_ORDER[-1]
+		archivo = request.files.get('archivo_pdf')
+		search_query = request.form.get('q', '').strip()
+
+		if not nombre:
+			flash('El nombre no puede quedar vacío.', 'warning')
+			return redirect(url_for('main.manage_fichas', q=search_query))
+
+		data = None
+		if archivo and archivo.filename:
+			if not archivo.filename.lower().endswith('.pdf') or archivo.mimetype not in (
+				'application/pdf', 'application/octet-stream'
+			):
+				flash('El archivo de reemplazo debe ser un PDF.', 'danger')
+				return redirect(url_for('main.manage_fichas', q=search_query))
+			data = archivo.read()
+			if not data:
+				flash('El archivo de reemplazo está vacío.', 'danger')
+				return redirect(url_for('main.manage_fichas', q=search_query))
+			if len(data) > 20 * 1024 * 1024:
+				flash('El archivo supera el límite de 20 MB.', 'danger')
+				return redirect(url_for('main.manage_fichas', q=search_query))
+
+		try:
+			with engine.begin() as conn:
+				if data is not None:
+					conn.execute(
+						text(
+							"UPDATE dwsge.f_tecnicas SET nombre = :nombre, seccion = :seccion, "
+							"archivo_pdf = :data, fecha_subida = now() WHERE id = :id"
+						),
+						{'nombre': nombre, 'seccion': seccion, 'data': data, 'id': ficha_id},
+					)
+					flash(f'Ficha #{ficha_id} actualizada (nombre, sección y archivo).', 'success')
+				else:
+					conn.execute(
+						text(
+							"UPDATE dwsge.f_tecnicas SET nombre = :nombre, seccion = :seccion "
+							"WHERE id = :id"
+						),
+						{'nombre': nombre, 'seccion': seccion, 'id': ficha_id},
+					)
+					flash(f'Ficha #{ficha_id} renombrada.', 'success')
+		except Exception as exc:
+			current_app.logger.exception('Error al actualizar ficha técnica %s: %s', ficha_id, exc)
+			flash('No se pudo actualizar la ficha técnica.', 'danger')
+
+		return redirect(url_for('main.manage_fichas', q=search_query))
+
+	@bp.route('/manage_fichas/<int:ficha_id>/delete', methods=['POST'])
+	@login_required
+	def delete_ficha(ficha_id):
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		engine = _get_dw_engine()
+		search_query = request.form.get('q', '').strip()
+
+		try:
+			with engine.begin() as conn:
+				result = conn.execute(
+					text("DELETE FROM dwsge.f_tecnicas WHERE id = :id"),
+					{'id': ficha_id},
+				)
+			if result.rowcount:
+				flash(
+					f'Ficha #{ficha_id} eliminada. Si alguna tarjeta de los dashboards '
+					'todavía la referencia, su botón de "Ficha técnica" dejará de funcionar '
+					'hasta que actualices ese ficha_id en el código.',
+					'success'
+				)
+			else:
+				flash(f'No se encontró la ficha #{ficha_id}.', 'warning')
+		except Exception as exc:
+			current_app.logger.exception('Error al eliminar ficha técnica %s: %s', ficha_id, exc)
+			flash('No se pudo eliminar la ficha técnica.', 'danger')
+
+		return redirect(url_for('main.manage_fichas', q=search_query))
+
+	@bp.route('/manage_fichas/<int:ficha_id>/pdf')
+	@login_required
+	def preview_ficha(ficha_id):
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		engine = _get_dw_engine()
+		try:
+			with engine.connect() as conn:
+				row = conn.execute(
+					text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
+					{'id': ficha_id},
+				).mappings().first()
+		except Exception as exc:
+			current_app.logger.exception('Error al previsualizar ficha técnica %s: %s', ficha_id, exc)
+			return 'Error al cargar la ficha', 500
+
+		if not row or not row.get('archivo_pdf'):
+			return 'Ficha no encontrada', 404
+
+		response = Response(bytes(row['archivo_pdf']), mimetype='application/pdf')
+		response.headers['Content-Disposition'] = 'inline; filename="ficha.pdf"'
+		return response
+
+	@bp.route('/manage_fichas/<int:ficha_id>/download')
+	@login_required
+	def download_ficha(ficha_id):
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		engine = _get_dw_engine()
+		try:
+			with engine.connect() as conn:
+				row = conn.execute(
+					text("SELECT nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE id = :id"),
+					{'id': ficha_id},
+				).mappings().first()
+		except Exception as exc:
+			current_app.logger.exception('Error al descargar ficha técnica %s: %s', ficha_id, exc)
+			return 'Error al cargar la ficha', 500
+
+		if not row or not row.get('archivo_pdf'):
+			return 'Ficha no encontrada', 404
+
+		filename = _safe_pdf_filename(row.get('nombre'), ficha_id)
+		response = Response(bytes(row['archivo_pdf']), mimetype='application/pdf')
+		response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+		return response
+
+	@bp.route('/manage_fichas/download_all')
+	@login_required
+	def download_all_fichas():
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		engine = _get_dw_engine()
+		try:
+			with engine.connect() as conn:
+				rows = conn.execute(
+					text("SELECT id, nombre, archivo_pdf FROM dwsge.f_tecnicas ORDER BY id")
+				).mappings().all()
+		except Exception as exc:
+			current_app.logger.exception('Error al descargar todas las fichas técnicas: %s', exc)
+			flash('No se pudieron descargar las fichas técnicas.', 'danger')
+			return redirect(url_for('main.manage_fichas'))
+
+		if not rows:
+			flash('No hay fichas técnicas para descargar.', 'warning')
+			return redirect(url_for('main.manage_fichas'))
+
+		return _zip_response(rows, 'fichas_tecnicas.zip')
+
+	@bp.route('/manage_fichas/download_section')
+	@login_required
+	def download_section_fichas():
+		if current_user.role != 'admin':
+			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
+			return redirect(url_for('main.index'))
+
+		seccion = request.args.get('seccion', '').strip()
+		if not seccion:
+			flash('Sección no especificada.', 'warning')
+			return redirect(url_for('main.manage_fichas'))
+
+		engine = _get_dw_engine()
+		try:
+			with engine.connect() as conn:
+				rows = conn.execute(
+					text("SELECT id, nombre, seccion, archivo_pdf FROM dwsge.f_tecnicas ORDER BY id")
+				).mappings().all()
+		except Exception as exc:
+			current_app.logger.exception('Error al descargar fichas técnicas de la sección %s: %s', seccion, exc)
+			flash('No se pudieron descargar las fichas técnicas.', 'danger')
+			return redirect(url_for('main.manage_fichas'))
+
+		rows = [
+			row for row in rows
+			if (row.get('seccion') or _guess_section_from_nombre(row.get('nombre'))) == seccion
+		]
+
+		if not rows:
+			flash(f'No hay fichas técnicas en la sección "{seccion}".', 'warning')
+			return redirect(url_for('main.manage_fichas'))
+
+		safe_section = _safe_pdf_filename(seccion, 'seccion')[:-4]
+		return _zip_response(rows, f"fichas_{safe_section}.zip")
 
 	@bp.route('/change_password', methods=['GET', 'POST'])
 	@login_required

@@ -1,0 +1,30 @@
+0 'Normal' | INFORME N° 009-2026-ABGJ
+1 'Normal' | Para		: 	JOSE RAFAEL OCUPA RUIZ
+2 'Normal' | Gerente de Gestión de la Información 
+4 'Normal' | De		:	ANTHONY BRANDON GAMARRA JAMANCA
+6 'Normal' | Asunto	:	Único entregable: Contratación de un servicio de bachiller en Ingeniería especializado en analítica de datos, para la construcción de indicadores y el diseño de tableros de control integrados mediante herramientas analíticas, orientados a la explotación de información sobre comorbilidades de alto costo (enfermedades oncológicas, huérfanas/raras y renales) para la Subgerencia de Estadística de la Gerencia de Gestión de la Información, de la Gerencia Central de Planeamiento y Presupuesto.
+8 'Normal' | Referencia	: 	Orden de Compra Nro. 4505503464
+9 'Normal' | Fecha 		:	Lima, 17 de setiembre del 2026
+10 'Normal' | _________________________________________________________________________________________  
+11 'Normal' | Es grato dirigirme a usted, para alcanzarle el informe que sustenta la contratación de un servicio de bachiller en Ingeniería especializado en analítica de datos, para la construcción de indicadores y el diseño de tableros de control integrados mediante herramientas analíticas, orientados a la explotación de información sobre comorbilidades de alto costo (enfermedades oncológicas, huérfanas/raras y renales) para la Subgerencia de Estadística de la Gerencia de Gestión de la Información, de la Gerencia Central de Planeamiento y Presupuesto.
+13 'List Paragraph' | ANTECEDENTES
+15 'List Paragraph' | Mediante el documento de la referencia, se dispone la contratación de un (01) especializado para la construcción de indicadores y el diseño de tableros de control integrados mediante herramientas analíticas, orientados a la explotación de información sobre comorbilidades de alto costo (enfermedades oncológicas, huérfanas/raras y renales) para la Subgerencia de Estadística de la Gerencia de Gestión de la Información, de la Gerencia Central de Planeamiento y Presupuesto.
+17 'List Paragraph' | Conforme al numeral N°.03 “Características y condiciones del servicio a contratar” de los Términos de Referencia de la contratación en mención, se detallan las actividades a desarrollar:
+19 'List Paragraph' | Depuración y validación de la información de los sistemas fuente (ESSI, Datawarehouse) vinculada a comorbilidades de alto costo (oncológicas, huérfanas/raras y renales), e integración al Data Warehouse estadístico.
+20 'List Paragraph' | Diseño y construcción de indicadores estadísticos y de gestión (incidencia, oportunidad de atención y demanda por red y centro) para el seguimiento de dichas comorbilidades. 
+21 'List Paragraph' | Desarrollo e implementación de tableros de control (dashboards) integrados mediante herramientas analíticas, que visualicen los indicadores construidos para la Subgerencia de Estadística. 
+22 'List Paragraph' | Elaboración de documentación técnica estandarizada (manuales, diccionarios de datos y protocolos de actualización) de los procesos de carga, validación y mantenimiento de la información.
+32 'List Paragraph' | ANÁLISIS
+34 'Normal' | Se procedió a realizar el desarrollo de las actividades conforme lo requerido en el Numeral N° 03 de los términos de referencia las mismas que se detallan a continuación:
+36 'Normal' | a) 
+37 'Normal' | b) 
+38 'Normal' | c) 
+39 'Normal' | d) 
+63 'List Paragraph' | CONCLUSIONES Y RECOMENDACIONES
+65 'Normal' | Se sugiere efectuar la revisión y validación de los avances alcanzados en este tercer entregable, empleando como referencia el repositorio documental ya implementado, en el que se concentra la información técnica y funcional asociada a los procesos de extracción, transformación, homologación y almacenamiento de datos. Resulta relevante orientar dicha revisión hacia la documentación vinculada a la calidad de los datos y a las reglas de negocio establecidas, dado que representan insumos fundamentales para el análisis de los servicios de Farmacia y Laboratorio. Cabe indicar que este repositorio, alojado en el servidor 10.0.29.250, ofrece un acceso ordenado, trazable y estructurado, lo cual facilita una evaluación integral y homogénea por parte de los diferentes actores involucrados.
+67 'Normal' | De igual manera, se recomienda efectuar una revisión conjunta (apoyada en el repositorio documental) de los diseños vinculados a los criterios de estandarización y homologación, entre ellos el modelo de extracción y carga (ETL/ELT), las reglas de homologación definidas y la arquitectura de almacenamiento del Data Warehouse, en coordinación con los equipos técnicos pertinentes. Esta actividad permitirá comprobar la coherencia de los diseños planteados, verificar su viabilidad técnica y asegurar su adecuada integración con los sistemas institucionales existentes, en concordancia con los lineamientos de gobierno de datos y gestión de metadatos.
+69 'Body Text' | En atención a lo expuesto, el suscrito ha cumplido con realizar las actividades correspondientes al tercer entregable del servicio “Contratación de servicio de bachiller en Ingeniería especializado en análisis de información, construcción de indicadores y al diseño de tableros de control de las variables estadísticas de los servicios de Farmacia y Laboratorio, para la Subgerencia de Estadística de la Gerencia de Gestión de la Información, de la Gerencia Central de Planeamiento y Presupuesto.”, conforme a lo establecido en los Términos de Referencia y en cumplimiento de la Orden de Compra N.° 4505503464, de fecha 17 de setiembre de 2026.
+70 'Normal' | Sin otro particular, quedo a su disposición para su evaluación y posterior conformidad del presente entregable.
+76 'Normal' |                                                                                                      ___________________________
+77 'Normal' |                                                                                       ANTHONY BRANDON GAMARRA JAMANCA
+78 'Normal' |                                                                                                                    DNI: 76262790

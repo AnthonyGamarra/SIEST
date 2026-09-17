@@ -160,7 +160,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                     border_color=card["border_color"],
                     subtitle_text=card.get("subtitle", subtitle),
                     href=card.get("href"),
-                    extra_style=card.get("extra_style")
+                    extra_style=card.get("extra_style"),
+                    ficha_id=card.get("ficha_id")
                 ),
                 style={'width': '100%'}
             )
@@ -438,6 +439,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                 "value": f"{total_consultantes_servicio:,.0f}",
                 "border_color": ACCENT,
                 "side_component": render_agrupador_table(total_consultantes_por_servicio_table),
+                "ficha_id": 159,
             },
             {
                 "title": "Total de Consultas",
@@ -445,6 +447,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                 "border_color": BRAND,
                 ##"href": f"{base}dash/total_atenciones/{codcas_url}{detail_query}",
                 "side_component": render_agrupador_table(total_atenciones_agru),
+                "ficha_id": 160,
             },
             {
                 "title": "Número de Médicos",
@@ -452,6 +455,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                 "border_color": BRAND_SOFT,
                 ##"href": f"{base}dash/total_medicos/{codcas_url}{detail_query}",
                 "side_component": render_agrupador_table(medicos_por_agrupador_table),
+                "ficha_id": 161,
             },
             {
                 "title": "Total horas programadas",
@@ -459,6 +463,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                 "border_color": BRAND,
                 ##"href": f"{base}dash/horas_programadas/{codcas_url}{detail_query}",
                 "side_component": render_agrupador_table(horas_programadas_table, value_format="{:,.2f}"),
+                "ficha_id": 162,
             },
             {
                 "title": "Total de horas Efectivas (Ejecutada)",
@@ -469,6 +474,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
                     horas_efectivas_por_agrupador_table,
                     value_format="{:,.2f}"
                 ),
+                "ficha_id": 163,
             },
         ]
 
@@ -628,7 +634,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
 
         return fecha_col_value
 
-    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None):
+    def render_card(title, value, border_color, subtitle_text, href=None, extra_style=None, ficha_id=None):
         link_content = html.H5(
             title,
             className="card-title",
@@ -648,13 +654,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
             )
         ) if href else link_content
 
+        title_row_children = [heading]
+        if ficha_id is not None:
+            title_row_children.append(
+                dbc.Button(
+                    [html.I(className="bi bi-file-earmark-text me-1"), "Ficha técnica"],
+                    id={'type': 'ficha-btn-odo', 'ficha_id': ficha_id},
+                    color='light', outline=True, size='sm',
+                    style={
+                        'borderColor': BRAND, 'color': BRAND,
+                        'backgroundColor': '#F7FBFF', 'fontFamily': FONT_FAMILY,
+                        'fontWeight': '600', 'fontSize': '11px', 'borderRadius': '10px',
+                        'padding': '4px 10px', 'whiteSpace': 'nowrap', 'flexShrink': 0,
+                        'marginLeft': '10px',
+                    }
+                )
+            )
+
         card_style = {**CARD_STYLE, "borderLeft": f"5px solid {border_color}", "height": "100%"}
         if extra_style:
             card_style.update(extra_style)
 
         return dbc.Card(
             dbc.CardBody([
-                heading,
+                html.Div(title_row_children, style={
+                    'display': 'flex', 'alignItems': 'center',
+                    'justifyContent': 'space-between', 'marginBottom': '6px'
+                }),
                 html.H2(value, style={
                     'fontWeight': '800', 'color': TEXT, 'fontSize': '34px', 'margin': 0,
                     'fontFamily': FONT_FAMILY, 'letterSpacing': '-0.2px'
@@ -1260,6 +1286,26 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
 
             content = html.Div([
                 dcc.Location(id='url_odo', refresh=True),
+                dbc.Modal(
+                    [
+                        dbc.ModalHeader(dbc.ModalTitle(id='ficha-modal-title-odo'), close_button=True),
+                        dbc.ModalBody(
+                            html.Iframe(
+                                id='ficha-modal-iframe-odo',
+                                style={'width': '100%', 'height': '100%', 'border': 'none'}
+                            ),
+                            style={'padding': 0, 'height': 'calc(90vh - 56px)'}
+                        ),
+                    ],
+                    id='ficha-modal-odo',
+                    is_open=False,
+                    size='xl',
+                    centered=True,
+                    scrollable=False,
+                    style={'zIndex': 5000},
+                    contentClassName='ficha-modal-content',
+                ),
+                dcc.Store(id='ficha-clicks-store-odo', data={}),
                 main_dashboard,
                 html.Div(
                     children=dash.page_container,
@@ -1453,6 +1499,49 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_odo/'):
 
         filename, pdf_bytes = ficha
         return dcc.send_bytes(pdf_bytes, filename)
+
+    # OJO: no basta con ctx.triggered_id / "any(n_clicks_list)" aca. Los
+    # callbacks pattern-matching con ALL se vuelven a disparar cuando el
+    # conjunto de componentes que matchea el patron cambia de forma (p.ej.
+    # cada vez que se rehacen las tarjetas tras una nueva busqueda), no solo
+    # cuando el usuario hace clic. Como Dash conserva el n_clicks de un
+    # boton cuyo id (mismo ficha_id) ya existia, ese re-disparo
+    # "estructural" trae n_clicks > 0 para cualquier ficha que se haya
+    # abierto alguna vez en la sesion y reabre el modal solo. Por eso se
+    # compara contra el conteo anterior guardado en un dcc.Store, y solo se
+    # reacciona al id cuyo n_clicks realmente aumento.
+    @dash_app.callback(
+        Output('ficha-modal-odo', 'is_open'),
+        Output('ficha-modal-iframe-odo', 'src'),
+        Output('ficha-modal-title-odo', 'children'),
+        Output('ficha-clicks-store-odo', 'data'),
+        Input({'type': 'ficha-btn-odo', 'ficha_id': ALL}, 'n_clicks'),
+        State({'type': 'ficha-btn-odo', 'ficha_id': ALL}, 'id'),
+        State('ficha-clicks-store-odo', 'data'),
+        prevent_initial_call=True,
+    )
+    def show_ficha_tecnica_odo(n_clicks_list, ids_list, prev_clicks):
+        from ficha_tecnica_utils import fetch_ficha_row, build_pdf_data_uri
+        prev_clicks = prev_clicks or {}
+        new_clicks = {}
+        clicked_ficha_id = None
+        for id_dict, n in zip(ids_list, n_clicks_list):
+            key = str(id_dict['ficha_id'])
+            n = n or 0
+            new_clicks[key] = n
+            if n > prev_clicks.get(key, 0):
+                clicked_ficha_id = id_dict['ficha_id']
+
+        if clicked_ficha_id is None:
+            return dash.no_update, dash.no_update, dash.no_update, new_clicks
+
+        engine = create_connection()
+        ficha = fetch_ficha_row(engine, clicked_ficha_id)
+        if not ficha:
+            return dash.no_update, dash.no_update, dash.no_update, new_clicks
+
+        nombre, pdf_bytes = ficha
+        return True, build_pdf_data_uri(pdf_bytes), nombre, new_clicks
 
     dash_app.layout = serve_layout
     return dash_app
