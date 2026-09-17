@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" />
 <style>
   /* Sin esto, al desplegar una seccion la pagina pasa a medir mas que la
      ventana y aparece la barra de scroll vertical del navegador, que le
@@ -228,6 +229,10 @@
     flex-wrap: wrap;
   }
 
+  .table-actions i {
+    margin-right: 4px;
+  }
+
   /* El sitio define una regla global "button { width:100%; background:
      gradiente; box-shadow; font-size:16px; ... }" pensada para el boton de
      login (static/css/styles.css), mas un brillo animado en ::before y un
@@ -333,6 +338,48 @@
     color: #0064af;
     text-decoration: none;
   }
+
+  /* Resumen de resultados, visible arriba en vez de solo al pie */
+  .fichas-summary {
+    color: #4a5672;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: -1rem 0 1.25rem 0;
+    padding-left: 0.25rem;
+  }
+
+  /* Toggle "+ Nueva sección": el input de texto arranca oculto y solo
+     aparece cuando el usuario realmente quiere crear una sección, en vez
+     de mostrarse siempre en las +100 filas. */
+  .seccion-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .link-nueva-seccion {
+    font-size: 0.75rem;
+    color: #0064af;
+    cursor: pointer;
+    text-decoration: none;
+    align-self: flex-start;
+  }
+
+  .link-nueva-seccion:hover {
+    text-decoration: underline;
+  }
+
+  .seccion-nueva-input {
+    display: none;
+  }
+
+  /* Estado "generando..." para descargas de ZIP, que no navegan fuera de
+     la pagina y por eso no dan ninguna señal nativa de progreso */
+  .btn-download-all.is-loading,
+  .btn-download-section.is-loading {
+    opacity: 0.65;
+    pointer-events: none;
+  }
 </style>
 
 <div class="manage-fichas-wrapper">
@@ -355,11 +402,15 @@
       </select>
     </div>
     <div>
+      <label for="nueva-seccion-nueva">O nombre de sección nueva</label>
+      <input id="nueva-seccion-nueva" type="text" name="seccion_nueva" placeholder="Déjalo vacío para usar la sección seleccionada" />
+    </div>
+    <div>
       <label for="nueva-archivo">Archivo PDF</label>
       <input id="nueva-archivo" type="file" name="archivo_pdf" accept="application/pdf" required />
     </div>
     <div>
-      <button type="submit">Subir ficha</button>
+      <button type="submit"><i class="bi bi-cloud-upload me-1"></i> Subir ficha</button>
     </div>
   </form>
 
@@ -375,17 +426,35 @@
       />
     </div>
     <div>
-      <button type="submit">Buscar</button>
+      <label for="search-seccion">Sección</label>
+      <select id="search-seccion" name="seccion">
+        <option value="">Todas las secciones</option>
+        {% for section in section_options %}
+        <option value="{{ section }}" {% if section == seccion_filter %}selected{% endif %}>{{ section }}</option>
+        {% endfor %}
+      </select>
     </div>
-    {% if search_query %}
+    <div>
+      <button type="submit"><i class="bi bi-search me-1"></i> Buscar</button>
+    </div>
+    {% if search_query or seccion_filter %}
     <div>
       <a href="{{ url_for('main.manage_fichas') }}" style="color:#0064af; font-weight:600;">Limpiar búsqueda</a>
     </div>
     {% endif %}
     <div style="margin-left: auto;">
-      <a class="btn-download-all" href="{{ url_for('main.download_all_fichas') }}">Descargar todas (ZIP)</a>
+      <a class="btn-download-all" href="{{ url_for('main.download_all_fichas') }}" onclick="showDownloadLoading(this, 'Generando ZIP...');">
+        <i class="bi bi-file-earmark-zip me-1"></i> Descargar todas (ZIP)
+      </a>
     </div>
   </form>
+
+  {% if secciones %}
+  <p class="fichas-summary">
+    <i class="bi bi-info-circle me-1"></i>
+    Mostrando {{ total_fichas }} ficha{{ 's' if total_fichas != 1 else '' }} en {{ secciones|length }} sección{{ 'es' if secciones|length != 1 else '' }}.
+  </p>
+  {% endif %}
 
   {% if secciones %}
   {% for label, fichas in secciones %}
@@ -396,26 +465,30 @@
     action="{{ url_for('main.update_ficha', ficha_id=ficha.id) }}"
     enctype="multipart/form-data"
     class="sr-only"
+    onsubmit="return confirmReplaceIfFile(this);"
   >
     <input type="hidden" name="q" value="{{ search_query }}" />
+    <input type="hidden" name="seccion_filter" value="{{ seccion_filter }}" />
   </form>
   <form
     id="delete-form-{{ ficha.id }}"
     method="post"
     action="{{ url_for('main.delete_ficha', ficha_id=ficha.id) }}"
     class="sr-only"
-    onsubmit="return confirm('¿Eliminar la ficha #{{ ficha.id }} ({{ ficha.nombre }})? Si alguna tarjeta la referencia, su botón de Ficha técnica dejará de funcionar.');"
   >
     <input type="hidden" name="q" value="{{ search_query }}" />
+    <input type="hidden" name="seccion_filter" value="{{ seccion_filter }}" />
   </form>
   {% endfor %}
   {% endfor %}
 
   {% for label, fichas in secciones %}
-  <details class="ficha-section" {% if search_query or secciones|length == 1 %}open{% endif %}>
+  <details class="ficha-section" {% if search_query or secciones|length == 1 or label == open_section %}open{% endif %}>
     <summary class="ficha-section-summary">{{ label }} <span class="ficha-section-count">({{ fichas|length }})</span></summary>
     <div class="ficha-section-toolbar">
-      <a class="btn-download-section" href="{{ url_for('main.download_section_fichas', seccion=label) }}">Descargar sección (ZIP)</a>
+      <a class="btn-download-section" href="{{ url_for('main.download_section_fichas', seccion=label) }}" onclick="showDownloadLoading(this, 'Generando...');">
+        <i class="bi bi-file-earmark-zip me-1"></i> Descargar sección (ZIP)
+      </a>
     </div>
     <div class="fichas-table-wrapper">
       <table class="manage-fichas-table">
@@ -447,22 +520,35 @@
               <input form="update-form-{{ ficha.id }}" type="text" name="nombre" value="{{ ficha.nombre or '' }}" title="{{ ficha.nombre or '' }}" required />
             </td>
             <td>
-              <select form="update-form-{{ ficha.id }}" name="seccion">
-                {% for section in section_options %}
-                <option value="{{ section }}" {% if section == (ficha.seccion or section_options[-1]) %}selected{% endif %}>{{ section }}</option>
-                {% endfor %}
-              </select>
+              <div class="seccion-field">
+                <select form="update-form-{{ ficha.id }}" name="seccion">
+                  {% for section in section_options %}
+                  <option value="{{ section }}" {% if section == (ficha.seccion or section_options[-1]) %}selected{% endif %}>{{ section }}</option>
+                  {% endfor %}
+                </select>
+                <a class="link-nueva-seccion" onclick="toggleNuevaSeccion(this, 'seccion-nueva-{{ ficha.id }}'); return false;" href="#">
+                  <i class="bi bi-plus-lg"></i> Nueva sección
+                </a>
+                <input id="seccion-nueva-{{ ficha.id }}" class="seccion-nueva-input" form="update-form-{{ ficha.id }}" type="text" name="seccion_nueva" placeholder="Nombre de la sección nueva" />
+              </div>
             </td>
             <td>
               <input form="update-form-{{ ficha.id }}" type="file" name="archivo_pdf" accept="application/pdf" />
             </td>
             <td class="ficha-size">{{ (ficha.size_bytes / 1024) | round(0, 'ceil') | int }} KB</td>
             <td class="ficha-size">{{ ficha.fecha_subida.strftime('%d/%m/%Y %H:%M') if ficha.fecha_subida else '-' }}</td>
-            <td class="table-actions">
-              <button form="update-form-{{ ficha.id }}" type="submit" class="btn-save-row">Guardar</button>
-              <a class="btn-preview-row" href="{{ url_for('main.preview_ficha', ficha_id=ficha.id) }}" target="_blank" rel="noopener">Ver PDF</a>
-              <a class="btn-download-row" href="{{ url_for('main.download_ficha', ficha_id=ficha.id) }}">Descargar</a>
-              <button form="delete-form-{{ ficha.id }}" type="submit" class="btn-delete-row">Eliminar</button>
+            <td>
+              <div class="table-actions">
+                <button form="update-form-{{ ficha.id }}" type="submit" class="btn-save-row"><i class="bi bi-check2"></i> Guardar</button>
+                <button type="button" class="btn-preview-row" data-bs-toggle="modal" data-bs-target="#pdfPreviewModal"
+                        data-pdf-url="{{ url_for('main.preview_ficha', ficha_id=ficha.id) }}"
+                        data-pdf-title="{{ ficha.nombre or ('Ficha #' ~ ficha.id) }}"><i class="bi bi-eye"></i> Ver PDF</button>
+                <a class="btn-download-row" href="{{ url_for('main.download_ficha', ficha_id=ficha.id) }}"><i class="bi bi-download"></i> Descargar</a>
+                <button type="button" class="btn-delete-row" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"
+                        data-form-id="delete-form-{{ ficha.id }}" data-ficha-nombre="{{ ficha.nombre or ('Ficha #' ~ ficha.id) }}">
+                  <i class="bi bi-trash"></i> Eliminar
+                </button>
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -471,7 +557,7 @@
     </div>
   </details>
   {% endfor %}
-  {% elif search_query %}
+  {% elif search_query or seccion_filter %}
   <p>No encontramos fichas que coincidan con tu búsqueda.</p>
   {% else %}
   <p>Todavía no hay fichas técnicas registradas.</p>
@@ -481,4 +567,119 @@
     <a href="{{ url_for('main.index') }}">← Volver al inicio</a>
   </div>
 </div>
+
+<div class="modal fade" id="pdfPreviewModal" tabindex="-1" aria-labelledby="pdfPreviewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content" style="height: 90vh;">
+      <div class="modal-header">
+        <h5 class="modal-title" id="pdfPreviewModalLabel">Ficha técnica</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" style="padding: 0;">
+        <iframe id="pdfPreviewFrame" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteConfirmModalLabel"><i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Eliminar ficha técnica</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Eliminar la ficha <strong id="deleteConfirmNombre"></strong>?</p>
+        <p class="text-muted" style="font-size: 0.85rem;">
+          Si alguna tarjeta de los dashboards todavía la referencia, su botón de
+          "Ficha técnica" dejará de funcionar hasta que actualices ese <code>ficha_id</code> en el código.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-preview-row" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-delete-row" id="deleteConfirmButton"><i class="bi bi-trash"></i> Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Reemplazar el PDF sobrescribe el archivo anterior sin posibilidad de
+  // deshacer, asi que se pide confirmacion SOLO cuando el input de archivo
+  // de esa fila realmente tiene un archivo seleccionado (guardar solo el
+  // nombre/seccion no deberia interrumpir con un aviso).
+  function confirmReplaceIfFile(form) {
+    var fileInput = document.querySelector('input[type="file"][form="' + form.id + '"]');
+    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+      return confirm('Vas a reemplazar el archivo PDF de esta ficha. El archivo anterior se perderá y no se puede deshacer. ¿Continuar?');
+    }
+    return true;
+  }
+
+  // Muestra el input de "sección nueva" (oculto por defecto) al hacer clic
+  // en "+ Nueva sección", en vez de mostrarlo siempre en cada fila.
+  function toggleNuevaSeccion(link, inputId) {
+    var input = document.getElementById(inputId);
+    if (!input) return;
+    var showing = input.style.display === 'block';
+    if (showing) {
+      input.style.display = 'none';
+      input.value = '';
+      link.innerHTML = '<i class="bi bi-plus-lg"></i> Nueva sección';
+    } else {
+      input.style.display = 'block';
+      input.focus();
+      link.innerHTML = '<i class="bi bi-x-lg"></i> Cancelar';
+    }
+  }
+
+  // Las descargas de ZIP no navegan fuera de la pagina, asi que sin esto no
+  // hay ninguna señal de que el clic funciono mientras se arma el archivo.
+  function showDownloadLoading(link, text) {
+    link.classList.add('is-loading');
+    var original = link.innerHTML;
+    link.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>' + text;
+    setTimeout(function () {
+      link.classList.remove('is-loading');
+      link.innerHTML = original;
+    }, 4000);
+  }
+
+  (function () {
+    var modalEl = document.getElementById('pdfPreviewModal');
+    var frame = document.getElementById('pdfPreviewFrame');
+    var title = document.getElementById('pdfPreviewModalLabel');
+    if (!modalEl) return;
+    modalEl.addEventListener('show.bs.modal', function (event) {
+      var trigger = event.relatedTarget;
+      if (!trigger) return;
+      frame.src = trigger.getAttribute('data-pdf-url');
+      title.textContent = trigger.getAttribute('data-pdf-title') || 'Ficha técnica';
+    });
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      frame.src = '';
+    });
+  })();
+
+  (function () {
+    var deleteModalEl = document.getElementById('deleteConfirmModal');
+    var nombreEl = document.getElementById('deleteConfirmNombre');
+    var confirmBtn = document.getElementById('deleteConfirmButton');
+    if (!deleteModalEl) return;
+    var formIdToSubmit = null;
+    deleteModalEl.addEventListener('show.bs.modal', function (event) {
+      var trigger = event.relatedTarget;
+      if (!trigger) return;
+      formIdToSubmit = trigger.getAttribute('data-form-id');
+      nombreEl.textContent = trigger.getAttribute('data-ficha-nombre') || '';
+    });
+    confirmBtn.addEventListener('click', function () {
+      if (formIdToSubmit) {
+        var form = document.getElementById(formIdToSubmit);
+        if (form) form.submit();
+      }
+    });
+  })();
+</script>
 {% endblock %}

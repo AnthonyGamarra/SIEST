@@ -34,6 +34,12 @@ def _get_dw_engine():
 	return get_dw_engine()
 
 
+def _is_valid_pdf(data):
+	"""Valida la firma binaria real del archivo (%PDF-), no solo la extensión
+	o el mimetype declarados por el navegador (ambos son fácilmente falseables)."""
+	return bool(data) and data.lstrip(b'\x00\xef\xbb\xbf')[:5] == b'%PDF-'
+
+
 def _safe_pdf_filename(raw_name, fallback_id=None):
 	base = (raw_name or '').strip() or f"ficha_{fallback_id or 'sin_nombre'}"
 	safe_chars = [ch if ch.isalnum() or ch in (' ', '-', '_', '.') else '_' for ch in base]
@@ -70,6 +76,42 @@ FICHA_SECTION_ORDER = [
 	'Centro Quirúrgico',
 	'Otras / Generales',
 ]
+
+
+def _resolve_section_options(engine):
+	"""Lista de secciones seleccionables: las fijas de FICHA_SECTION_ORDER
+	mas cualquier seccion "libre" (creada a mano desde la UI) que ya este en
+	uso en la tabla, para que quede disponible para elegir en adelante. El
+	catch-all ('Otras / Generales') siempre queda al final."""
+	catch_all = FICHA_SECTION_ORDER[-1]
+	fijas = FICHA_SECTION_ORDER[:-1]
+	extras = []
+	try:
+		with engine.connect() as conn:
+			rows = conn.execute(
+				text("SELECT DISTINCT seccion FROM dwsge.f_tecnicas WHERE seccion IS NOT NULL ORDER BY seccion")
+			).scalars().all()
+		extras = [s for s in rows if s and s not in FICHA_SECTION_ORDER]
+	except Exception as exc:
+		current_app.logger.exception('Error al listar secciones de fichas técnicas: %s', exc)
+	return fijas + extras + [catch_all]
+
+
+def _resolve_seccion_from_form(form, known_sections):
+	"""El input de texto 'seccion_nueva' tiene prioridad sobre el <select>
+	'seccion', para permitir crear una seccion/grupo nuevo desde la UI.
+
+	Si lo escrito coincide (sin distinguir mayusculas/espacios) con una
+	seccion que ya existe, se reutiliza tal cual esta guardada esa seccion
+	en vez de crear una "nueva" que en realidad es un duplicado por typo
+	(ej. "Emergencia " o "emergencia" en vez de "Emergencia")."""
+	nueva = form.get('seccion_nueva', '').strip()
+	if nueva:
+		for existing in known_sections:
+			if existing.strip().lower() == nueva.lower():
+				return existing
+		return nueva
+	return form.get('seccion', '').strip() or known_sections[-1]
 
 
 def _guess_section_from_nombre(nombre):
@@ -792,7 +834,7 @@ def register_routes(app):
 
 		if request.method == 'POST':
 			nombre = request.form.get('nombre', '').strip()
-			seccion = request.form.get('seccion', '').strip() or FICHA_SECTION_ORDER[-1]
+			seccion = _resolve_seccion_from_form(request.form, _resolve_section_options(engine))
 			archivo = request.files.get('archivo_pdf')
 
 			if not archivo or not archivo.filename:
@@ -812,6 +854,9 @@ def register_routes(app):
 			if len(data) > 20 * 1024 * 1024:
 				flash('El archivo supera el límite de 20 MB.', 'danger')
 				return redirect(url_for('main.manage_fichas'))
+			if not _is_valid_pdf(data):
+				flash('El archivo no es un PDF válido (la firma del contenido no coincide).', 'danger')
+				return redirect(url_for('main.manage_fichas'))
 
 			nombre_final = nombre or archivo.filename
 
@@ -829,14 +874,22 @@ def register_routes(app):
 				current_app.logger.exception('Error al subir ficha técnica: %s', exc)
 				flash('No se pudo subir la ficha técnica.', 'danger')
 
-			return redirect(url_for('main.manage_fichas'))
+			return redirect(url_for('main.manage_fichas', open=seccion))
 
 		search_query = request.args.get('q', '').strip()
+		seccion_filter = request.args.get('seccion', '').strip()
+		open_section = request.args.get('open', '').strip()
 		sql = "SELECT id, nombre, seccion, length(archivo_pdf) AS size_bytes, fecha_subida FROM dwsge.f_tecnicas"
+		conditions = []
 		params = {}
 		if search_query:
-			sql += " WHERE nombre ILIKE :q"
+			conditions.append("nombre ILIKE :q")
 			params['q'] = f"%{search_query}%"
+		if seccion_filter:
+			conditions.append("seccion = :seccion")
+			params['seccion'] = seccion_filter
+		if conditions:
+			sql += " WHERE " + " AND ".join(conditions)
 		sql += " ORDER BY id"
 
 		try:
@@ -855,7 +908,9 @@ def register_routes(app):
 			secciones=secciones,
 			total_fichas=len(fichas),
 			search_query=search_query,
-			section_options=FICHA_SECTION_ORDER,
+			seccion_filter=seccion_filter,
+			open_section=open_section,
+			section_options=_resolve_section_options(engine),
 		)
 
 	@bp.route('/manage_fichas/<int:ficha_id>/update', methods=['POST'])
@@ -867,13 +922,14 @@ def register_routes(app):
 
 		engine = _get_dw_engine()
 		nombre = request.form.get('nombre', '').strip()
-		seccion = request.form.get('seccion', '').strip() or FICHA_SECTION_ORDER[-1]
+		seccion = _resolve_seccion_from_form(request.form, _resolve_section_options(engine))
 		archivo = request.files.get('archivo_pdf')
 		search_query = request.form.get('q', '').strip()
+		seccion_filter = request.form.get('seccion_filter', '').strip()
 
 		if not nombre:
 			flash('El nombre no puede quedar vacío.', 'warning')
-			return redirect(url_for('main.manage_fichas', q=search_query))
+			return redirect(url_for('main.manage_fichas', q=search_query, seccion=seccion_filter, open=seccion))
 
 		data = None
 		if archivo and archivo.filename:
@@ -881,14 +937,17 @@ def register_routes(app):
 				'application/pdf', 'application/octet-stream'
 			):
 				flash('El archivo de reemplazo debe ser un PDF.', 'danger')
-				return redirect(url_for('main.manage_fichas', q=search_query))
+				return redirect(url_for('main.manage_fichas', q=search_query, seccion=seccion_filter, open=seccion))
 			data = archivo.read()
 			if not data:
 				flash('El archivo de reemplazo está vacío.', 'danger')
-				return redirect(url_for('main.manage_fichas', q=search_query))
+				return redirect(url_for('main.manage_fichas', q=search_query, seccion=seccion_filter, open=seccion))
 			if len(data) > 20 * 1024 * 1024:
 				flash('El archivo supera el límite de 20 MB.', 'danger')
-				return redirect(url_for('main.manage_fichas', q=search_query))
+				return redirect(url_for('main.manage_fichas', q=search_query, seccion=seccion_filter, open=seccion))
+			if not _is_valid_pdf(data):
+				flash('El archivo no es un PDF válido (la firma del contenido no coincide).', 'danger')
+				return redirect(url_for('main.manage_fichas', q=search_query, seccion=seccion_filter, open=seccion))
 
 		try:
 			with engine.begin() as conn:
@@ -914,7 +973,7 @@ def register_routes(app):
 			current_app.logger.exception('Error al actualizar ficha técnica %s: %s', ficha_id, exc)
 			flash('No se pudo actualizar la ficha técnica.', 'danger')
 
-		return redirect(url_for('main.manage_fichas', q=search_query))
+		return redirect(url_for('main.manage_fichas', q=search_query, open=seccion))
 
 	@bp.route('/manage_fichas/<int:ficha_id>/delete', methods=['POST'])
 	@login_required
@@ -925,14 +984,17 @@ def register_routes(app):
 
 		engine = _get_dw_engine()
 		search_query = request.form.get('q', '').strip()
+		seccion_filter = request.form.get('seccion_filter', '').strip()
+		open_section = ''
 
 		try:
 			with engine.begin() as conn:
-				result = conn.execute(
-					text("DELETE FROM dwsge.f_tecnicas WHERE id = :id"),
+				deleted = conn.execute(
+					text("DELETE FROM dwsge.f_tecnicas WHERE id = :id RETURNING seccion"),
 					{'id': ficha_id},
-				)
-			if result.rowcount:
+				).first()
+			if deleted:
+				open_section = deleted[0] or ''
 				flash(
 					f'Ficha #{ficha_id} eliminada. Si alguna tarjeta de los dashboards '
 					'todavía la referencia, su botón de "Ficha técnica" dejará de funcionar '
@@ -945,7 +1007,7 @@ def register_routes(app):
 			current_app.logger.exception('Error al eliminar ficha técnica %s: %s', ficha_id, exc)
 			flash('No se pudo eliminar la ficha técnica.', 'danger')
 
-		return redirect(url_for('main.manage_fichas', q=search_query))
+		return redirect(url_for('main.manage_fichas', q=search_query, seccion=seccion_filter, open=open_section))
 
 	@bp.route('/manage_fichas/<int:ficha_id>/pdf')
 	@login_required
@@ -1037,17 +1099,27 @@ def register_routes(app):
 		engine = _get_dw_engine()
 		try:
 			with engine.connect() as conn:
+				# Filtrado en SQL: para una seccion puntual no hace falta traer
+				# el archivo_pdf (bytea) de las demas ~100+ fichas de la tabla
+				# para descartarlas despues en Python.
 				rows = conn.execute(
-					text("SELECT id, nombre, seccion, archivo_pdf FROM dwsge.f_tecnicas ORDER BY id")
+					text("SELECT id, nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE seccion = :seccion"),
+					{'seccion': seccion},
+				).mappings().all()
+				# Filas legacy sin 'seccion' asignada (no deberian quedar, ya
+				# se hizo un backfill, pero por si acaso): se resuelven con el
+				# mismo criterio de respaldo que usa el agrupamiento de la UI.
+				sin_seccion = conn.execute(
+					text("SELECT id, nombre, archivo_pdf FROM dwsge.f_tecnicas WHERE seccion IS NULL OR seccion = ''")
 				).mappings().all()
 		except Exception as exc:
 			current_app.logger.exception('Error al descargar fichas técnicas de la sección %s: %s', seccion, exc)
 			flash('No se pudieron descargar las fichas técnicas.', 'danger')
 			return redirect(url_for('main.manage_fichas'))
 
-		rows = [
-			row for row in rows
-			if (row.get('seccion') or _guess_section_from_nombre(row.get('nombre'))) == seccion
+		rows = list(rows) + [
+			row for row in sin_seccion
+			if _guess_section_from_nombre(row.get('nombre')) == seccion
 		]
 
 		if not rows:
