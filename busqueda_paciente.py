@@ -280,7 +280,7 @@ def create_dash_app(flask_app, url_base_pathname="/busqueda_paciente_embed/"):
 
     def unauthorized_layout():
         return html.Div(
-            [html.H3("Acceso restringido"), html.P("Este modulo esta disponible solo para administradores.")],
+            [html.H3("Acceso restringido"), html.P("Este modulo esta disponible solo para super administradores.")],
             style={"padding": "40px", "fontFamily": font_family},
         )
 
@@ -317,7 +317,7 @@ def create_dash_app(flask_app, url_base_pathname="/busqueda_paciente_embed/"):
     def serve_layout():
         if not has_request_context():
             return html.Div()
-        if not getattr(current_user, "is_authenticated", False) or getattr(current_user, "role", None) != "admin":
+        if not getattr(current_user, "is_authenticated", False) or getattr(current_user, "role", None) != "sadmin":
             return unauthorized_layout()
         return dbc.Container(
             [

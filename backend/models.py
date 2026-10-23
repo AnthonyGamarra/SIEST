@@ -4,12 +4,17 @@ from extensions import db, login_manager
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from flask import current_app
 
+# 'sadmin' (super administrador) tiene todos los permisos de 'admin' y, ademas,
+# es el unico rol con acceso a "Otros proyectos" (Patologias, Prediccion de
+# desercion y Seguimiento de paciente).
+ADMIN_ROLES = ('admin', 'sadmin')
+
 def dashboard_code_for_user(user, request):
 
     if not getattr(user, 'is_authenticated', False):
         return ''
     role = getattr(user, 'role', None)
-    if role in ('admin', 'admin_red', 'consulta'):
+    if role in ('admin', 'sadmin', 'admin_red', 'consulta'):
         code = request.form.get('codcas', '') or request.args.get('codcas', '')
     else:
         code = getattr(user, 'dashboard_code', lambda: '')()
@@ -112,6 +117,14 @@ class User(UserMixin, db.Model):
         if s.isdigit():
             return s.zfill(3)
         return s
+
+    @property
+    def is_admin(self):
+        return self.role in ADMIN_ROLES
+
+    @property
+    def is_sadmin(self):
+        return self.role == 'sadmin'
 
     @property
     def is_active(self):

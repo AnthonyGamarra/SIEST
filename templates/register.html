@@ -262,6 +262,9 @@
         <label for="rol">Rol</label>
         <select id="rol" name="rol" required>
           <option value="">Seleccionar rol...</option>
+          {% if current_user.is_sadmin %}
+          <option value="sadmin">Súper administrador</option>
+          {% endif %}
           <option value="admin">Administrador</option>
           <option value="admin_red">Administrador de Red</option>
           <option value="consulta">Consulta</option>

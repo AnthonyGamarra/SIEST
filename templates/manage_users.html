@@ -247,6 +247,9 @@
           </td>
           <td>
             <select form="manage-form-{{ usuario.id }}" name="rol" required>
+              {% if current_user.is_sadmin or usuario.role == 'sadmin' %}
+              <option value="sadmin" {% if usuario.role == 'sadmin' %}selected{% endif %}>Súper administrador</option>
+              {% endif %}
               <option value="admin" {% if usuario.role == 'admin' %}selected{% endif %}>Administrador</option>
               <option value="admin_red" {% if usuario.role == 'admin_red' %}selected{% endif %}>Admin de red</option>
               <option value="consulta" {% if usuario.role == 'consulta' %}selected{% endif %}>Consulta</option>

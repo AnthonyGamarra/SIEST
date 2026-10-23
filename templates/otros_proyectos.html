@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="main ce-main">
+	<div class="modules-container">
+		<div class="modules-header" style="color: #ffffff">
+			<h1 class="modules-title">Otros proyectos</h1>
+			<p class="modules-subtitle">
+				Elige el proyecto que deseas explorar.
+			</p>
+		</div>
+		<div class="modules-menu">
+
+			<a href="{{ url_for('main.modulo_patologias') }}" class="module">
+				<img src="{{ url_for('static', filename='microscope_4712682.png') }}" alt="Modulo Ejecutivo de Patologias" />
+				<span>Patologías (Ejecutivo)</span>
+			</a>
+
+			{% if current_user.is_sadmin %}
+			<a href="{{ url_for('main.prediccion_desercion') }}" class="module">
+				<img src="{{ url_for('static', filename='artificial-intelligence_11751499.png') }}" alt="Predicción de deserción" />
+				<span>Predicción de deserción</span>
+			</a>
+
+			<a href="{{ url_for('main.busqueda_paciente') }}" class="module">
+				<img src="{{ url_for('static', filename='examination_12772954.png') }}" alt="Busqueda de Paciente" />
+				<span>Seguimiento de paciente por DNI</span>
+			</a>
+			{% endif %}
+
+		</div>
+		<div class="modules-footer" style="margin-top: 2rem; text-align: center">
+			<a class="pill-btn pill-btn--ghost" href="{{ url_for('main.index') }}">Volver al inicio</a>
+		</div>
+	</div>
+</div>
+{% endblock %}

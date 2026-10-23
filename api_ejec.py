@@ -1,7 +1,7 @@
 """
 API JSON del Modulo Ejecutivo de Patologias (Tab 1 - Analitica), consumida
 por el frontend React/Nivo (frontend_ejec/). Mismo control de acceso que la
-version Dash: solo usuarios autenticados con role == 'admin'.
+version Dash: solo usuarios autenticados con role 'admin' o 'sadmin'.
 """
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
@@ -15,7 +15,7 @@ bp = Blueprint("api_ejec", __name__, url_prefix="/api/ejec")
 def _require_admin():
     if not getattr(current_user, "is_authenticated", False):
         return jsonify({"error": "Sesion no iniciada."}), 401
-    if getattr(current_user, "role", None) != "admin":
+    if getattr(current_user, "role", None) not in ("admin", "sadmin"):
         return jsonify({"error": "Solo los administradores pueden acceder al Modulo Ejecutivo de Patologias."}), 403
 
 

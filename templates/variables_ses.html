@@ -47,7 +47,7 @@
 			{% endif %}
 
 			{% set code_hosp = current_user.dashboard_code() if current_user else '' %}
-			{% if (current_user.role == 'admin' or current_user.username in ('42991109', '76262790')) and code_hosp %}
+			{% if (current_user.is_admin or current_user.username in ('42991109', '76262790')) and code_hosp %}
 			<a href="{{ hosp_url }}" class="module">
 				<img src="{{ url_for('static', filename='hospitalizacion.png') }}" alt="Hospitalización" />
 				<span>Hospitalización</span>
@@ -60,7 +60,7 @@
 			</div>
 			{% endif %}
 
-			{% if current_user.role == 'admin' or current_user.username == '18182276' or current_user.username == '28309335' %}
+			{% if current_user.is_admin or current_user.username == '18182276' or current_user.username == '28309335' %}
 			<a href="{{ proc_url }}" class="module">
 				<img src="{{ url_for('static', filename='medical_13604970.png') }}" alt="Procedimientos" />
 				<span>Procedimientos</span>
@@ -72,7 +72,7 @@
 			</div>
 			{% endif %}
 
-			{% if current_user.role == 'admin' %}
+			{% if current_user.is_admin %}
 			<a href="{{ farm_url }}" class="module">
 				<img src="{{ url_for('static', filename='pill_4877761.png') }}" alt="Farmacia" />
 				<span>Farmacia</span>

@@ -1058,7 +1058,7 @@ def create_dash_app(flask_app, url_base_pathname="/dashboard_ejec_embed/"):
     def serve_layout():
         if not has_request_context():
             return html.Div()
-        if not getattr(current_user, "is_authenticated", False) or getattr(current_user, "role", None) != "admin":
+        if not getattr(current_user, "is_authenticated", False) or getattr(current_user, "role", None) not in ("admin", "sadmin"):
             return unauthorized_layout()
         return dbc.Container(
             [

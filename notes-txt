@@ -1,0 +1,3 @@
+para levantar:
+
+python -m waitress --listen=0.0.0.0:8080 --threads=8 --connection-limit=200 app:app

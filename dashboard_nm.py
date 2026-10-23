@@ -915,9 +915,9 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WHERE cod_centro = :codcas
                         AND ((cod_servicio ='F21'
                         AND cod_actividad = 'B1'
-                        AND ce.cod_subactividad in ('694','417', '418','040','127'))
+                        AND ce.cod_subactividad in ('694','417', '418','040','127', '008'))
                         OR (cod_servicio ='F21'
-                        AND cod_actividad = 'B1' AND cod_subactividad in ('007', '480', '643', '008') AND ce.cod_tipo_gravidez = '1'))
+                        AND cod_actividad = 'B1' AND cod_subactividad in ('007', '480', '643') AND ce.cod_tipo_gravidez = '1'))
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -965,7 +965,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         AND ce.cod_servicio ='F21'
                         AND cod_actividad = 'B1'
                         AND cod_tipo_gravidez = '1'
-                        AND ce.cod_subactividad in ('007', '480', '643', '008')
+                        AND ce.cod_subactividad in ('007', '480', '643')
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1017,7 +1017,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WHERE ce.cod_centro = :codcas
                         AND ((ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad ='417')
                         OR 
-                        (ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad ='418')
+                        (ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad in ('418','008'))
                         OR
                         (ce.cod_servicio ='F21' AND ce.cod_actividad = '96' AND ce.cod_subactividad ='127'))
                         AND (

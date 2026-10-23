@@ -1096,7 +1096,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             return None
 
         query =  f"""
-            SELECT DISTINCT ON (cq.acto_med, cq.num_solicitud)
+            SELECT DISTINCT ON (cq.cod_tipdoc_paciente, cq.doc_paciente, cq.cod_cpms, cq.fec_oper)
                 cq.cod_oricentro,
                 cq.cod_centro,
                 ca.cenasides AS cenasides,
@@ -1145,7 +1145,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                                     ELSE '1'
                                 END
                             ) IN {codasegu_clause}
-            ORDER BY cq.acto_med, cq.num_solicitud, cq.fec_oper DESC;
+            ORDER BY cq.cod_tipdoc_paciente, cq.doc_paciente, cq.cod_cpms, cq.fec_oper DESC;
         """
         df = pd.read_sql(query, engine)
         if df.empty:

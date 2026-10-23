@@ -89,7 +89,7 @@
                   >Cambiar contraseña</a
                 >
               </li>
-              {% if current_user.role == 'admin' %}
+              {% if current_user.is_admin %}
               <li>
                 <a class="dropdown-item" href="{{ url_for('main.register') }}"
                   >Agregar usuario</a
@@ -146,7 +146,7 @@
           action="{{ url_for('main.index') }}"
         >
           {% set limit_centers_to_red = current_user.role == 'admin_red' and current_user.code_red is not none %}
-          {% set show_red_selector = current_user.role in ['admin', 'consulta'] %}
+          {% set show_red_selector = current_user.role in ['admin', 'sadmin', 'consulta'] %}
           <div class="d-flex align-items-center mb-3">
             <img
               src="{{ url_for('static', filename='SIEST.png') }}"
@@ -275,7 +275,7 @@
           </a>
 
           <!-- Módulo 5: reportes gerenciales -->
-          {% if current_user.role in ['admin', 'admin_red', 'consulta'] %}
+          {% if current_user.role in ['admin', 'sadmin', 'admin_red', 'consulta'] %}
           <a href="{{ url_for('main.reportes_gerenciales') }}" class="module">
             <img
               src="{{ url_for('static', filename='analytics.png') }}"
@@ -299,7 +299,7 @@
           </a>
 
           <!-- Módulo 6: reportes LOGS - ADMIN -->
-          {% if current_user.role == 'admin' %}
+          {% if current_user.is_admin %}
           <a href="{{ url_for('logs.view_logs') }}" class="module">
             <img
               src="{{ url_for('static', filename='logs.png') }}"
@@ -310,7 +310,7 @@
           {% endif %}
 
           <!-- Módulo 7: reporteador -->
-          {% if current_user.role == 'admin' %}
+          {% if current_user.is_admin %}
           <a href="{{ url_for('main.dashboard_diag_admin') }}" class="module">
             <img
               src="{{ url_for('static', filename='spreadsheet_6221117.png') }}"
@@ -321,17 +321,7 @@
           </a>
           {% endif %}
 
-          {% if current_user.role == 'admin' %}
-          <a href="{{ url_for('main.prediccion_desercion') }}" class="module">
-            <img
-              src="{{ url_for('static', filename='artificial-intelligence_11751499.png') }}"
-              alt="Predicción de deserción"
-            />
-            <span>Predicción de deserción</span>
-          </a>
-          {% endif %}
-
-          {% if current_user.role == 'admin' %}
+          {% if current_user.is_admin %}
           <a href="{{ url_for('main.tramas') }}" class="module">
             <img
               src="{{ url_for('static', filename='nature_13698536.png') }}"
@@ -341,23 +331,14 @@
           </a>
           {% endif %}
 
-          {% if current_user.role == 'admin' %}
-          <a href="{{ url_for('main.modulo_patologias') }}" class="module">
+          <!-- Otros proyectos: Patologías (admin y sadmin); Predicción de deserción y Seguimiento de paciente (solo sadmin) -->
+          {% if current_user.is_admin %}
+          <a href="{{ url_for('main.otros_proyectos') }}" class="module">
             <img
-              src="{{ url_for('static', filename='microscope_4712682.png') }}"
-              alt="Modulo Ejecutivo de Patologias"
+              src="{{ url_for('static', filename='otros_proyectos.png') }}"
+              alt="Otros proyectos"
             />
-            <span>Patologías (Ejecutivo)</span>
-          </a>
-          {% endif %}
-
-          {% if current_user.role == 'admin' %}
-          <a href="{{ url_for('main.busqueda_paciente') }}" class="module">
-            <img
-              src="{{ url_for('static', filename='examination_12772954.png') }}"
-              alt="Busqueda de Paciente"
-            />
-            <span>Seguimiento de paciente por DNI</span>
+            <span>Otros proyectos</span>
           </a>
           {% endif %}
 

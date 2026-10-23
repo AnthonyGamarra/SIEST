@@ -479,8 +479,8 @@ def register_routes(app):
 	@bp.route('/prediccion_desercion', methods=['GET', 'POST'])
 	@login_required
 	def prediccion_desercion():
-		if current_user.role != 'admin':
-			flash('Solo los administradores pueden ejecutar la predicción de deserción.', 'danger')
+		if not current_user.is_sadmin:
+			flash('Solo los súper administradores pueden ejecutar la predicción de deserción.', 'danger')
 			return redirect(url_for('main.index'))
 
 		default_payload = {
@@ -699,7 +699,7 @@ def register_routes(app):
 	@bp.route('/register', methods=['GET', 'POST'])
 	@login_required
 	def register():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para registrar usuarios', 'danger')
 			return redirect(url_for('main.index'))
 		
@@ -720,7 +720,9 @@ def register_routes(app):
 			flag = '0' if flag == '0' else '1'
 
 			
-			if User.query.filter_by(username=username).first():
+			if role == 'sadmin' and not current_user.is_sadmin:
+				flash('Solo un súper administrador puede asignar el rol de súper administrador.', 'danger')
+			elif User.query.filter_by(username=username).first():
 				flash('El usuario ya existe', 'danger')
 			else:
 				new_user = User(username=username)
@@ -746,7 +748,7 @@ def register_routes(app):
 	@bp.route('/manage_users', methods=['GET', 'POST'])
 	@login_required
 	def manage_users():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar usuarios', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -773,6 +775,10 @@ def register_routes(app):
 			flag = '0' if flag == '0' else '1'
 			search_field_post = request.form.get('field', 'nombre')
 			search_query_post = request.form.get('q', '').strip()
+
+			if not current_user.is_sadmin and 'sadmin' in (usuario.role, rol):
+				flash('Solo un súper administrador puede modificar usuarios o roles de súper administrador.', 'danger')
+				return redirect(url_for('main.manage_users', field=search_field_post, q=search_query_post))
 
 			if not username:
 				flash('El nombre de usuario es obligatorio.', 'warning')
@@ -826,7 +832,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas', methods=['GET', 'POST'])
 	@login_required
 	def manage_fichas():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -916,7 +922,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas/<int:ficha_id>/update', methods=['POST'])
 	@login_required
 	def update_ficha(ficha_id):
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -978,7 +984,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas/<int:ficha_id>/delete', methods=['POST'])
 	@login_required
 	def delete_ficha(ficha_id):
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -1012,7 +1018,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas/<int:ficha_id>/pdf')
 	@login_required
 	def preview_ficha(ficha_id):
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -1037,7 +1043,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas/<int:ficha_id>/download')
 	@login_required
 	def download_ficha(ficha_id):
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -1063,7 +1069,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas/download_all')
 	@login_required
 	def download_all_fichas():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -1087,7 +1093,7 @@ def register_routes(app):
 	@bp.route('/manage_fichas/download_section')
 	@login_required
 	def download_section_fichas():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('No tienes permisos para gestionar fichas técnicas', 'danger')
 			return redirect(url_for('main.index'))
 
@@ -1163,7 +1169,7 @@ def register_routes(app):
 	@bp.route('/api/redes/<code_red>/centros', methods=['GET'])
 	@login_required
 	def centros_by_red_api(code_red):
-		if current_user.role not in ('admin', 'admin_red', 'consulta'):
+		if current_user.role not in ('admin', 'sadmin', 'admin_red', 'consulta'):
 			return jsonify({'error': 'No autorizado'}), 403
 
 		if not code_red:
@@ -1202,7 +1208,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_redirect():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code =  request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1216,7 +1222,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_index():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code = request.form.get('codcas', '') 
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1246,7 +1252,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_nm_redirect():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code =  request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1260,7 +1266,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_nm_index():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code = request.form.get('codcas', '') 
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1291,7 +1297,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_odo_redirect():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code =  request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1305,7 +1311,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_odo_index():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code = request.form.get('codcas', '') 
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1454,7 +1460,7 @@ def register_routes(app):
 	@bp.route('/diag_cap_admin')
 	@login_required
 	def dashboard_diag_admin():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('Solo los administradores pueden acceder al reporte diagnóstico.', 'danger')
 			return redirect(url_for('main.index'))
 		return redirect('/diag_cap/')
@@ -1473,7 +1479,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_alt_redirect():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code = request.form.get('codcas', '') or request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1486,7 +1492,7 @@ def register_routes(app):
 	@login_required
 	def dashboard_alt_index():
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code = request.form.get('codcas', '') or request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1516,7 +1522,7 @@ def register_routes(app):
 
 	def _hosp_allowed():
 		return (
-			getattr(current_user, 'role', '') == 'admin'
+			getattr(current_user, 'is_admin', False)
 			or str(getattr(current_user, 'username', '')).strip() in HOSP_ALLOWED_USERS
 		)
 
@@ -1634,7 +1640,7 @@ def register_routes(app):
 
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
 		code = ""
-		if current_user.role == 'admin':
+		if current_user.is_admin:
 			code = request.form.get('codcas', '') or request.args.get('codcas', '')
 		elif current_user.role == 'user':
 			code = getattr(current_user, 'dashboard_code', lambda: '')()
@@ -1747,7 +1753,7 @@ def register_routes(app):
 	@bp.route('/tramas/')
 	@login_required
 	def tramas():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('Solo los administradores pueden acceder a las Tramas B1-B2.', 'danger')
 			return redirect(url_for('main.index'))
 		return render_template(
@@ -1756,10 +1762,18 @@ def register_routes(app):
 			dashboard_url='/tramas_embed/',
 		)
 
+	@bp.route('/otros-proyectos/')
+	@login_required
+	def otros_proyectos():
+		if not current_user.is_admin:
+			flash('Solo los administradores pueden acceder a Otros proyectos.', 'danger')
+			return redirect(url_for('main.index'))
+		return render_template('otros_proyectos.html', show_modules=False)
+
 	@bp.route('/patologias/')
 	@login_required
 	def modulo_patologias():
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('Solo los administradores pueden acceder al Modulo Ejecutivo de Patologias.', 'danger')
 			return redirect(url_for('main.index'))
 		return render_template(
@@ -1771,8 +1785,8 @@ def register_routes(app):
 	@bp.route('/busqueda-paciente/')
 	@login_required
 	def busqueda_paciente():
-		if current_user.role != 'admin':
-			flash('Solo los administradores pueden acceder a la Busqueda de Paciente.', 'danger')
+		if not current_user.is_sadmin:
+			flash('Solo los súper administradores pueden acceder a la Busqueda de Paciente.', 'danger')
 			return redirect(url_for('main.index'))
 		return render_template(
 			'wrappers/dashboard_wrapper.html',
@@ -1789,7 +1803,7 @@ def register_routes(app):
 	@bp.route('/patologias-beta/<path:filename>')
 	@login_required
 	def modulo_patologias_beta(filename='index.html'):
-		if current_user.role != 'admin':
+		if not current_user.is_admin:
 			flash('Solo los administradores pueden acceder al Modulo Ejecutivo de Patologias.', 'danger')
 			return redirect(url_for('main.index'))
 		target = filename

@@ -1025,7 +1025,7 @@ def view_logs():
     junto con 2 gráficos de análisis.
     """
     # Verificar que el usuario sea admin
-    if current_user.role != 'admin':
+    if not current_user.is_admin:
         return "Acceso denegado. Solo administradores pueden ver los logs.", 403
     
     # Consultar TODOS los logs ordenados por ID descendente (más recientes primero)
@@ -1055,7 +1055,7 @@ def register_logs_blueprint(app):
 @login_required
 def export_logs_csv():
     """Exporta todos los logs como CSV (solo admin)."""
-    if current_user.role != 'admin':
+    if not current_user.is_admin:
         return "Acceso denegado.", 403
 
     logs = Logs_User.query.order_by(desc(Logs_User.id)).all()
