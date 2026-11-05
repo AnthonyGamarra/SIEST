@@ -258,7 +258,7 @@ def layout(codcas=None, **kwargs):
                     ], style={**CARD_STYLE}),
                     html.Br(),
                     html.Br(),
-                    # Segundo bloque: grafico diagnostico
+                    # Segundo bloque: grafico procedimiento
                     html.Div([
                         dcc.Loading(
                             html.Div(
@@ -334,9 +334,41 @@ def register_callbacks(app):
             LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
-            WHERE cod_centro = '{codcas}'
-              AND cod_servicio ='F21'
-              AND ce.cod_subactividad in ('007','480','643','694','417','418','127','008','040')
+            WHERE ce.cod_centro = '{codcas}'
+              AND ce.cod_servicio ='F21'
+              AND ce.cod_actividad ='B1'
+              AND ((ce.cod_subactividad = '007' AND ce.cod_cpms in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                  OR (ce.cod_subactividad = '480' AND ce.cod_cpms in ('59401.01'))
+                  OR (ce.cod_subactividad = '643' AND ce.cod_cpms in ('59401.02'))
+                  OR (ce.cod_subactividad = '694' AND ce.cod_cpms in ('99208'))
+                  OR (ce.cod_subactividad = '417' AND ce.cod_cpms in ('99402.05'))
+                  OR (ce.cod_subactividad = '418' AND ce.cod_cpms in ('99402.03'))
+                  OR (ce.cod_subactividad = '127' AND ce.cod_cpms in ('86703.01'))
+                  OR (ce.cod_subactividad = '008' AND ce.cod_cpms in ('59430'))
+                  OR (ce.cod_subactividad = '040' AND ce.cod_cpms in ('99385.02','99386.02')))
+              AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
+
+            UNION ALL
+
+            SELECT
+                c.servhosdes AS descripcion_servicio,
+                a.actespnom AS descripcion_subactividad
+            FROM dssge.dw_proc_{anio}_{periodo} ce
+            LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
+            LEFT JOIN dwsge.sgss_cmace10 AS a
+                ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
+            WHERE ce.cod_centro = '{codcas}'
+              AND ce.cod_servicio ='F21'
+              AND ce.cod_actividad ='B1'
+              AND ((ce.cod_subactividad = '007' AND ce.codproced in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                  OR (ce.cod_subactividad = '480' AND ce.codproced in ('59401.01'))
+                  OR (ce.cod_subactividad = '643' AND ce.codproced in ('59401.02'))
+                  OR (ce.cod_subactividad = '694' AND ce.codproced in ('99208'))
+                  OR (ce.cod_subactividad = '417' AND ce.codproced in ('99402.05'))
+                  OR (ce.cod_subactividad = '418' AND ce.codproced in ('99402.03'))
+                  OR (ce.cod_subactividad = '127' AND ce.codproced in ('86703.01'))
+                  OR (ce.cod_subactividad = '008' AND ce.codproced in ('59430'))
+                  OR (ce.cod_subactividad = '040' AND ce.codproced in ('99385.02','99386.02')))
               AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
         """
         try:
@@ -414,57 +446,90 @@ def register_callbacks(app):
         tipo_asegurado = _parse_codasegu(search) or DEFAULT_TIPO_ASEGURADO
         codasegu_clause = resolve_tipo_asegurado_clause(tipo_asegurado)
         if not codcas:
-            return empty_fig("Atenciones por diagnostico"), "Sin codcas."
+            return empty_fig("Atenciones por procedimiento"), "Sin codcas."
         if not periodo or not anio:
-            return empty_fig("Atenciones por diagnostico"), "Faltan filtros (periodo/anio)."
+            return empty_fig("Atenciones por procedimiento"), "Faltan filtros (periodo/anio)."
         engine = create_connection()
         if engine is None:
-            return empty_fig("Atenciones por diagnostico"), "Error de conexion a la base de datos."
+            return empty_fig("Atenciones por procedimiento"), "Error de conexion a la base de datos."
 
         query = f"""
             SELECT ce.cod_oricentro, ce.cod_centro, a.actespnom, c.servhosdes,
                    ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,
-                   ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                   ce.acto_med::NUMERIC, ce.doc_paciente, ce.cod_cpms AS cpscod, cp.cpsdes
             FROM dwsge.dwe_consulta_externa_no_medicas_{anio}_{periodo} ce
-            LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=ce.diagcod
+            LEFT JOIN dwsge.sgss_cmcpp10 AS cp ON cp.cpscod = ce.cod_cpms
             LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.sgss_cmace10 AS a
                 ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
             LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
-            WHERE cod_centro = '{codcas}'
-              AND cod_servicio ='F21'
-              AND ce.cod_subactividad in ('007','480','643','694','417','418','127','008','040')
+            WHERE ce.cod_centro = '{codcas}'
+              AND ce.cod_servicio ='F21'
+              AND ce.cod_actividad ='B1'
+              AND ((ce.cod_subactividad = '007' AND ce.cod_cpms in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                  OR (ce.cod_subactividad = '480' AND ce.cod_cpms in ('59401.01'))
+                  OR (ce.cod_subactividad = '643' AND ce.cod_cpms in ('59401.02'))
+                  OR (ce.cod_subactividad = '694' AND ce.cod_cpms in ('99208'))
+                  OR (ce.cod_subactividad = '417' AND ce.cod_cpms in ('99402.05'))
+                  OR (ce.cod_subactividad = '418' AND ce.cod_cpms in ('99402.03'))
+                  OR (ce.cod_subactividad = '127' AND ce.cod_cpms in ('86703.01'))
+                  OR (ce.cod_subactividad = '008' AND ce.cod_cpms in ('59430'))
+                  OR (ce.cod_subactividad = '040' AND ce.cod_cpms in ('99385.02','99386.02')))
+              AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
+
+            UNION ALL
+
+            SELECT ce.cod_oricentro, ce.cod_centro, a.actespnom, c.servhosdes,
+                   ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,
+                   ce.acto_med::NUMERIC, ce.doc_paciente, ce.codproced AS cpscod, cp.cpsdes
+            FROM dssge.dw_proc_{anio}_{periodo} ce
+            LEFT JOIN dwsge.sgss_cmcpp10 AS cp ON cp.cpscod = ce.codproced
+            LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
+            LEFT JOIN dwsge.sgss_cmace10 AS a
+                ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
+            WHERE ce.cod_centro = '{codcas}'
+              AND ce.cod_servicio ='F21'
+              AND ce.cod_actividad ='B1'
+              AND ((ce.cod_subactividad = '007' AND ce.codproced in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                  OR (ce.cod_subactividad = '480' AND ce.codproced in ('59401.01'))
+                  OR (ce.cod_subactividad = '643' AND ce.codproced in ('59401.02'))
+                  OR (ce.cod_subactividad = '694' AND ce.codproced in ('99208'))
+                  OR (ce.cod_subactividad = '417' AND ce.codproced in ('99402.05'))
+                  OR (ce.cod_subactividad = '418' AND ce.codproced in ('99402.03'))
+                  OR (ce.cod_subactividad = '127' AND ce.codproced in ('86703.01'))
+                  OR (ce.cod_subactividad = '008' AND ce.codproced in ('59430'))
+                  OR (ce.cod_subactividad = '040' AND ce.codproced in ('99385.02','99386.02')))
               AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
         """
         try:
             df = pd.read_sql(query, engine)
         except Exception as e:
-            return empty_fig("Atenciones por diagnostico"), f"Error ejecutando consulta: {e}"
+            return empty_fig("Atenciones por procedimiento"), f"Error ejecutando consulta: {e}"
         if df.empty:
-            return empty_fig(f"Atenciones por diagnostico - Periodo {periodo}" ), f"Sin datos para periodo {periodo}."
+            return empty_fig(f"Atenciones por procedimiento - Periodo {periodo}" ), f"Sin datos para periodo {periodo}."
 
         bar_df = (
-            df.assign(diagdes=df["diagdes"].fillna("Sin diagnostico"))
-              .groupby("diagdes").size().reset_index(name="Atenciones")
+            df.assign(cpsdes=df["cpsdes"].fillna("Sin procedimiento"))
+              .groupby("cpsdes").size().reset_index(name="Atenciones")
               .sort_values("Atenciones", ascending=False).head(10)
         )
         if bar_df.empty:
-            fig = empty_fig(f"Atenciones por diagnostico - Periodo {periodo}")
-            msg_fig = "Sin datos de diagnosticos."
+            fig = empty_fig(f"Atenciones por procedimiento - Periodo {periodo}")
+            msg_fig = "Sin datos de procedimientos."
         else:
             total_agr = bar_df["Atenciones"].sum()
             bar_df["label"] = bar_df["Atenciones"].apply(
                 lambda v: f"{v:,.0f} ({v/total_agr:.1%})" if total_agr else f"{v:,.0f} (0.0%)"
             )
-            fig = px.bar(bar_df, y="diagdes", x="Atenciones", orientation="h",
-                         title=f"Atenciones por diagnostico - Periodo {periodo}",
+            fig = px.bar(bar_df, y="cpsdes", x="Atenciones", orientation="h",
+                         title=f"Atenciones por procedimiento - Periodo {periodo}",
                          text="label", color="Atenciones", color_continuous_scale=BAR_COLOR_SCALE)
             fig = style_horizontal_bar(fig, height=320)
-            msg_fig = f"{bar_df['Atenciones'].sum():,} atenciones en {bar_df.shape[0]} diagnosticos."
+            msg_fig = f"{bar_df['Atenciones'].sum():,} atenciones en {bar_df.shape[0]} procedimientos."
         fig.update_layout(
-            xaxis_title="Atenciones", yaxis_title="Diagnostico",
+            xaxis_title="Atenciones", yaxis_title="Procedimiento",
             template="simple_white", paper_bgcolor="#F9FBFD", plot_bgcolor="#F9FBFD",
             margin=dict(l=90, r=32, t=70, b=40),
             title_font=dict(size=18, color=BRAND),
@@ -500,18 +565,53 @@ def register_callbacks(app):
         query = f"""
             SELECT ce.cod_oricentro, ce.cod_centro, a.actespnom, c.servhosdes,
                    ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,
-                   ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                   ce.acto_med::NUMERIC, ce.doc_paciente,
+                   ce.cod_cpms AS cpscod, cp.cpsdes
             FROM dwsge.dwe_consulta_externa_no_medicas_{anio}_{periodo} ce
-            LEFT OUTER JOIN dwsge.sgss_cmdia10 dg ON dg.diagcod=ce.diagcod
+            LEFT JOIN dwsge.sgss_cmcpp10 AS cp ON cp.cpscod = ce.cod_cpms
             LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
             LEFT JOIN dwsge.sgss_cmace10 AS a
                 ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
             LEFT JOIN dwsge.sgss_cmact10 AS am ON ce.cod_actividad = am.actcod
             LEFT JOIN dwsge.sgss_cmcas10 AS ca
                 ON ce.cod_oricentro = ca.oricenasicod AND ce.cod_centro = ca.cenasicod
-            WHERE cod_centro = '{codcas}'
-              AND cod_servicio ='F21'
-              AND ce.cod_subactividad in ('007','480','643','694','417','418','127','008','040')
+            WHERE ce.cod_centro = '{codcas}'
+              AND ce.cod_servicio ='F21'
+              AND ce.cod_actividad ='B1'
+              AND ((ce.cod_subactividad = '007' AND ce.cod_cpms in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                  OR (ce.cod_subactividad = '480' AND ce.cod_cpms in ('59401.01'))
+                  OR (ce.cod_subactividad = '643' AND ce.cod_cpms in ('59401.02'))
+                  OR (ce.cod_subactividad = '694' AND ce.cod_cpms in ('99208'))
+                  OR (ce.cod_subactividad = '417' AND ce.cod_cpms in ('99402.05'))
+                  OR (ce.cod_subactividad = '418' AND ce.cod_cpms in ('99402.03'))
+                  OR (ce.cod_subactividad = '127' AND ce.cod_cpms in ('86703.01'))
+                  OR (ce.cod_subactividad = '008' AND ce.cod_cpms in ('59430'))
+                  OR (ce.cod_subactividad = '040' AND ce.cod_cpms in ('99385.02','99386.02')))
+              AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
+
+            UNION ALL
+
+            SELECT ce.cod_oricentro, ce.cod_centro, a.actespnom, c.servhosdes,
+                   ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,
+                   ce.acto_med::NUMERIC, ce.doc_paciente,
+                   ce.codproced AS cpscod, cp.cpsdes
+            FROM dssge.dw_proc_{anio}_{periodo} ce
+            LEFT JOIN dwsge.sgss_cmcpp10 AS cp ON cp.cpscod = ce.codproced
+            LEFT JOIN dwsge.sgss_cmsho10 AS c ON ce.cod_servicio = c.servhoscod
+            LEFT JOIN dwsge.sgss_cmace10 AS a
+                ON ce.cod_actividad = a.actcod AND ce.cod_subactividad = a.actespcod
+            WHERE ce.cod_centro = '{codcas}'
+              AND ce.cod_servicio ='F21'
+              AND ce.cod_actividad ='B1'
+              AND ((ce.cod_subactividad = '007' AND ce.codproced in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                  OR (ce.cod_subactividad = '480' AND ce.codproced in ('59401.01'))
+                  OR (ce.cod_subactividad = '643' AND ce.codproced in ('59401.02'))
+                  OR (ce.cod_subactividad = '694' AND ce.codproced in ('99208'))
+                  OR (ce.cod_subactividad = '417' AND ce.codproced in ('99402.05'))
+                  OR (ce.cod_subactividad = '418' AND ce.codproced in ('99402.03'))
+                  OR (ce.cod_subactividad = '127' AND ce.codproced in ('86703.01'))
+                  OR (ce.cod_subactividad = '008' AND ce.codproced in ('59430'))
+                  OR (ce.cod_subactividad = '040' AND ce.codproced in ('99385.02','99386.02')))
               AND (CASE WHEN ce.cod_tipo_paciente = '4' THEN '2' ELSE '1' END) IN {codasegu_clause}
         """
         try:

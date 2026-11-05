@@ -739,43 +739,46 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
             ORDER BY cq.cod_tipdoc_paciente, cq.doc_paciente, cq.cod_cpms, cq.fec_oper DESC;
         """
 
+        # Horas de operación por evento (paciente + fecha + hora de inicio): un acto con
+        # varios CPMS o dos actos simultáneos se cuentan una sola vez.
         query_horas = f"""
-            SELECT DISTINCT ON (cq.cod_tipdoc_paciente, cq.doc_paciente, cq.cod_cpms, cq.fec_oper)
-                cq.acto_med,
-                cq.fec_oper,
-                CASE
-                    WHEN cq.duracion_sala = '00:00' THEN
-                        -- Calcula la diferencia entre el mayor y menor valor entre las 4 horas
-                        TO_CHAR(
-                            (
-                                GREATEST(
-                                    cq.hor_ini_anest::TIME,
-                                    cq.hor_fin_anest::TIME,
-                                    cq.hor_ini_operac::TIME,
-                                    cq.hor_fin_operac::TIME
-                                )
-                                -
-                                LEAST(
-                                    cq.hor_ini_anest::TIME,
-                                    cq.hor_fin_anest::TIME,
-                                    cq.hor_ini_operac::TIME,
-                                    cq.hor_fin_operac::TIME
-                                )
-                            ),
-                            'HH24:MI'
-                        )
-                    ELSE cq.duracion_sala
-                END AS duracion_sala,
-                cq.cod_tipo_programacion
-            FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
-            WHERE cq.cod_centro = '{codcas}'
-                AND (
-                        CASE
-                            WHEN cod_tipo_paciente = '4' THEN '2'
-                            ELSE '1'
-                        END
-                    ) IN {codasegu_clause}
-            ORDER BY cq.cod_tipdoc_paciente, cq.doc_paciente, cq.cod_cpms, cq.fec_oper DESC;
+            SELECT DISTINCT ON (ev.cod_tipdoc_paciente, ev.doc_paciente, ev.fec_oper, ev.hor_ini_evento)
+                ev.acto_med,
+                ev.fec_oper,
+                ev.duracion_calc AS duracion_operac,
+                ev.cod_tipo_programacion
+            FROM (
+                SELECT
+                    cq.cod_tipdoc_paciente,
+                    cq.doc_paciente,
+                    cq.fec_oper,
+                    cq.acto_med,
+                    cq.cod_tipo_programacion,
+                    COALESCE(NULLIF(TRIM(cq.hor_ini_sala), ''), cq.hor_ini_operac) AS hor_ini_evento,
+                    CASE
+                        WHEN NULLIF(TRIM(cq.duracion_operac), '') IS NULL OR cq.duracion_operac = '00:00' THEN
+                            -- Sin duración de operación: se calcula con las horas de operación.
+                            -- Sin fecha de fin, si fin < inicio se asume que terminó al día siguiente.
+                            TO_CHAR(
+                                CASE
+                                    WHEN cq.hor_fin_operac::TIME < cq.hor_ini_operac::TIME
+                                    THEN cq.hor_fin_operac::TIME - cq.hor_ini_operac::TIME + INTERVAL '24 hours'
+                                    ELSE cq.hor_fin_operac::TIME - cq.hor_ini_operac::TIME
+                                END,
+                                'HH24:MI'
+                            )
+                        ELSE cq.duracion_operac
+                    END AS duracion_calc
+                FROM dssge.dwe_centro_quirurgico_{anio_str}_{periodo} cq
+                WHERE cq.cod_centro = '{codcas}'
+                    AND (
+                            CASE
+                                WHEN cq.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                        ) IN {codasegu_clause}
+            ) ev
+            ORDER BY ev.cod_tipdoc_paciente, ev.doc_paciente, ev.fec_oper, ev.hor_ini_evento, ev.duracion_calc DESC;
         """
 
         query_suspendidas = f"""
@@ -845,7 +848,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_cq/'):
                     return int(parts[0]) + (int(parts[1]) / 60 if len(parts) > 1 else 0)
                 except (ValueError, IndexError):
                     return 0.0
-            return df_h['duracion_sala'].apply(_parse_one).sum()
+            return df_h['duracion_operac'].apply(_parse_one).sum()
 
         horas_electivas = _parse_horas(df_horas, programacion='1')
         horas_emergencia = _parse_horas(df_horas, programacion='2')

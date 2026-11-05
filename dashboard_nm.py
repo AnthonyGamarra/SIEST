@@ -552,14 +552,13 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             "ficha_id": 146,
             "ficha_badge": "Ficha actualizada",
         },
-        # {
-        #     "title": "Total de atenciones integral Anemia",
-        #     "stat_key": "total_nutricion_anemia",
-        #     "border_color": BRAND,
-        #     "table_key": "nutricion_anemia_por_sub_act",
-        #     "table_title": "Atenciones por subactividad",
-        #     "link_target": "/dashboard/dash/total_atenciones_nm_nu_anemia/{codcas}"
-        # },
+        {
+            "title": "Total de atenciones integral Anemia",
+            "stat_key": "total_nutricion_anemia",
+            "border_color": BRAND,
+            "table_key": "nutricion_anemia_por_sub_act",
+            "table_title": "Atenciones por subactividad",
+        },
     ]
 
     build_nutricion_cards = create_cards_builder(NUTRICION_CARD_TEMPLATE)
@@ -897,135 +896,35 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
     def build_queries_complementaria(anio_str, periodo_str, params):
         codasegu = params.get('codasegu', TIPO_ASEGURADO_SQL[DEFAULT_TIPO_ASEGURADO])
         queries = [
+            # Total obstétricas = prenatal + familiar + complementarias + preconcepcional
             ("atenciones", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom,ce.acto_med, ce.doc_paciente
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE cod_centro = :codcas
-                        AND ((cod_servicio ='F21'
-                        AND cod_actividad = 'B1'
-                        AND ce.cod_subactividad in ('694','417', '418','040','127', '008'))
-                        OR (cod_servicio ='F21'
-                        AND cod_actividad = 'B1' AND cod_subactividad in ('007', '480', '643') AND ce.cod_tipo_gravidez = '1'))
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-                    UNION ALL
-                    
                     SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
-                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT JOIN dwsge.sgss_cmace10 AS a
                         ON ce.cod_actividad = a.actcod
                         AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
                     WHERE ce.cod_centro = :codcas
-                    AND ce.cod_actividad ='96'
                     AND ce.cod_servicio ='F21'
-                    AND ce.cod_subactividad ='127'
+                    AND ce.cod_actividad ='B1'
+                    AND ((ce.cod_subactividad = '007' AND ce.cod_cpms in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                        OR (ce.cod_subactividad = '480' AND ce.cod_cpms in ('59401.01'))
+                        OR (ce.cod_subactividad = '643' AND ce.cod_cpms in ('59401.02'))
+                        OR (ce.cod_subactividad = '694' AND ce.cod_cpms in ('99208'))
+                        OR (ce.cod_subactividad = '417' AND ce.cod_cpms in ('99402.05'))
+                        OR (ce.cod_subactividad = '418' AND ce.cod_cpms in ('99402.03'))
+                        OR (ce.cod_subactividad = '127' AND ce.cod_cpms in ('86703.01'))
+                        OR (ce.cod_subactividad = '008' AND ce.cod_cpms in ('59430'))
+                        OR (ce.cod_subactividad = '040' AND ce.cod_cpms in ('99385.02','99386.02')))
                     AND (
                             CASE 
                                 WHEN ce.cod_tipo_paciente = '4' THEN '2'
                                 ELSE '1'
                             END
                             ) IN {codasegu}
-            """),
-            params.copy()),
-            ("prenatal", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE ce.cod_centro = :codcas
-                        AND ce.cod_servicio ='F21'
-                        AND cod_actividad = 'B1'
-                        AND cod_tipo_gravidez = '1'
-                        AND ce.cod_subactividad in ('007', '480', '643')
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-            ("familiar", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-                        ON dg.diagcod=ce.diagcod
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE ce.cod_centro = :codcas
-                        AND ce.cod_servicio ='F21'
-                        AND cod_actividad = 'B1'
-                        AND ce.cod_subactividad ='694'
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
-            """),
-            params.copy()),
-            ("complementarias", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom,ce.acto_med, ce.doc_paciente
-                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
-                        ON ce.cod_servicio = c.servhoscod
-                    LEFT JOIN dwsge.sgss_cmace10 AS a
-                        ON ce.cod_actividad = a.actcod
-                        AND ce.cod_subactividad = a.actespcod
-                    LEFT JOIN dwsge.sgss_cmact10 AS am
-                        ON ce.cod_actividad = am.actcod
-                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
-                        ON ce.cod_oricentro = ca.oricenasicod
-                        AND ce.cod_centro = ca.cenasicod
-                        WHERE ce.cod_centro = :codcas
-                        AND ((ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad ='417')
-                        OR 
-                        (ce.cod_servicio ='F21' AND ce.cod_actividad = 'B1' AND ce.cod_subactividad in ('418','008'))
-                        OR
-                        (ce.cod_servicio ='F21' AND ce.cod_actividad = '96' AND ce.cod_subactividad ='127'))
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
+
                     UNION ALL
 
                     SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
@@ -1037,9 +936,17 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         ON ce.cod_actividad = a.actcod
                         AND ce.cod_subactividad = a.actespcod
                     WHERE ce.cod_centro = :codcas
-                    AND ce.cod_actividad ='96'
                     AND ce.cod_servicio ='F21'
-                    AND ce.cod_subactividad ='127'
+                    AND ce.cod_actividad ='B1'
+                    AND ((ce.cod_subactividad = '007' AND ce.codproced in ('59401.01','59401.02','99208','99402.05','99402.03','86703','59430','99385.02','99386.02'))
+                        OR (ce.cod_subactividad = '480' AND ce.codproced in ('59401.01'))
+                        OR (ce.cod_subactividad = '643' AND ce.codproced in ('59401.02'))
+                        OR (ce.cod_subactividad = '694' AND ce.codproced in ('99208'))
+                        OR (ce.cod_subactividad = '417' AND ce.codproced in ('99402.05'))
+                        OR (ce.cod_subactividad = '418' AND ce.codproced in ('99402.03'))
+                        OR (ce.cod_subactividad = '127' AND ce.codproced in ('86703.01'))
+                        OR (ce.cod_subactividad = '008' AND ce.codproced in ('59430'))
+                        OR (ce.cod_subactividad = '040' AND ce.codproced in ('99385.02','99386.02')))
                     AND (
                             CASE 
                                 WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1048,8 +955,8 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                             ) IN {codasegu}
             """),
             params.copy()),
-            ("preconcepcional", text(f"""
-                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+            ("prenatal", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
                     FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
                     LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
                         ON dg.diagcod=ce.diagcod
@@ -1063,16 +970,179 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                     LEFT JOIN dwsge.sgss_cmcas10 AS ca
                         ON ce.cod_oricentro = ca.oricenasicod
                         AND ce.cod_centro = ca.cenasicod
-                        WHERE ce.cod_centro = :codcas
-                        AND ce.cod_servicio ='F21'
-                        AND ce.cod_actividad = 'B1'
-                        AND ce.cod_subactividad ='040'
-                        AND (
-                                CASE 
-                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
-                                    ELSE '1'
-                                END
-                                ) IN {codasegu}
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.cod_cpms in ('59401.02','59401.01'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('480') AND ce.cod_cpms in ('59401.01'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('643') AND ce.cod_cpms in ('59401.02')))
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+
+                    UNION ALL
+                    
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.codproced in ('59401.02','59401.01'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('480') AND ce.codproced in ('59401.01'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('643') AND ce.codproced in ('59401.02')))
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+            """),
+            params.copy()),
+            ("familiar", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('694') AND ce.cod_cpms in ('99208'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.cod_cpms in ('99208')))
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+                    UNION ALL
+                    
+
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('694') AND ce.codproced in ('99208'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.codproced in ('99208')))
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+
+
+            """),
+            params.copy()),
+            ("complementarias", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('417') AND ce.cod_cpms in ('99402.05'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('418') AND ce.cod_cpms in ('99402.03'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('127') AND ce.cod_cpms in ('86703.01'))    
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('008') AND ce.cod_cpms in ('59430'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.cod_cpms in ('99402.05','99402.03','86703','59430')))                                                                    
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+                    UNION ALL
+
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('417') AND ce.codproced in ('99402.05'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('418') AND ce.codproced in ('99402.03'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('127') AND ce.codproced in ('86703.01'))    
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('008') AND ce.codproced in ('59430'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.codproced in ('99402.05','99402.03','86703','59430')))                                                                    
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+            """),
+            params.copy()),
+            ("preconcepcional", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('040') AND ce.cod_cpms in ('99385.02','99386.02'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.cod_cpms in ('99385.02','99386.02')))                                                                    
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
+                    UNION ALL
+
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,a.actespnom, ce.acto_med::NUMERIC, ce.doc_paciente
+                    FROM dssge.dw_proc_{anio_str}_{periodo_str} ce
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    WHERE ce.cod_centro = :codcas
+                    AND ((ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('040') AND ce.codproced in ('99385.02','99386.02'))
+                    OR (ce.cod_servicio ='F21' AND ce.cod_actividad ='B1' AND ce.cod_subactividad in ('007') AND ce.codproced in ('99385.02','99386.02')))                                                                    
+                    AND (
+                            CASE 
+                                WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                ELSE '1'
+                            END
+                            ) IN {codasegu}
             """),
             params.copy()),
         ]
@@ -1249,7 +1319,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
                         WHERE cod_centro = :codcas
                         AND cod_servicio ='F31'
                         AND cod_actividad ='B1'
-                        AND ce.cod_subactividad in ('050', '056', '609','692','693','695','821','822','823','824','825','826','828','827')
+                        AND ce.cod_subactividad in ('050','609','692','693','695','821','822','823','824','825','826','828','827')
                         AND (
                                 CASE 
                                     WHEN ce.cod_tipo_paciente = '4' THEN '2'
@@ -1259,32 +1329,33 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             """),
             params.copy()),
 
-            # ("nutricion_anemia", text(f"""
-            #         SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
-            #         FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
-            #         LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
-            #             ON dg.diagcod=ce.diagcod
-            #         LEFT JOIN dwsge.sgss_cmsho10 AS c 
-            #             ON ce.cod_servicio = c.servhoscod
-            #         LEFT JOIN dwsge.sgss_cmace10 AS a
-            #             ON ce.cod_actividad = a.actcod
-            #             AND ce.cod_subactividad = a.actespcod
-            #         LEFT JOIN dwsge.sgss_cmact10 AS am
-            #             ON ce.cod_actividad = am.actcod
-            #         LEFT JOIN dwsge.sgss_cmcas10 AS ca
-            #             ON ce.cod_oricentro = ca.oricenasicod
-            #             AND ce.cod_centro = ca.cenasicod
-            #             WHERE cod_centro = :codcas
-            #             AND cod_servicio ='F31'
-            #             AND ce.cod_subactividad in ('056')
-            #             AND (
-            #                     CASE 
-            #                         WHEN ce.cod_tipo_paciente = '4' THEN '2'
-            #                         ELSE '1'
-            #                     END
-            #                     ) IN {codasegu}
-            # """),
-            # params.copy()),
+            ("nutricion_anemia", text(f"""
+                    SELECT ce.cod_oricentro, ce.cod_centro,ca.cenasides,a.actespnom,c.servhosdes,ce.cod_servicio, ce.cod_actividad, ce.cod_subactividad,ce.acto_med, ce.doc_paciente, ce.diagcod, dg.diagdes
+                    FROM dwsge.dwe_consulta_externa_no_medicas_{anio_str}_{periodo_str} ce
+                    LEFT OUTER JOIN dwsge.sgss_cmdia10 dg 
+                        ON dg.diagcod=ce.diagcod
+                    LEFT JOIN dwsge.sgss_cmsho10 AS c 
+                        ON ce.cod_servicio = c.servhoscod
+                    LEFT JOIN dwsge.sgss_cmace10 AS a
+                        ON ce.cod_actividad = a.actcod
+                        AND ce.cod_subactividad = a.actespcod
+                    LEFT JOIN dwsge.sgss_cmact10 AS am
+                        ON ce.cod_actividad = am.actcod
+                    LEFT JOIN dwsge.sgss_cmcas10 AS ca
+                        ON ce.cod_oricentro = ca.oricenasicod
+                        AND ce.cod_centro = ca.cenasicod
+                        WHERE cod_centro = :codcas
+                        AND cod_servicio ='F31'
+                        AND cod_actividad ='B1'
+                        AND ce.cod_subactividad in ('056')
+                        AND (
+                                CASE 
+                                    WHEN ce.cod_tipo_paciente = '4' THEN '2'
+                                    ELSE '1'
+                                END
+                                ) IN {codasegu}
+            """),
+            params.copy()),
         ]
         return {
             "queries": queries,
@@ -1826,7 +1897,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_consejeria_df = results.get("consejeria", pd.DataFrame())
 
         nutricion_total_df = results.get("nutricion_total", pd.DataFrame())
-        # nutricion_anemia_df = results.get("nutricion_anemia", pd.DataFrame())
+        nutricion_anemia_df = results.get("nutricion_anemia", pd.DataFrame())
 
         atenciones_e_df = results.get("enfermeria_total", pd.DataFrame())
         atenciones_tuberculosis_df = results.get("enfermeria_tuberculosis", pd.DataFrame())
@@ -1913,7 +1984,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         total_atenciones_consejeria = len(atenciones_consejeria_df)
 
         total_nutricion_atenciones = len(nutricion_total_df)
-        # total_nutricion_anemia = len(nutricion_anemia_df)
+        total_nutricion_anemia = len(nutricion_anemia_df)
         total_enfermeria_atenciones = len(atenciones_e_df)
         total_enfermeria_tuberculosis = len(atenciones_tuberculosis_df)
         total_enfermeria_vih = len(atenciones_vih_df)
@@ -1933,7 +2004,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
         atenciones_consejeria_df_agru = summarize_sub_activities(atenciones_consejeria_df)
 
         nutricion_total_df_agru = summarize_sub_activities(nutricion_total_df)
-        # nutricion_anemia_df_agru = summarize_sub_activities(nutricion_anemia_df)
+        nutricion_anemia_df_agru = summarize_sub_activities(nutricion_anemia_df)
 
         atenciones_tuberculosis_df_agru = summarize_sub_activities(atenciones_tuberculosis_df)
         atenciones_vih_df_agru = summarize_sub_activities(atenciones_vih_df)
@@ -1962,7 +2033,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             atenciones_psicoprofilaxis_df,
             atenciones_consejeria_df,
             nutricion_total_df,
-            # nutricion_anemia_df,
+            nutricion_anemia_df,
             atenciones_e_df,
             atenciones_tuberculosis_df,
             atenciones_vih_df,
@@ -1990,7 +2061,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'total_atenciones_consejeria': total_atenciones_consejeria,
             'total_nutricion_atenciones': total_nutricion_atenciones,
             'total_nutricion_individual': total_nutricion_atenciones,
-            # 'total_nutricion_anemia': total_nutricion_anemia,
+            'total_nutricion_anemia': total_nutricion_anemia,
             'total_enfermeria_atenciones': total_enfermeria_atenciones,
             'total_enfermeria_tuberculosis': total_enfermeria_tuberculosis,
             'total_enfermeria_vih': total_enfermeria_vih,
@@ -2020,7 +2091,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_nm/'):
             'atenciones_psicoprofilaxis_por_sub_act': atenciones_psicoprofilaxis_df_agru,
             'atenciones_consejeria_por_sub_act': atenciones_consejeria_df_agru,
             'nutricion_individual_por_sub_act': nutricion_total_df_agru,
-            # 'nutricion_anemia_por_sub_act': nutricion_anemia_df_agru,
+            'nutricion_anemia_por_sub_act': nutricion_anemia_df_agru,
             'enfermeria_tuberculosis_por_sub_act': atenciones_tuberculosis_df_agru,
             'enfermeria_vih_por_sub_act': atenciones_vih_df_agru,
             'enfermeria_cronicas_am_por_sub_act': atenciones_cronicas_am_df_agru,

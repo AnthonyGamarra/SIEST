@@ -12,6 +12,18 @@
     z-index: 2000 !important;
 }
 
+/* Dash 4: el menú se renderiza dentro del propio dropdown, así que queda atrapado
+   en el z-index inline de su contenedor. Elevamos el dropdown abierto/enfocado
+   para que su menú quede por encima de los dropdowns vecinos. */
+.dashboard-control-bar .dash-dropdown-content {
+    z-index: 5000 !important;
+}
+
+.dashboard-control-bar > :focus-within,
+.dashboard-control-bar > :has(.dash-dropdown-content) {
+    z-index: 5000 !important;
+}
+
 #diag-filter-centro .Select-menu-outer .Select-option,
 #diag-filter-centro .Select-menu-outer .VirtualizedSelectOption,
 #diag-filter-servicio .Select-menu-outer .Select-option,
