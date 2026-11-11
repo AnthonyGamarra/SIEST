@@ -455,7 +455,7 @@ def create_dash_app(flask_app, url_base_pathname='/dashboard_farm_embed/'):
                             ELSE '1'
                         END
                     ) IN {codasegu_clause}
-                AND cant_atendida > 0
+                AND tipo_movimiento in ('207','211')
             GROUP BY f.cod_area, a.arehosdes, ca.cenasides
             ORDER BY recetas DESC
         """

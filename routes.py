@@ -1607,6 +1607,31 @@ def register_routes(app):
 			codcas=code,
 		)
 
+	@bp.route('/lab/')
+	@login_required
+	def lab_index():
+		token = dashboard_code_for_user(current_user, request)
+		if token:
+			return redirect(url_for('main.lab_wrapper', token=token))
+		flash('No hay código asociado al usuario para mostrar el dashboard de Laboratorio.', 'warning')
+		return redirect(url_for('main.index'))
+
+	@bp.route('/lab/<token>', methods=['GET'])
+	@bp.route('/lab/<token>/', methods=['GET'])
+	@login_required
+	def lab_wrapper(token):
+		code = decode_code(token)
+		if not code:
+			flash('El código seleccionado es inválido o expiró.', 'warning')
+			return redirect(url_for('main.index'))
+		dashboard_url = f'/dashboard_lab_embed/{token}/'
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url=dashboard_url,
+			codcas=code,
+		)
+
 	@bp.route('/variables_ses/')
 	@login_required
 	def variables_ses_index():
@@ -1636,6 +1661,7 @@ def register_routes(app):
 			hosp_url=f'/hosp/{token}/',
 			proc_url=f'/proc/{token}/',
 			farm_url=f'/farm/{token}/',
+			lab_url=f'/lab/{token}/',
 		)
 
 	def redirect_with(target_path, warning_msg='No hay código asociado al usuario para mostrar el dashboard.'):
