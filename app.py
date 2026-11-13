@@ -20,6 +20,7 @@ from dashboard_hosp import create_dash_app as create_dash_hosp
 from dashboard_proc import create_dash_app as create_dash_proc
 from dashboard_farm import create_dash_app as create_dash_farm
 from dashboard_lab import create_dash_app as create_dash_lab
+from mantenimiento_establecimientos_v3 import create_dash_app as create_dash_establecimientos_v3
 from dashboard_ejec import create_dash_app as create_dash_ejec
 from tramas import create_dash_app as create_dash_tramas
 from busqueda_paciente import create_dash_app as create_dash_busqueda_paciente
@@ -103,6 +104,7 @@ def create_app():
     create_dash_proc(app, url_base_pathname='/dashboard_proc_embed/')
     create_dash_farm(app, url_base_pathname='/dashboard_farm_embed/')
     create_dash_lab(app, url_base_pathname='/dashboard_lab_embed/')
+    create_dash_establecimientos_v3(app, url_base_pathname='/establecimientos_v3_embed/')
     create_dash_ejec(app, url_base_pathname='/dashboard_ejec_embed/')
     create_dash_tramas(app, url_base_pathname='/tramas_embed/')
     create_dash_busqueda_paciente(app, url_base_pathname='/busqueda_paciente_embed/')

@@ -1796,6 +1796,17 @@ def register_routes(app):
 			return redirect(url_for('main.index'))
 		return render_template('otros_proyectos.html', show_modules=False)
 
+	@bp.route('/centro-gestion-establecimientos/')
+	@login_required
+	def centro_gestion_establecimientos():
+		# Visible para todos; las pestañas por rol se resuelven en el Dash
+		# (mantenimiento_establecimientos_v3.py).
+		return render_template(
+			'wrappers/dashboard_wrapper.html',
+			show_modules=False,
+			dashboard_url='/establecimientos_v3_embed/',
+		)
+
 	@bp.route('/patologias/')
 	@login_required
 	def modulo_patologias():
