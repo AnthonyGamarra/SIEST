@@ -40,6 +40,8 @@ from backend.establecimientos_service_v3 import (
     preparar_cambios_edicion,
     construir_caracterizacion_establecimientos,
     CHAR_LEVEL_ORDER,
+    fuente_caracterizacion_por_condicion,
+    generar_excel_caracterizacion_establecimientos,
 )
 
 
@@ -56,8 +58,9 @@ DANGER = "#B42318"
 
 
 def _ttl_cached(fn, seconds):
-    """Memoiza fn(**kwargs) por `seconds`. Solo se usa en el modo publico
-    (public_establecimientos.py), para no consultar SQL Server en cada visita."""
+    """Memoiza fn(*args, **kwargs) por `seconds`. Solo se usa en el modo
+    publico (public_establecimientos.py), para no consultar SQL Server en
+    cada visita."""
     import threading
     import time
 
@@ -215,6 +218,108 @@ def _figure_donut(records, title):
     return fig
 
 
+def _figure_red_level(red_level_counts, top=12):
+    """
+    Barras horizontales apiladas:
+    composición de las principales redes por Nivel I, II, III y Sin nivel.
+    """
+    items = list((red_level_counts or {}).items())
+
+    items = sorted(
+        items,
+        key=lambda item: (
+            -sum(int(v or 0) for v in item[1].values()),
+            item[0],
+        ),
+    )[:top]
+
+    items = items[::-1]
+
+    networks = [item[0] for item in items]
+
+    fig = go.Figure()
+
+    level_config = [
+        ("NIVEL I", "#3B82F6"),
+        ("NIVEL II", "#10B981"),
+        ("NIVEL III", "#8B5CF6"),
+        ("SIN NIVEL", "#94A3B8"),
+    ]
+
+    for level, color in level_config:
+        values = [
+            int(values_by_level.get(level) or 0)
+            for _, values_by_level in items
+        ]
+
+        fig.add_trace(
+            go.Bar(
+                name=(
+                    _format_level_label(level)
+                    if level != "SIN NIVEL"
+                    else "Sin nivel"
+                ),
+                y=networks,
+                x=values,
+                orientation="h",
+                marker_color=color,
+                hovertemplate=(
+                    "%{y}<br>"
+                    + (
+                        _format_level_label(level)
+                        if level != "SIN NIVEL"
+                        else "Sin nivel"
+                    )
+                    + ": %{x}<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        barmode="stack",
+        margin={"l": 20, "r": 20, "t": 20, "b": 35},
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        font={"family": "Segoe UI, Arial", "color": TEXT},
+        height=420,
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.01,
+            "xanchor": "left",
+            "x": 0,
+            "font": {"size": 10},
+        },
+    )
+
+    fig.update_xaxes(
+        title="Centros",
+        showgrid=True,
+        gridcolor="#EEF1F5",
+        zeroline=False,
+    )
+    fig.update_yaxes(
+        showgrid=False,
+        automargin=True,
+    )
+
+    return fig
+
+
+def _format_level_label(value):
+    """Formato institucional de niveles con romanos en mayúscula."""
+    text = str(value or "").strip().upper()
+
+    labels = {
+        "NIVEL I": "Nivel I",
+        "NIVEL II": "Nivel II",
+        "NIVEL III": "Nivel III",
+        "SIN NIVEL": "Sin nivel",
+    }
+
+    return labels.get(text, str(value or "").strip())
+
+
 def create_dash_app(
     flask_app,
     url_base_pathname="/establecimientos_v3_embed/",
@@ -250,21 +355,30 @@ def create_dash_app(
     # Este Dash edita el maestro en SQL Server (UPDATE + versionado RENIPRESS),
     # asi que se protege todo lo que cuelga de su prefijo (layout, callbacks
     # _dash-update-component y assets), no solo la ruta Flask que lo envuelve.
-    # Cualquier usuario autenticado entra, pero los que no son admin solo
-    # pueden ejecutar los callbacks de la pestaña Caracterizacion: ocultar las
-    # otras pestañas en el layout no basta, los callbacks se pueden invocar
-    # directo con un POST.
-    OUTPUTS_CARACTERIZACION = {
-        "est-v3-char-red.options",
-        "est-v3-characterization-content.children",
-        "est-v3-char-status.children",
+    # En SIEST entra cualquier usuario autenticado, pero los que no son admin
+    # (y el modo publico) solo pueden ejecutar los callbacks de la pestaña
+    # Caracterizacion: ocultar las otras pestañas no basta, los callbacks se
+    # pueden invocar directo con un POST.
+    #
+    # Se compara la clave exacta del output en callback_map (incluye el hash
+    # de allow_duplicate): est-v3-download.data lo comparten la descarga de
+    # caracterizacion y las del maestro, y Dash despacha por esa clave.
+    CALLBACKS_CARACTERIZACION = {
+        "cargar_redes_caracterizacion",
+        "cargar_caracterizacion",
+        "descargar_caracterizacion",
     }
+    allowed_outputs = set()
 
-    def _callback_outputs(payload):
-        # Dash envia "id.prop" para un output y "..id1.prop1...id2.prop2.."
-        # para varios.
-        output = str((payload or {}).get("output") or "")
-        return {o for o in output.strip(".").split("...") if o}
+    def _outputs_caracterizacion():
+        if not allowed_outputs:
+            allowed_outputs.update(
+                key
+                for key, entry in app.callback_map.items()
+                if getattr(entry.get("callback"), "__name__", None)
+                in CALLBACKS_CARACTERIZACION
+            )
+        return allowed_outputs
 
     @flask_app.before_request
     def _require_access_establecimientos_v3():
@@ -279,8 +393,8 @@ def create_dash_app(
             if getattr(current_user, "is_admin", False):
                 return None
         if request.path.endswith("/_dash-update-component"):
-            outputs = _callback_outputs(request.get_json(silent=True))
-            if not outputs or not outputs <= OUTPUTS_CARACTERIZACION:
+            payload = request.get_json(silent=True) or {}
+            if payload.get("output") not in _outputs_caracterizacion():
                 abort(403)
         return None
 
@@ -564,7 +678,7 @@ def create_dash_app(
                 html.Summary(
                     [
                         html.Span(
-                            level_name.title()
+                            _format_level_label(level_name)
                             if level_name != "SIN NIVEL"
                             else "Sin nivel"
                         ),
@@ -587,6 +701,7 @@ def create_dash_app(
 
     def render_characterization(summary):
         total = int(summary.get("total") or 0)
+
         condition_counts = summary.get(
             "condition_counts",
             {},
@@ -600,6 +715,7 @@ def create_dash_app(
             "centers_by_condition_level",
             {},
         )
+        alerts = summary.get("alerts", {})
 
         propio = int(condition_counts.get("PROPIO") or 0)
         extra = int(condition_counts.get("EXTRA") or 0)
@@ -611,10 +727,14 @@ def create_dash_app(
             for level in CHAR_LEVEL_ORDER
         }
 
+        # =============================================================
+        # TARJETA PRINCIPAL Y CONDICIÓN
+        # =============================================================
+
         total_popover = html.Div(
             [
                 html.Div(
-                    "Composición del maestro oficial",
+                    "Composición del universo filtrado",
                     className="est-v3-char-popover-intro",
                 ),
                 _char_breakdown_list(
@@ -661,7 +781,11 @@ def create_dash_app(
 
         extra_groups = [
             (
-                level.title(),
+                (
+                    _format_level_label(level)
+                    if level != "SIN NIVEL"
+                    else "Sin nivel"
+                ),
                 condition_centers
                 .get("EXTRA", {})
                 .get(level, []),
@@ -703,7 +827,7 @@ def create_dash_app(
                     propio,
                     "bi bi-heart-pulse",
                     "#2A78D6",
-                    subtitle="Establecimientos propios EsSalud",
+                    subtitle="Fuente institucional: GCPS",
                     popover_title="Oferta propia por nivel",
                     popover_body=own_popover,
                     width=6,
@@ -714,10 +838,7 @@ def create_dash_app(
                     extra,
                     "bi bi-box-arrow-up-right",
                     "#EB6834",
-                    subtitle=(
-                        "IPRESS / APP validadas por "
-                        "GCOP / Operaciones"
-                    ),
+                    subtitle="Fuente institucional: GCOP",
                     popover_title=(
                         "Centros de oferta extrainstitucional"
                     ),
@@ -730,6 +851,10 @@ def create_dash_app(
             ],
             className="g-3 mb-3",
         )
+
+        # =============================================================
+        # NIVEL ASISTENCIAL
+        # =============================================================
 
         level_cards = []
 
@@ -775,35 +900,33 @@ def create_dash_app(
                     max_centers=30,
                 )
             else:
-                category_counts = [
-                    (category, len(centers))
-                    for category, centers
-                    in level_data.get(
-                        "categories",
-                        {},
-                    ).items()
-                ]
-
                 popover_body = _char_breakdown_list(
-                    category_counts
+                    [
+                        (category, len(centers))
+                        for category, centers
+                        in level_data.get(
+                            "categories",
+                            {},
+                        ).items()
+                    ]
                 )
 
             level_cards.append(
                 char_card(
                     f"est-v3-char-level-{index}",
                     (
-                        level.title()
+                        _format_level_label(level)
                         if level != "SIN NIVEL"
                         else "Sin nivel"
                     ),
                     int(level_data.get("count") or 0),
                     icon,
                     accent,
-                    subtitle="Clasificación EsSalud",
+                    subtitle="Nivel de atención",
                     popover_title=(
                         "Centros sin nivel"
                         if level == "SIN NIVEL"
-                        else f"{level.title()} por categoría MINSA"
+                        else f"{_format_level_label(level)} por categoría MINSA"
                     ),
                     popover_body=popover_body,
                     width=3,
@@ -815,18 +938,215 @@ def create_dash_app(
             className="g-3 mb-3",
         )
 
+        # =============================================================
+        # ALERTAS DE CARACTERIZACIÓN
+        # =============================================================
+
+        alert_items = [
+            (
+                "Sin nivel",
+                int(alerts.get("SIN_NIVEL") or 0),
+                "bi bi-diagram-2",
+            ),
+            (
+                "Sin categoría MINSA",
+                int(alerts.get("SIN_CATEGORIA") or 0),
+                "bi bi-tags",
+            ),
+            (
+                "Sin tipo de centro",
+                int(alerts.get("SIN_TIPO") or 0),
+                "bi bi-building-exclamation",
+            ),
+        ]
+
+        alert_cards = html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.I(className=f"{icon} me-2"),
+                                label,
+                            ],
+                            className="est-v3-char-alert-label",
+                        ),
+                        html.Div(
+                            str(value),
+                            className=(
+                                "est-v3-char-alert-value "
+                                + (
+                                    "is-clear"
+                                    if value == 0
+                                    else "is-warning"
+                                )
+                            ),
+                        ),
+                    ],
+                    className="est-v3-char-alert-item",
+                )
+                for label, value, icon in alert_items
+            ],
+            className="est-v3-char-alert-grid",
+        )
+
+        alerts_panel = html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div(
+                            "Alertas de caracterización",
+                            className="est-v3-panel-title",
+                        ),
+                        html.Div(
+                            (
+                                "Registros que requieren revisión para "
+                                "mejorar la consistencia del maestro."
+                            ),
+                            className="est-v3-panel-subtitle",
+                        ),
+                    ]
+                ),
+                alert_cards,
+            ],
+            className="est-v3-panel",
+        )
+
+        # =============================================================
+        # GRÁFICOS ESTRATÉGICOS
+        # =============================================================
+
+        networks = list(
+            summary.get(
+                "red_counts",
+                {},
+            ).items()
+        )[:15]
+
+        network_records = [
+            {
+                "CATEGORIA": label,
+                "CANTIDAD": value,
+            }
+            for label, value in networks
+        ]
+
+        departments = list(
+            summary.get(
+                "department_counts",
+                {},
+            ).items()
+        )[:15]
+
+        department_records = [
+            {
+                "CATEGORIA": label,
+                "CANTIDAD": value,
+            }
+            for label, value in departments
+        ]
+
+        types = list(
+            summary.get(
+                "type_counts",
+                {},
+            ).items()
+        )[:14]
+
+        type_records = [
+            {
+                "CATEGORIA": label,
+                "CANTIDAD": value,
+            }
+            for label, value in types
+        ]
+
+        strategic_charts = dbc.Row(
+            [
+                dbc.Col(
+                    html.Div(
+                        [
+                            html.Div(
+                                "Composición de redes por nivel",
+                                className="est-v3-panel-title",
+                            ),
+                            html.Div(
+                                (
+                                    "Permite identificar concentración y "
+                                    "complejidad asistencial dentro de las "
+                                    "principales redes."
+                                ),
+                                className="est-v3-panel-subtitle",
+                            ),
+                            dcc.Graph(
+                                figure=_figure_red_level(
+                                    summary.get(
+                                        "red_level_counts",
+                                        {},
+                                    ),
+                                    top=12,
+                                ),
+                                config={
+                                    "displayModeBar": False,
+                                },
+                            ),
+                        ],
+                        className="est-v3-panel h-100",
+                    ),
+                    xl=7,
+                    xs=12,
+                ),
+                dbc.Col(
+                    html.Div(
+                        [
+                            html.Div(
+                                "Distribución territorial",
+                                className="est-v3-panel-title",
+                            ),
+                            html.Div(
+                                (
+                                    "Departamentos con mayor número de "
+                                    "establecimientos oficiales."
+                                ),
+                                className="est-v3-panel-subtitle",
+                            ),
+                            dcc.Graph(
+                                figure=_figure_bar(
+                                    department_records,
+                                    " ",
+                                    horizontal=True,
+                                ),
+                                config={
+                                    "displayModeBar": False,
+                                },
+                                className="est-v3-char-graph",
+                            ),
+                        ],
+                        className="est-v3-panel h-100",
+                    ),
+                    xl=5,
+                    xs=12,
+                ),
+            ],
+            className="g-3 mb-3",
+        )
+
+        # =============================================================
+        # MATRIZ DETALLADA NIVEL > CATEGORÍA > CENTRO
+        # =============================================================
+
         matrix = html.Div(
             [
                 html.Div(
                     [
                         html.Div(
-                            "Por nivel y categoría",
+                            "Nivel → categoría MINSA → centro",
                             className="est-v3-panel-title",
                         ),
                         html.Div(
                             (
-                                "Nivel EsSalud y categoría MINSA. "
-                                "Despliegue una categoría para ver "
+                                "Detalle jerárquico del universo filtrado. "
+                                "Despliegue una categoría para revisar "
                                 "sus establecimientos."
                             ),
                             className="est-v3-panel-subtitle",
@@ -860,93 +1180,81 @@ def create_dash_app(
             className="est-v3-panel h-100",
         )
 
-        types = list(
-            summary.get(
-                "type_counts",
-                {},
-            ).items()
-        )[:14]
-
-        type_records = [
-            {
-                "CATEGORIA": label,
-                "CANTIDAD": value,
-            }
-            for label, value in types
-        ]
-
-        networks = list(
-            summary.get(
-                "red_counts",
-                {},
-            ).items()
-        )[:15]
-
-        network_records = [
-            {
-                "CATEGORIA": label,
-                "CANTIDAD": value,
-            }
-            for label, value in networks
-        ]
-
-        side = html.Div(
+        typology_panel = html.Div(
             [
                 html.Div(
-                    [
-                        html.Div(
-                            "Por tipo de establecimiento",
-                            className="est-v3-panel-title",
-                        ),
-                        html.Div(
-                            (
-                                "Caracterización funcional: hospitales, "
-                                "policlínicos, centros médicos, CAP y otros."
-                            ),
-                            className="est-v3-panel-subtitle",
-                        ),
-                        dcc.Graph(
-                            figure=_figure_bar(
-                                type_records,
-                                " ",
-                                horizontal=True,
-                            ),
-                            config={
-                                "displayModeBar": False,
-                            },
-                            className="est-v3-char-graph",
-                        ),
-                    ],
-                    className="est-v3-panel",
+                    "Tipología de establecimientos",
+                    className="est-v3-panel-title",
                 ),
                 html.Div(
-                    [
-                        html.Div(
-                            "Redes con mayor oferta",
-                            className="est-v3-panel-title",
-                        ),
-                        html.Div(
-                            (
-                                "Ranking de centros oficiales bajo "
-                                "el filtro activo."
-                            ),
-                            className="est-v3-panel-subtitle",
-                        ),
-                        dcc.Graph(
-                            figure=_figure_bar(
-                                network_records,
-                                " ",
-                                horizontal=True,
-                            ),
-                            config={
-                                "displayModeBar": False,
-                            },
-                            className="est-v3-char-graph",
-                        ),
-                    ],
-                    className="est-v3-panel",
+                    (
+                        "Distribución funcional por tipo de centro: "
+                        "hospitales, policlínicos, centros médicos, "
+                        "CAP y otros."
+                    ),
+                    className="est-v3-panel-subtitle",
                 ),
-            ]
+                dcc.Graph(
+                    figure=_figure_bar(
+                        type_records,
+                        " ",
+                        horizontal=True,
+                    ),
+                    config={
+                        "displayModeBar": False,
+                    },
+                    className="est-v3-char-graph",
+                ),
+            ],
+            className="est-v3-panel",
+        )
+
+        networks_panel = html.Div(
+            [
+                html.Div(
+                    "Redes con mayor oferta",
+                    className="est-v3-panel-title",
+                ),
+                html.Div(
+                    (
+                        "Ranking de redes según cantidad de centros "
+                        "oficiales bajo el filtro activo."
+                    ),
+                    className="est-v3-panel-subtitle",
+                ),
+                dcc.Graph(
+                    figure=_figure_bar(
+                        network_records,
+                        " ",
+                        horizontal=True,
+                    ),
+                    config={
+                        "displayModeBar": False,
+                    },
+                    className="est-v3-char-graph",
+                ),
+            ],
+            className="est-v3-panel",
+        )
+
+        detail_row = dbc.Row(
+            [
+                dbc.Col(
+                    matrix,
+                    xl=7,
+                    xs=12,
+                ),
+                dbc.Col(
+                    [
+                        alerts_panel,
+                        typology_panel,
+                        networks_panel,
+                    ],
+                    xl=5,
+                    xs=12,
+                ),
+            ],
+            className="g-3",
         )
 
         return html.Div(
@@ -954,21 +1262,8 @@ def create_dash_app(
                 cards_top,
                 cards_condition,
                 cards_levels,
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            matrix,
-                            xl=7,
-                            xs=12,
-                        ),
-                        dbc.Col(
-                            side,
-                            xl=5,
-                            xs=12,
-                        ),
-                    ],
-                    className="g-3",
-                ),
+                strategic_charts,
+                detail_row,
             ]
         )
 
@@ -1569,25 +1864,71 @@ def create_dash_app(
                                 html.Div(
                                     [
                                         html.Div(
-                                            "Fuente operativa",
+                                            "Fuente",
                                             className=(
                                                 "est-v3-char-source-label"
                                             ),
                                         ),
                                         html.Div(
-                                            (
-                                                "Maestro oficial SIEST · "
-                                                "ES_VERSION_ACTUAL = 1 · "
-                                                "ES_OFICIAL = 1"
+                                            "GCPS / GCOP",
+                                            id=(
+                                                "est-v3-char-source-value"
                                             ),
                                             className=(
                                                 "est-v3-char-source-value"
                                             ),
                                         ),
+                                        html.Div(
+                                            (
+                                                "Según Condición EsSalud "
+                                                "seleccionada"
+                                            ),
+                                            className=(
+                                                "est-v3-char-source-note"
+                                            ),
+                                        ),
                                     ],
                                     className="est-v3-char-source",
                                 ),
-                                xl=4,
+                                xl=2,
+                                md=6,
+                                xs=12,
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        dbc.Button(
+                                            [
+                                                html.I(
+                                                    className=(
+                                                        "bi bi-file-earmark-excel "
+                                                        "me-2"
+                                                    )
+                                                ),
+                                                "Descargar caracterización",
+                                            ],
+                                            id=(
+                                                "est-v3-char-download"
+                                            ),
+                                            color="success",
+                                            className="w-100",
+                                        ),
+                                        html.Div(
+                                            (
+                                                "Excel con resúmenes de "
+                                                "gráficos y detalle"
+                                            ),
+                                            className=(
+                                                "est-v3-char-download-note"
+                                            ),
+                                        ),
+                                    ],
+                                    className=(
+                                        "est-v3-char-download-box"
+                                    ),
+                                ),
+                                xl=2,
+                                md=6,
                                 xs=12,
                             ),
                         ],
@@ -1998,7 +2339,8 @@ def create_dash_app(
         ]
     )
 
-    # Admin ve las 4 pestañas; el resto de roles solo Caracterizacion (lectura).
+    # Admin ve las 4 pestañas; el resto de roles (y el modo publico) solo
+    # Caracterizacion.
     def _main_tabs(es_admin):
         characterization_tab = dbc.Tab(
             characterization_layout,
@@ -2067,7 +2409,7 @@ def create_dash_app(
                                         html.Div(
                                             [
                                                 html.Div(
-                                                    "Centro de Gestión de Establecimientos",
+                                                    "Infraestructura hospitalaria",
                                                     className="est-v3-app-title",
                                                 ),
                                                 html.Div(
@@ -2433,10 +2775,10 @@ def create_dash_app(
         from flask import has_request_context
         from flask_login import current_user
 
-        # Sin request (validacion interna de Dash) se usa el layout completo
-        # para que todos los IDs de los callbacks existan.
         if public:
             return _build_layout(False)
+        # Sin request (validacion interna de Dash) se usa el layout completo
+        # para que todos los IDs de los callbacks existan.
         if not has_request_context():
             return _build_layout(True)
         return _build_layout(bool(getattr(current_user, "is_admin", False)))
@@ -2662,6 +3004,10 @@ def create_dash_app(
             "est-v3-char-status",
             "children",
         ),
+        Output(
+            "est-v3-char-source-value",
+            "children",
+        ),
         Input("est-v3-init", "n_intervals"),
         Input("est-v3-refresh", "data"),
         Input("est-v3-char-condition", "value"),
@@ -2699,9 +3045,14 @@ def create_dash_app(
             if red:
                 status_parts.append(str(red))
 
+            fuente = fuente_caracterizacion_por_condicion(
+                condition
+            )
+
             return (
                 render_characterization(summary),
                 " · ".join(status_parts),
+                fuente,
             )
 
         except Exception as exc:
@@ -2729,6 +3080,7 @@ def create_dash_app(
                     color="danger",
                 ),
                 "Error de consulta",
+                fuente_caracterizacion_por_condicion(condition),
             )
 
 
@@ -3322,6 +3674,87 @@ def create_dash_app(
             no_update,
             no_update,
         )
+
+    # =======================================================================
+    # DESCARGA DE CARACTERIZACIÓN
+    # =======================================================================
+
+    @app.callback(
+        Output(
+            "est-v3-download",
+            "data",
+            allow_duplicate=True,
+        ),
+        Input(
+            "est-v3-char-download",
+            "n_clicks",
+        ),
+        State(
+            "est-v3-char-condition",
+            "value",
+        ),
+        State(
+            "est-v3-char-red",
+            "value",
+        ),
+        prevent_initial_call=True,
+    )
+    def descargar_caracterizacion(
+        n_clicks,
+        condition,
+        red,
+    ):
+        if not n_clicks:
+            return no_update
+
+        try:
+            records = fetch_centros_caracterizacion(
+                condicion_centro=condition or None,
+                red_asistencial=red or None,
+            )
+
+            content, total = (
+                generar_excel_caracterizacion_establecimientos(
+                    records=records,
+                    condicion=condition,
+                    red_asistencial=red or None,
+                )
+            )
+
+            condition_tag = (
+                "PROPIOS"
+                if condition == "PROPIO"
+                else (
+                    "EXTRAS"
+                    if condition == "EXTRA"
+                    else "TODOS"
+                )
+            )
+
+            filename = (
+                "CARACTERIZACION_ESTABLECIMIENTOS_"
+                + condition_tag
+                + "_"
+                + datetime.now().strftime(
+                    "%Y%m%d_%H%M%S"
+                )
+                + ".xlsx"
+            )
+
+            return dcc.send_bytes(
+                lambda buffer: buffer.write(content),
+                filename,
+            )
+
+        except Exception as exc:
+            print(
+                "[ESTABLECIMIENTOS V3] ERROR DESCARGA CARACTERIZACION:",
+                repr(exc),
+                flush=True,
+            )
+            traceback.print_exc()
+            return no_update
+
 
     # =======================================================================
     # REPORTES
